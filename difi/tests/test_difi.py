@@ -19,6 +19,20 @@ def test_analyzeLinkages():
                                                        minObs=5, 
                                                        contaminationThreshold=0.2)
     
+    # Re-arange columns in-case order is changed (python 3.5 and earlier)
+    allLinkages_test = allLinkages_test[["linkage_id", 
+                                         "num_members", 
+                                         "num_obs", 
+                                         "pure", 
+                                         "partial", 
+                                         "false", 
+                                         "contamination", 
+                                         "linked_truth"]]
+    allTruths_test = allTruths_test[["truth", 
+                                     "found_pure", 
+                                     "found_partial", 
+                                     "found"]] 
+    
     # Assert dataframes are equal
     assert_frame_equal(allLinkages_test, allLinkages_solution)
     assert_frame_equal(allTruths_test, allTruths_solution)
