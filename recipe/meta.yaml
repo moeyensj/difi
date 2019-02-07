@@ -1,0 +1,25 @@
+
+
+{% set data = load_setup_py_data() %}
+
+package:
+  name: difi
+  version: {{ data.get('version') }}
+
+source:
+  path: ..
+
+requirements:
+  run:
+    - numpy
+    - pandas
+    - pytest
+    - pytest-cov
+
+build:
+  script: python setup.py install --single-version-externally-managed --record=record.txt
+
+about:
+  home: https://github.com/moeyensj/difi
+  license: BSD-3 Clause
+  license_file: LICENSE.md
