@@ -95,18 +95,17 @@ def analyzeObservations(observations,
     percent_unknown = num_unknown_obs / len(observations) * 100.0
     percent_false_positive = num_fp_obs / len(observations) * 100.0
 
-    
     # Prepare summary DataFrame
-    summary = pd.DataFrame({
-        "num_unique_truths" : num_truths, 
-        "num_unique_known_truths" : num_unique_truths,
-        "num_unique_known_truths_findable" : num_findable,
-        "num_known_truth_observations": num_truth_obs,
-        "num_unknown_truth_observations": num_unknown_obs,
-        "num_false_positive_observations": num_fp_obs,
-        "percent_known_truth_observations": percent_known,
-        "percent_unknown_truth_observations": percent_unknown,
-        "percent_false_positive_observations": percent_false_positive}, index=[0]) 
+    summary = pd.DataFrame(index=[0]) 
+    summary["num_unique_truths"] = num_truths, 
+    summary["num_unique_known_truths"] = num_unique_truths,
+    summary["num_unique_known_truths_findable"] = num_findable,
+    summary["num_known_truth_observations"] = num_truth_obs
+    summary["num_unknown_truth_observations"] = num_unknown_obs
+    summary["num_false_positive_observations"] = num_fp_obs
+    summary["percent_known_truth_observations"] = percent_known
+    summary["percent_unknown_truth_observations"] = percent_unknown
+    summary["percent_false_positive_observations"] = percent_false_positive
     
     time_end = time.time()
     if verbose == True:
