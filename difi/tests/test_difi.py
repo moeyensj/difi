@@ -2,6 +2,7 @@ import os
 import math
 import string
 import random
+import pytest
 import numpy as np
 import pandas as pd 
 from pandas.util.testing import assert_frame_equal
@@ -1274,6 +1275,122 @@ def test_analyzeLinkages_multiObject():
         'num_false_positive_partial_linkages' : [0],
         'num_mixed_clusters' : [2],
         'num_total_clusters' : [3]
+    })
+
+    # Re-arange columns in case order is changed (python 3.5 and earlier)
+    summary = summary[[
+        'num_unique_known_truths_found', 
+        'num_unique_known_truths_missed',
+        'percent_completeness',
+        'num_known_truths_pure_linkages',
+        'num_known_truths_partial_linkages', 
+        'num_unknown_truths_pure_linkages',
+        'num_unknown_truths_partial_linkages',
+        'num_false_positive_pure_linkages',
+        'num_false_positive_partial_linkages',
+        'num_mixed_clusters',
+        'num_total_clusters']]
+
+    assert_frame_equal(summary, summary_test)
+
+def test_analyzeLinkages_emptyDataFrames():
+    # Case 3a: Pass empty observations and linkageMembers DataFrames
+
+    # Randomly assign names to the columns
+    columnMapping = {
+        "linkage_id" : ''.join([random.choice(string.ascii_letters + string.digits) for n in range(np.random.randint(64))]),
+        "obs_id" : ''.join([random.choice(string.ascii_letters + string.digits) for n in range(np.random.randint(64))]),
+        "truth" : ''.join([random.choice(string.ascii_letters + string.digits) for n in range(np.random.randint(64))])
+    }
+
+
+    # Create the linkageMembers dataframe
+    linkageMembers_empty = pd.DataFrame(columns=[
+        columnMapping["linkage_id"],
+        columnMapping["obs_id"]
+    ])
+
+    # Create the observations dataframe
+    observations_empty = pd.DataFrame(columns=[
+        columnMapping["obs_id"],
+        columnMapping["truth"]
+    ])
+
+    # Test an error is raised when the observations dataframe is empy
+    with pytest.raises(ValueError):
+        allLinkages_test, allTruths_test, summary_test = analyzeLinkages(observations_empty, 
+                                                                         linkageMembers_empty, 
+                                                                         unknownIDs=[],
+                                                                         falsePositiveIDs=[],
+                                                                         contaminationThreshold=0.2,
+                                                                         minObs=5, 
+                                                                         columnMapping=columnMapping, 
+                                                                         verbose=True)
+
+    # Case 3b: Pass non-empty observations and empty linkageMembers DataFrames
+        
+    # Create randomly sized pure cluster
+    num_obs = np.random.randint(2, 100000)
+    name = ''.join([random.choice(string.ascii_letters + string.digits) for n in range(np.random.randint(64))])
+    truth = [name for i in range(num_obs)]
+    obs_ids = np.arange(1, num_obs + 1)
+    columnMapping = {
+        "linkage_id" : ''.join([random.choice(string.ascii_letters + string.digits) for n in range(np.random.randint(64))]),
+        "obs_id" : ''.join([random.choice(string.ascii_letters + string.digits) for n in range(np.random.randint(64))]),
+        "truth" : ''.join([random.choice(string.ascii_letters + string.digits) for n in range(np.random.randint(64))])
+    }
+
+    # Create the linkageMembers dataframe
+    linkageMembers_empty = pd.DataFrame(columns=[
+        columnMapping["linkage_id"],
+        columnMapping["obs_id"]
+    ])
+
+    # Create the observations dataframe
+    observations = pd.DataFrame({
+        columnMapping["obs_id"] : obs_ids,
+        columnMapping["truth"] : truth,
+    })
+
+    # Run analysis for case when it should found
+    allLinkages_test, allTruths_test, summary_test = analyzeLinkages(observations, 
+                                                                     linkageMembers_empty,
+                                                                     minObs=num_obs - 1, 
+                                                                     columnMapping=columnMapping, 
+                                                                     verbose=True)
+
+    # Test that the length of allLinkages is zero
+    assert len(allLinkages_test) == 0
+
+    # Test that the length of allTruths is one 
+    assert len(allTruths_test) == 1
+
+    # Test that the length of the summary dataframe is one
+    assert len(summary_test) == 1
+
+    ### Test allTruths
+
+    # Test number of clusters is consistent
+    np.testing.assert_equal(allTruths_test["found_pure"].values, np.array([0]))
+    np.testing.assert_equal(allTruths_test["found_partial"].values, np.array([0]))
+    np.testing.assert_equal(allTruths_test["found"].values, np.array([0]))
+
+    # Test that the truth is the name
+    np.testing.assert_equal(allTruths_test[columnMapping["truth"]].values, name)
+
+    ### Test summary
+    summary = pd.DataFrame({
+        'num_unique_known_truths_found' : [0],
+        'num_unique_known_truths_missed' : [np.NaN],
+        'percent_completeness' : [np.NaN],
+        'num_known_truths_pure_linkages' : [0],
+        'num_known_truths_partial_linkages' : [0],
+        'num_unknown_truths_pure_linkages' : [0],
+        'num_unknown_truths_partial_linkages' : [0],
+        'num_false_positive_pure_linkages' : [0],
+        'num_false_positive_partial_linkages' : [0],
+        'num_mixed_clusters' : [0],
+        'num_total_clusters' : [0]
     })
 
     # Re-arange columns in case order is changed (python 3.5 and earlier)
