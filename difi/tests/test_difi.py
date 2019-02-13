@@ -120,7 +120,7 @@ def test_analyzeLinkages_singleObject_found():
     })
     
     # Re-arange columns in case order is changed (python 3.5 and earlier)
-    summary_test = summary_test[[
+    summary = summary[[
         'num_unique_known_truths_found', 
         'num_unique_known_truths_missed',
         'percent_completeness',
@@ -193,7 +193,7 @@ def test_analyzeLinkages_singleObject_found():
     })
     
     # Re-arange columns in case order is changed (python 3.5 and earlier)
-    summary_test = summary_test[[
+    summary = summary[[
         'num_unique_known_truths_found', 
         'num_unique_known_truths_missed',
         'percent_completeness',
@@ -288,7 +288,7 @@ def test_analyzeLinkages_singleObject_missed():
     })
     
     # Re-arange columns in case order is changed (python 3.5 and earlier)
-    summary_test = summary_test[[
+    summary = summary[[
         'num_unique_known_truths_found', 
         'num_unique_known_truths_missed',
         'percent_completeness',
@@ -361,7 +361,7 @@ def test_analyzeLinkages_singleObject_missed():
     })
     
     # Re-arange columns in case order is changed (python 3.5 and earlier)
-    summary_test = summary_test[[
+    summary = summary[[
         'num_unique_known_truths_found', 
         'num_unique_known_truths_missed',
         'percent_completeness',
