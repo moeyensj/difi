@@ -1,3 +1,5 @@
+import time
+import warnings
 import numpy as np
 import pandas as pd
 
@@ -7,8 +9,12 @@ def analyzeLinkages(observations,
                     linkageMembers, 
                     allLinkages=None, 
                     allTruths=None,
+                    summary=None,
                     minObs=5, 
                     contaminationThreshold=0.2, 
+                    unknownIDs=[],
+                    falsePositiveIDs=[],
+                    verbose=True,
                     columnMapping={"linkage_id": "linkage_id",
                                    "obs_id": "obs_id",
                                    "truth": "truth"}):
@@ -55,8 +61,12 @@ def analyzeLinkages(observations,
     allTruths : `~pandas.DataFrame`
         DataFrame with added found_pure, found_partial, found columns. 
     """
+    time_start = time.time()
+    if verbose is True:
+        print("Analyzing linkages...")
+    
     # If allLinkages DataFrame does not exist, create it
-    if allLinkages == None:
+    if allLinkages is None:
         linkage_ids = linkageMembers[columnMapping["linkage_id"]].unique()
         linkage_ids.sort()
         allLinkages = pd.DataFrame({
@@ -67,21 +77,27 @@ def analyzeLinkages(observations,
     allLinkages["num_obs"] = np.ones(len(allLinkages)) * np.NaN
     allLinkages["pure"] = np.zeros(len(allLinkages), dtype=int)
     allLinkages["partial"] = np.zeros(len(allLinkages), dtype=int)
-    allLinkages["false"] = np.zeros(len(allLinkages), dtype=int)
+    allLinkages["mixed"] = np.zeros(len(allLinkages), dtype=int)
     allLinkages["contamination"] = np.ones(len(allLinkages), dtype=int) * np.NaN
     allLinkages["linked_truth"] = np.ones(len(allLinkages), dtype=int) * np.NaN
     
     # Add the number of observations each linkage as 
-    allLinkages["num_obs"] = linkageMembers["linkage_id"].value_counts().sort_index().values
+    allLinkages["num_obs"] = linkageMembers[columnMapping["linkage_id"]].value_counts().sort_index().values
 
     # If allTruths DataFrame does not exist, create it
-    if allTruths == None:
+    if allTruths is None:
         truths = observations[columnMapping["truth"]].unique()
         allTruths = pd.DataFrame({
             columnMapping["truth"] : truths,
             "found_pure" : np.zeros(len(truths), dtype=int),
             "found_partial" : np.zeros(len(truths), dtype=int),
             "found" : np.zeros(len(truths), dtype=int)})
+    
+    # If it does exist, add columns
+    else:
+        allTruths["found_pure"] = np.zeros(len(allTruths), dtype=int)
+        allTruths["found_partial"] = np.zeros(len(allTruths), dtype=int)
+        allTruths["found"] = np.zeros(len(allTruths), dtype=int)
         
     ### Calculate the number of unique truth's per linkage
     
@@ -95,7 +111,7 @@ def analyzeLinkages(observations,
         on=columnMapping["obs_id"])
     
     # Drop observation ID column
-    linkage_truth.drop(columns="obs_id", inplace=True)
+    linkage_truth.drop(columns=columnMapping["obs_id"], inplace=True)
     
     # Drop duplicate rows, any correct linkage will now only have one row since
     # all the truth values would have been the same, any incorrect linkage
@@ -141,7 +157,7 @@ def analyzeLinkages(observations,
         allLinkages[allLinkages["pure"] != 1][columnMapping["linkage_id"]])]
 
     # Drop observation ID column
-    linkage_truth.drop(columns="obs_id", inplace=True)
+    linkage_truth.drop(columns=columnMapping["obs_id"], inplace=True)
 
     # Group by linkage IDs and truths, creates a multi-level index with linkage ID
     # as the first index, then truth as the second index and as values is the count 
@@ -183,11 +199,91 @@ def analyzeLinkages(observations,
     allLinkages.loc[allLinkages[columnMapping["linkage_id"]].isin(partial_linkages[columnMapping["linkage_id"]]), "linked_truth"] = partial_linkages[columnMapping["truth"]].values
     allLinkages.loc[allLinkages[columnMapping["linkage_id"]].isin(partial_linkages[columnMapping["linkage_id"]]), "partial"] = 1
     allLinkages.loc[allLinkages[columnMapping["linkage_id"]].isin(partial_linkages[columnMapping["linkage_id"]]), "contamination"] = partial_linkages["contamination"].values
-    allLinkages.loc[(allLinkages["pure"] != 1) & (allLinkages["partial"] != 1), "false"] = 1
+    allLinkages.loc[(allLinkages["pure"] != 1) & (allLinkages["partial"] != 1), "mixed"] = 1
 
-    # Update allTruths to indicate which objects were found in pure and partial clusters, if found in either the object is found
+    # Update allTruths to indicate which objects were found in pure and partial linkages, if found in either the object is found
     allTruths.loc[allTruths[columnMapping["truth"]].isin(allLinkages[allLinkages["pure"] == 1]["linked_truth"].values), "found_pure"] = 1
     allTruths.loc[allTruths[columnMapping["truth"]].isin(allLinkages[allLinkages["partial"] == 1]["linked_truth"].values), "found_partial"] = 1
     allTruths.loc[(allTruths["found_pure"] == 1) | (allTruths["found_partial"] == 1), "found"] = 1
+
+    # Linkage breakdown for known objects
+    num_pure_known = len(allLinkages[(allLinkages["pure"] == 1) & ~allLinkages["linked_truth"].isin(unknownIDs + falsePositiveIDs)])
+    num_partial_known = len(allLinkages[(allLinkages["partial"] == 1) & ~allLinkages["linked_truth"].isin(unknownIDs + falsePositiveIDs)])
     
-    return allLinkages, allTruths
+    # Linkage breakdown for unknown objects
+    num_pure_unknown = len(allLinkages[(allLinkages["pure"] == 1) & allLinkages["linked_truth"].isin(unknownIDs)])
+    num_partial_unknown = len(allLinkages[(allLinkages["partial"] == 1) & allLinkages["linked_truth"].isin(unknownIDs)])
+    
+    # Linkage breakdown for false positives
+    num_pure_false_positives = len(allLinkages[(allLinkages["pure"] == 1) & allLinkages["linked_truth"].isin(falsePositiveIDs)])
+    num_partial_false_positives = len(allLinkages[(allLinkages["partial"] == 1) & allLinkages["linked_truth"].isin(falsePositiveIDs)])
+    
+    # Linkage break down for everything else
+    num_mixed = len(allLinkages[allLinkages["mixed"] == 1])
+    num_total = len(allLinkages)
+    
+    try: 
+        mixed_linkage_percentage = num_mixed / num_total * 100
+    except:
+        mixed_linkage_percentage = 0.0
+
+    if verbose == True:
+        print("Known truth pure linkages: {}".format(num_pure_known))
+        print("Known truth partial linkages: {}".format(num_partial_known))
+        print("Unknown truth pure linkages: {}".format(num_pure_unknown))
+        print("Unknown truth partial linkages: {}".format(num_partial_unknown))
+        print("False positive pure linkages: {}".format(num_pure_false_positives))
+        print("False positive partial linkages: {}".format(num_partial_false_positives))
+        print("Mixed linkages: {}".format(num_mixed))
+        print("Total linkages: {}".format(num_total))
+        print("Mixed linkage percentage (%): {:1.3f}".format(mixed_linkage_percentage))
+    
+    num_known_found = len(allTruths[(allTruths["found"] == 1) 
+                                    & (~allTruths[columnMapping["truth"]].isin(unknownIDs + falsePositiveIDs))])
+    if "findable" in allTruths.columns:
+        num_known_missed = len(allTruths[(allTruths["found"] == 0) 
+                                         & (allTruths["findable"] == 1) 
+                                         & (~allTruths[columnMapping["truth"]].isin(unknownIDs + falsePositiveIDs))])
+    
+        if num_known_found == 0:
+            completeness = 0.0   
+        elif num_known_missed == 0 and num_known_found != 0:
+            completeness = num_known_found * 100.
+        else:
+            completeness = num_known_found / (num_known_found + num_known_missed) * 100.
+    else:
+        # If 'findable' is not a column in allTruths then issue 
+        # warning that completeness cannot be calculated
+        warnings.warn("No 'findable' column was found in allTruths. Cannot compute completeness.", UserWarning)
+            
+        completeness = np.NaN
+        num_known_missed = np.NaN
+
+    # If summary DataFrame does not exist, create it
+    if summary is None:
+        summary = pd.DataFrame(index=[0]) 
+    
+    summary["num_unique_known_truths_found"] = num_known_found
+    summary["num_unique_known_truths_missed"] = num_known_missed
+    summary["percent_completeness"] = completeness
+    summary["num_known_truths_pure_linkages"] = num_pure_known
+    summary["num_known_truths_partial_linkages"] = num_partial_known
+    summary["num_unknown_truths_pure_linkages"] = num_pure_unknown
+    summary["num_unknown_truths_partial_linkages"] = num_partial_unknown
+    summary["num_false_positive_pure_linkages"] = num_pure_false_positives
+    summary["num_false_positive_partial_linkages"] = num_partial_false_positives
+    summary["num_mixed_clusters"] = num_mixed
+    summary["num_total_clusters"] = num_total
+    
+    if verbose == True:
+        time_end = time.time()
+        print("Unique known truths linked: {}".format(num_known_found))
+        print("Unique known truths missed: {}".format(num_known_missed))
+        print("Completeness (%): {:1.3f}".format(completeness))
+        print("")
+        print("Total time in seconds: {}".format(time_end - time_start))   
+
+    return allLinkages, allTruths, summary
+    
+    
+

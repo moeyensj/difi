@@ -1,4 +1,4 @@
-linkage_id num_members num_obs pure partial false contamination linked_truth
+linkage_id num_members num_obs pure partial mixed contamination linked_truth
 1 1 5 1 0 0  K13YB9X
 2 5 5 0 0 1  
 3 4 5 0 0 1  
