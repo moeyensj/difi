@@ -89,7 +89,7 @@ def test_analyzeLinkages_singleObject_found():
     assert allLinkages_test["pure"].values[0] == 1
     assert allLinkages_test["partial"].values[0] == 0
     assert allLinkages_test["mixed"].values[0] == 0
-    #assert allLinkages["contamination"].values[0].isna()
+    assert math.isnan(allLinkages_test["contamination"].values[0])
 
     # Test the linked truth is the name
     assert allLinkages_test["linked_truth"].values[0] == name
@@ -163,7 +163,7 @@ def test_analyzeLinkages_singleObject_found():
     assert allLinkages_test["pure"].values[0] == 1
     assert allLinkages_test["partial"].values[0] == 0
     assert allLinkages_test["mixed"].values[0] == 0
-    #assert allLinkages["contamination"].values[0].isna()
+    assert math.isnan(allLinkages_test["contamination"].values[0])
 
     # Test the linked truth is the name
     assert allLinkages_test["linked_truth"].values[0] == name
@@ -237,8 +237,8 @@ def test_analyzeLinkages_singleObject_found():
     assert allLinkages_test["pure"].values[0] == 1
     assert allLinkages_test["partial"].values[0] == 0
     assert allLinkages_test["mixed"].values[0] == 0
-    #assert allLinkages["contamination"].values[0].isna()
-
+    assert math.isnan(allLinkages_test["contamination"].values[0])
+    
     # Test the linked truth is the name
     assert allLinkages_test["linked_truth"].values[0] == name
 
