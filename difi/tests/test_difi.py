@@ -1116,3 +1116,178 @@ def test_analyzeLinkages_multiObject():
         'num_total_clusters']]
 
     assert_frame_equal(summary, summary_test)
+
+    #### CASE 2: Testing pure, partial and mixed linkages
+
+    # Case 2a: Run analysis such that the contaminationThreshold doesn't allow
+    # any objects to be found
+
+    # Grab a percentage of the detections in linkage 2 and linkage 3 and swap them
+    obs_ids_2to3 = linkageMembers[linkageMembers[columnMapping["linkage_id"]] == 2][columnMapping["obs_id"]].values[int(0.85*minObs[1]):]
+    obs_ids_3to2 = linkageMembers[linkageMembers[columnMapping["linkage_id"]] == 3][columnMapping["obs_id"]].values[0:int(0.2*minObs[2])]
+    linkageMembers.loc[linkageMembers[columnMapping["obs_id"]].isin(obs_ids_2to3), columnMapping["linkage_id"]] = 3
+    linkageMembers.loc[linkageMembers[columnMapping["obs_id"]].isin(obs_ids_3to2), columnMapping["linkage_id"]] = 2
+
+    # Re-adjust minObs
+    minObs = np.array([minObs[0], 
+                       minObs[1] - len(obs_ids_2to3) + len(obs_ids_3to2),  
+                       minObs[2] + len(obs_ids_2to3) - len(obs_ids_3to2)])
+
+    allLinkages_test, allTruths_test, summary_test = analyzeLinkages(observations, 
+                                                                     linkageMembers, 
+                                                                     #allTruths=allTruths_test,
+                                                                     unknownIDs=[],
+                                                                     falsePositiveIDs=[],
+                                                                     contaminationThreshold=0.0,
+                                                                     minObs=minObs[1], 
+                                                                     columnMapping=columnMapping, 
+                                                                     verbose=True)
+    ### Test allLinkages
+
+    # Test that the length of allLinkages and allTruths dataframes is one
+    for df in [allLinkages_test, allTruths_test]:
+        assert len(df) == 3
+
+    # Test that the length of the summary dataframe is one
+    assert len(summary_test) == 1
+
+    # Test that the number of observations were correctly counted
+    np.testing.assert_equal(allLinkages_test["num_obs"].values, minObs)
+
+    # Test that the number of members is 1
+    np.testing.assert_equal(allLinkages_test["num_members"].values, np.array([1, 2, 2]))
+
+    # Test that the number of clusters is as expected
+    np.testing.assert_equal(allLinkages_test["pure"].values, np.array([0, 0, 0]))
+    np.testing.assert_equal(allLinkages_test["partial"].values, np.array([0, 0, 0]))
+    np.testing.assert_equal(allLinkages_test["mixed"].values, np.array([1, 1, 1]))
+    for i in allLinkages_test["contamination"].values:
+        assert math.isnan(i)
+
+    # Test the linked truth is nan
+    for i in allLinkages_test["linked_truth"].values:
+        assert math.isnan(i)
+
+    ### Test allTruths
+
+    # Test number of clusters is consistent
+    np.testing.assert_equal(allTruths_test["found_pure"].values, np.array([0, 0, 0]))
+    np.testing.assert_equal(allTruths_test["found_partial"].values, np.array([0, 0, 0]))
+    np.testing.assert_equal(allTruths_test["found"].values, np.array([0, 0, 0]))
+
+    # Test that the truth is the name
+    np.testing.assert_equal(allTruths_test[columnMapping["truth"]].values, names)
+
+    ### Test summary
+    summary = pd.DataFrame({
+        'num_unique_known_truths_found' : [0],
+        'num_unique_known_truths_missed' : [np.NaN],
+        'percent_completeness' : [np.NaN],
+        'num_known_truths_pure_linkages' : [0],
+        'num_known_truths_partial_linkages' : [0],
+        'num_unknown_truths_pure_linkages' : [0],
+        'num_unknown_truths_partial_linkages' : [0],
+        'num_false_positive_pure_linkages' : [0],
+        'num_false_positive_partial_linkages' : [0],
+        'num_mixed_clusters' : [3],
+        'num_total_clusters' : [3]
+    })
+
+    # Re-arange columns in case order is changed (python 3.5 and earlier)
+    summary = summary[[
+        'num_unique_known_truths_found', 
+        'num_unique_known_truths_missed',
+        'percent_completeness',
+        'num_known_truths_pure_linkages',
+        'num_known_truths_partial_linkages', 
+        'num_unknown_truths_pure_linkages',
+        'num_unknown_truths_partial_linkages',
+        'num_false_positive_pure_linkages',
+        'num_false_positive_partial_linkages',
+        'num_mixed_clusters',
+        'num_total_clusters']]
+
+    assert_frame_equal(summary, summary_test)
+
+    # Case 2b: Run analysis such that the contaminationThreshold doesn't allows
+    # only the last object to be found
+
+    allLinkages_test, allTruths_test, summary_test = analyzeLinkages(observations, 
+                                                                     linkageMembers, 
+                                                                     #allTruths=allTruths_test,
+                                                                     unknownIDs=[],
+                                                                     falsePositiveIDs=[],
+                                                                     contaminationThreshold=0.2,
+                                                                     minObs=minObs[1], 
+                                                                     columnMapping=columnMapping, 
+                                                                     verbose=True)
+    ### Test allLinkages
+
+    # Test that the length of allLinkages and allTruths dataframes is one
+    for df in [allLinkages_test, allTruths_test]:
+        assert len(df) == 3
+
+    # Test that the length of the summary dataframe is one
+    assert len(summary_test) == 1
+
+    # Test that the number of observations were correctly counted
+    np.testing.assert_equal(allLinkages_test["num_obs"].values, minObs)
+
+    # Test that the number of members is 1
+    np.testing.assert_equal(allLinkages_test["num_members"].values, np.array([1, 2, 2]))
+
+    # Test that the number of clusters is as expected
+    np.testing.assert_equal(allLinkages_test["pure"].values, np.array([0, 0, 0]))
+    np.testing.assert_equal(allLinkages_test["partial"].values, np.array([0, 0, 1]))
+    np.testing.assert_equal(allLinkages_test["mixed"].values, np.array([1, 1, 0]))
+    for i in allLinkages_test["contamination"].values[:-1]:
+        assert math.isnan(i)
+    np.testing.assert_allclose(allLinkages_test["contamination"].values[-1], len(obs_ids_2to3) / minObs[-1])
+
+    # Test the linked truth is nan for the first two linkages
+    for i in allLinkages_test["linked_truth"].values[:-1]:
+        assert math.isnan(i)
+
+    # Test that the linked truth for the third linkage is as expected
+    assert allLinkages_test["linked_truth"].values[-1] == names[-1]
+
+    ### Test allTruths
+
+    # Test number of clusters is consistent
+    np.testing.assert_equal(allTruths_test["found_pure"].values, np.array([0, 0, 0]))
+    np.testing.assert_equal(allTruths_test["found_partial"].values, np.array([0, 0, 1]))
+    np.testing.assert_equal(allTruths_test["found"].values, np.array([0, 0, 1]))
+
+    # Test that the truth is the name
+    np.testing.assert_equal(allTruths_test[columnMapping["truth"]].values, names)
+
+    ### Test summary
+    summary = pd.DataFrame({
+        'num_unique_known_truths_found' : [1],
+        'num_unique_known_truths_missed' : [np.NaN],
+        'percent_completeness' : [np.NaN],
+        'num_known_truths_pure_linkages' : [0],
+        'num_known_truths_partial_linkages' : [1],
+        'num_unknown_truths_pure_linkages' : [0],
+        'num_unknown_truths_partial_linkages' : [0],
+        'num_false_positive_pure_linkages' : [0],
+        'num_false_positive_partial_linkages' : [0],
+        'num_mixed_clusters' : [2],
+        'num_total_clusters' : [3]
+    })
+
+    # Re-arange columns in case order is changed (python 3.5 and earlier)
+    summary = summary[[
+        'num_unique_known_truths_found', 
+        'num_unique_known_truths_missed',
+        'percent_completeness',
+        'num_known_truths_pure_linkages',
+        'num_known_truths_partial_linkages', 
+        'num_unknown_truths_pure_linkages',
+        'num_unknown_truths_partial_linkages',
+        'num_false_positive_pure_linkages',
+        'num_false_positive_partial_linkages',
+        'num_mixed_clusters',
+        'num_total_clusters']]
+
+    assert_frame_equal(summary, summary_test)
