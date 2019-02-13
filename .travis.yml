@@ -1,8 +1,8 @@
 language: python
 os:
   - linux
-  - osx
-  - windows
+  # - osx
+  # - windows (Python is currently unsupported on Travis)
 sudo: false
 branches:
   only:
