@@ -50,6 +50,12 @@ def analyzeLinkages(observations,
         Number of detections expressed as a percentage belonging to other objects in a linkage
         allowed for the object with the most detections in the linkage to be considered found. 
         [Default = 0.2]
+    unknownIDs : list, optional
+        Values in the name column for unknown observations.
+        [Default = []]
+    falsePositiveIDs : list, optional
+        Names of false positive IDs.
+        [Default = []]
     columnMapping : dict, optional
         The mapping of columns in observations and linkageMembers to internally used names. 
         Needs the following: "linkage_id" : ..., "truth": ... and "obs_id" : ... .
@@ -60,6 +66,8 @@ def analyzeLinkages(observations,
         DataFrame with added pure, partial, false, contamination, num_obs, num_members, linked_truth 
     allTruths : `~pandas.DataFrame`
         DataFrame with added found_pure, found_partial, found columns. 
+    summary : `~pandas.DataFrame`
+        DataFrame with columns add to summarize the different type of linkages analyzed
     """
     time_start = time.time()
     if verbose is True:
