@@ -138,7 +138,82 @@ def test_analyzeLinkages_singleObject_found():
     # Add findable column
     allTruths_test["findable"] = [1]
     
-     # Run analysis for case when it should found with a findable column (pass allTruths)
+    # Run analysis for case when it should found with a findable column 
+    # suggesting it is findable (pass allTruths)
+    allLinkages_test, allTruths_test, summary_test = analyzeLinkages(observations, 
+                                                                     linkageMembers,
+                                                                     allTruths=allTruths_test,
+                                                                     minObs=num_obs - 1, 
+                                                                     columnMapping=columnMapping, 
+                                                                     verbose=True)
+
+    ### Test allLinkages
+
+    # Test the the length of all the dataframes is one
+    for df in [allLinkages_test, allTruths_test, summary_test]:
+        assert len(df) == 1
+
+    # Test that the number of observations were correctly counted
+    assert allLinkages_test["num_obs"].values[0] == num_obs
+
+    # Test that the number of members is 1
+    assert allLinkages_test["num_members"].values[0] == 1
+
+    # Test that the number of clusters is as expected
+    assert allLinkages_test["pure"].values[0] == 1
+    assert allLinkages_test["partial"].values[0] == 0
+    assert allLinkages_test["mixed"].values[0] == 0
+    #assert allLinkages["contamination"].values[0].isna()
+
+    # Test the linked truth is the name
+    assert allLinkages_test["linked_truth"].values[0] == name
+
+    ### Test allTruths
+
+    # Test number of clusters is consistent
+    assert allTruths_test["found_pure"].values[0] == 1
+    assert allTruths_test["found_partial"].values[0] == 0
+    assert allTruths_test["found"].values[0] == 1
+
+    # Test that the truth is the name
+    assert allTruths_test[columnMapping["truth"]].values[0] == name
+
+    ### Test summary
+    summary = pd.DataFrame({
+        'num_unique_known_truths_found' : [1],
+        'num_unique_known_truths_missed' : [0],
+        'percent_completeness' : [100.0],
+        'num_known_truths_pure_linkages' : [1],
+        'num_known_truths_partial_linkages' : [0],
+        'num_unknown_truths_pure_linkages' : [0],
+        'num_unknown_truths_partial_linkages' : [0],
+        'num_false_positive_pure_linkages' : [0],
+        'num_false_positive_partial_linkages' : [0],
+        'num_mixed_clusters' : [0],
+        'num_total_clusters' : [1]
+    })
+    
+    # Re-arange columns in case order is changed (python 3.5 and earlier)
+    summary = summary[[
+        'num_unique_known_truths_found', 
+        'num_unique_known_truths_missed',
+        'percent_completeness',
+        'num_known_truths_pure_linkages',
+        'num_known_truths_partial_linkages', 
+        'num_unknown_truths_pure_linkages',
+        'num_unknown_truths_partial_linkages',
+        'num_false_positive_pure_linkages',
+        'num_false_positive_partial_linkages',
+        'num_mixed_clusters',
+        'num_total_clusters']]
+
+    assert_frame_equal(summary, summary_test)
+    
+    # Add findable column
+    allTruths_test["findable"] = [0]
+    
+    # Run analysis for case when it should found with a findable column 
+    # suggesting it is not findable (pass allTruths)
     allLinkages_test, allTruths_test, summary_test = analyzeLinkages(observations, 
                                                                      linkageMembers,
                                                                      allTruths=allTruths_test,
