@@ -22,7 +22,7 @@ def test_analyzeLinkages_fromFile():
                                                                      minObs=5, 
                                                                      contaminationThreshold=0.2)
     
-    # Re-arange columns in-case order is changed (python 3.5 and earlier)
+    # Re-arange columns in case order is changed (python 3.5 and earlier)
     allLinkages_test = allLinkages_test[["linkage_id", 
                                          "num_members", 
                                          "num_obs", 
@@ -118,6 +118,20 @@ def test_analyzeLinkages_singleObject_found():
         'num_mixed_clusters' : [0],
         'num_total_clusters' : [1]
     })
+    
+    # Re-arange columns in case order is changed (python 3.5 and earlier)
+    summary_test = summary_test[[
+        'num_unique_known_truths_found', 
+        'num_unique_known_truths_missed',
+        'percent_completeness',
+        'num_known_truths_pure_linkages',
+        'num_known_truths_partial_linkages', 
+        'num_unknown_truths_pure_linkages',
+        'num_unknown_truths_partial_linkages',
+        'num_false_positive_pure_linkages',
+        'num_false_positive_partial_linkages',
+        'num_mixed_clusters',
+        'num_total_clusters']]
 
     assert_frame_equal(summary, summary_test)
     
@@ -177,6 +191,20 @@ def test_analyzeLinkages_singleObject_found():
         'num_mixed_clusters' : [0],
         'num_total_clusters' : [1]
     })
+    
+    # Re-arange columns in case order is changed (python 3.5 and earlier)
+    summary_test = summary_test[[
+        'num_unique_known_truths_found', 
+        'num_unique_known_truths_missed',
+        'percent_completeness',
+        'num_known_truths_pure_linkages',
+        'num_known_truths_partial_linkages', 
+        'num_unknown_truths_pure_linkages',
+        'num_unknown_truths_partial_linkages',
+        'num_false_positive_pure_linkages',
+        'num_false_positive_partial_linkages',
+        'num_mixed_clusters',
+        'num_total_clusters']]
 
     assert_frame_equal(summary, summary_test)
 
@@ -258,6 +286,20 @@ def test_analyzeLinkages_singleObject_missed():
         'num_mixed_clusters' : [1],
         'num_total_clusters' : [1]
     })
+    
+    # Re-arange columns in case order is changed (python 3.5 and earlier)
+    summary_test = summary_test[[
+        'num_unique_known_truths_found', 
+        'num_unique_known_truths_missed',
+        'percent_completeness',
+        'num_known_truths_pure_linkages',
+        'num_known_truths_partial_linkages', 
+        'num_unknown_truths_pure_linkages',
+        'num_unknown_truths_partial_linkages',
+        'num_false_positive_pure_linkages',
+        'num_false_positive_partial_linkages',
+        'num_mixed_clusters',
+        'num_total_clusters']]
 
     assert_frame_equal(summary, summary_test)
     
@@ -317,6 +359,20 @@ def test_analyzeLinkages_singleObject_missed():
         'num_mixed_clusters' : [1],
         'num_total_clusters' : [1]
     })
+    
+    # Re-arange columns in case order is changed (python 3.5 and earlier)
+    summary_test = summary_test[[
+        'num_unique_known_truths_found', 
+        'num_unique_known_truths_missed',
+        'percent_completeness',
+        'num_known_truths_pure_linkages',
+        'num_known_truths_partial_linkages', 
+        'num_unknown_truths_pure_linkages',
+        'num_unknown_truths_partial_linkages',
+        'num_false_positive_pure_linkages',
+        'num_false_positive_partial_linkages',
+        'num_mixed_clusters',
+        'num_total_clusters']]
 
     assert_frame_equal(summary, summary_test)
 
