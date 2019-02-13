@@ -2,6 +2,7 @@ language: python
 os:
   - linux
   - osx
+  - windows
 sudo: false
 branches:
   only:
