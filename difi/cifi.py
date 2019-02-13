@@ -86,7 +86,7 @@ def analyzeObservations(observations,
         "num_obs", 
         "findable"])
     
-    allTruths[columnMapping["truth"]] = observations[columnMapping["truth"]].unique()
+    allTruths[columnMapping["truth"]] = num_obs_descending
     allTruths["num_obs"] = num_obs_per_object
     allTruths.loc[(allTruths[columnMapping["truth"]].isin(findable)) & (~allTruths[columnMapping["truth"]].isin(unknownIDs + falsePositiveIDs)), "findable"] = 1
     allTruths.loc[allTruths["findable"] != 1, ["findable"]] = 0
