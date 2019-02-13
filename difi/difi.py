@@ -286,8 +286,8 @@ def analyzeLinkages(observations,
     summary["num_unknown_truths_partial_linkages"] = num_partial_unknown
     summary["num_false_positive_pure_linkages"] = num_pure_false_positives
     summary["num_false_positive_partial_linkages"] = num_partial_false_positives
-    summary["num_mixed_clusters"] = num_mixed
-    summary["num_total_clusters"] = num_total
+    summary["num_mixed_linkages"] = num_mixed
+    summary["num_total_linkages"] = num_total
     
     if verbose == True:
         time_end = time.time()

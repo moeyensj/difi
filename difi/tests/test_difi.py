@@ -42,7 +42,7 @@ def test_analyzeLinkages_fromFile():
     assert_frame_equal(allTruths_test, allTruths_solution)
     
 def test_analyzeLinkages_singleObject_found():
-    # Create randomly sized pure cluster
+    # Create randomly sized pure linkage
     num_obs = np.random.randint(2, 100000)
     name = ''.join([random.choice(string.ascii_letters + string.digits) for n in range(np.random.randint(64))])
     truth = [name for i in range(num_obs)]
@@ -86,7 +86,7 @@ def test_analyzeLinkages_singleObject_found():
     # Test that the number of members is 1
     assert allLinkages_test["num_members"].values[0] == 1
 
-    # Test that the number of clusters is as expected
+    # Test that the number of linkages is as expected
     assert allLinkages_test["pure"].values[0] == 1
     assert allLinkages_test["partial"].values[0] == 0
     assert allLinkages_test["mixed"].values[0] == 0
@@ -97,7 +97,7 @@ def test_analyzeLinkages_singleObject_found():
 
     ### Test allTruths
 
-    # Test number of clusters is consistent
+    # Test number of linkages is consistent
     assert allTruths_test["found_pure"].values[0] == 1
     assert allTruths_test["found_partial"].values[0] == 0
     assert allTruths_test["found"].values[0] == 1
@@ -116,8 +116,8 @@ def test_analyzeLinkages_singleObject_found():
         'num_unknown_truths_partial_linkages' : [0],
         'num_false_positive_pure_linkages' : [0],
         'num_false_positive_partial_linkages' : [0],
-        'num_mixed_clusters' : [0],
-        'num_total_clusters' : [1]
+        'num_mixed_linkages' : [0],
+        'num_total_linkages' : [1]
     })
     
     # Re-arange columns in case order is changed (python 3.5 and earlier)
@@ -131,8 +131,8 @@ def test_analyzeLinkages_singleObject_found():
         'num_unknown_truths_partial_linkages',
         'num_false_positive_pure_linkages',
         'num_false_positive_partial_linkages',
-        'num_mixed_clusters',
-        'num_total_clusters']]
+        'num_mixed_linkages',
+        'num_total_linkages']]
 
     assert_frame_equal(summary, summary_test)
     
@@ -160,7 +160,7 @@ def test_analyzeLinkages_singleObject_found():
     # Test that the number of members is 1
     assert allLinkages_test["num_members"].values[0] == 1
 
-    # Test that the number of clusters is as expected
+    # Test that the number of linkages is as expected
     assert allLinkages_test["pure"].values[0] == 1
     assert allLinkages_test["partial"].values[0] == 0
     assert allLinkages_test["mixed"].values[0] == 0
@@ -171,7 +171,7 @@ def test_analyzeLinkages_singleObject_found():
 
     ### Test allTruths
 
-    # Test number of clusters is consistent
+    # Test number of linkages is consistent
     assert allTruths_test["found_pure"].values[0] == 1
     assert allTruths_test["found_partial"].values[0] == 0
     assert allTruths_test["found"].values[0] == 1
@@ -190,8 +190,8 @@ def test_analyzeLinkages_singleObject_found():
         'num_unknown_truths_partial_linkages' : [0],
         'num_false_positive_pure_linkages' : [0],
         'num_false_positive_partial_linkages' : [0],
-        'num_mixed_clusters' : [0],
-        'num_total_clusters' : [1]
+        'num_mixed_linkages' : [0],
+        'num_total_linkages' : [1]
     })
     
     # Re-arange columns in case order is changed (python 3.5 and earlier)
@@ -205,8 +205,8 @@ def test_analyzeLinkages_singleObject_found():
         'num_unknown_truths_partial_linkages',
         'num_false_positive_pure_linkages',
         'num_false_positive_partial_linkages',
-        'num_mixed_clusters',
-        'num_total_clusters']]
+        'num_mixed_linkages',
+        'num_total_linkages']]
 
     assert_frame_equal(summary, summary_test)
     
@@ -234,7 +234,7 @@ def test_analyzeLinkages_singleObject_found():
     # Test that the number of members is 1
     assert allLinkages_test["num_members"].values[0] == 1
 
-    # Test that the number of clusters is as expected
+    # Test that the number of linkages is as expected
     assert allLinkages_test["pure"].values[0] == 1
     assert allLinkages_test["partial"].values[0] == 0
     assert allLinkages_test["mixed"].values[0] == 0
@@ -245,7 +245,7 @@ def test_analyzeLinkages_singleObject_found():
 
     ### Test allTruths
 
-    # Test number of clusters is consistent
+    # Test number of linkages is consistent
     assert allTruths_test["found_pure"].values[0] == 1
     assert allTruths_test["found_partial"].values[0] == 0
     assert allTruths_test["found"].values[0] == 1
@@ -264,8 +264,8 @@ def test_analyzeLinkages_singleObject_found():
         'num_unknown_truths_partial_linkages' : [0],
         'num_false_positive_pure_linkages' : [0],
         'num_false_positive_partial_linkages' : [0],
-        'num_mixed_clusters' : [0],
-        'num_total_clusters' : [1]
+        'num_mixed_linkages' : [0],
+        'num_total_linkages' : [1]
     })
     
     # Re-arange columns in case order is changed (python 3.5 and earlier)
@@ -279,13 +279,13 @@ def test_analyzeLinkages_singleObject_found():
         'num_unknown_truths_partial_linkages',
         'num_false_positive_pure_linkages',
         'num_false_positive_partial_linkages',
-        'num_mixed_clusters',
-        'num_total_clusters']]
+        'num_mixed_linkages',
+        'num_total_linkages']]
 
     assert_frame_equal(summary, summary_test)
 
 def test_analyzeLinkages_singleObject_missed():    
-    # Create randomly sized pure cluster
+    # Create randomly sized pure linkage
     num_obs = np.random.randint(2, 100000)
     name = ''.join([random.choice(string.ascii_letters + string.digits) for n in range(np.random.randint(64))])
     truth = [name for i in range(num_obs)]
@@ -329,7 +329,7 @@ def test_analyzeLinkages_singleObject_missed():
     # Test that the number of members is 1
     assert allLinkages_test["num_members"].values[0] == 1
 
-    # Test that the number of clusters is as expected
+    # Test that the number of linkages is as expected
     assert allLinkages_test["pure"].values[0] == 0
     assert allLinkages_test["partial"].values[0] == 0
     assert allLinkages_test["mixed"].values[0] == 1
@@ -340,7 +340,7 @@ def test_analyzeLinkages_singleObject_missed():
     
     ### Test allTruths
 
-    # Test number of clusters is consistent
+    # Test number of linkages is consistent
     assert allTruths_test["found_pure"].values[0] == 0
     assert allTruths_test["found_partial"].values[0] == 0
     assert allTruths_test["found"].values[0] == 0
@@ -359,8 +359,8 @@ def test_analyzeLinkages_singleObject_missed():
         'num_unknown_truths_partial_linkages' : [0],
         'num_false_positive_pure_linkages' : [0],
         'num_false_positive_partial_linkages' : [0],
-        'num_mixed_clusters' : [1],
-        'num_total_clusters' : [1]
+        'num_mixed_linkages' : [1],
+        'num_total_linkages' : [1]
     })
     
     # Re-arange columns in case order is changed (python 3.5 and earlier)
@@ -374,8 +374,8 @@ def test_analyzeLinkages_singleObject_missed():
         'num_unknown_truths_partial_linkages',
         'num_false_positive_pure_linkages',
         'num_false_positive_partial_linkages',
-        'num_mixed_clusters',
-        'num_total_clusters']]
+        'num_mixed_linkages',
+        'num_total_linkages']]
 
     assert_frame_equal(summary, summary_test)
     
@@ -402,7 +402,7 @@ def test_analyzeLinkages_singleObject_missed():
     # Test that the number of members is 1
     assert allLinkages_test["num_members"].values[0] == 1
 
-    # Test that the number of clusters is as expected
+    # Test that the number of linkages is as expected
     assert allLinkages_test["pure"].values[0] == 0
     assert allLinkages_test["partial"].values[0] == 0
     assert allLinkages_test["mixed"].values[0] == 1
@@ -413,7 +413,7 @@ def test_analyzeLinkages_singleObject_missed():
     
     ### Test allTruths
 
-    # Test number of clusters is consistent
+    # Test number of linkages is consistent
     assert allTruths_test["found_pure"].values[0] == 0
     assert allTruths_test["found_partial"].values[0] == 0
     assert allTruths_test["found"].values[0] == 0
@@ -432,8 +432,8 @@ def test_analyzeLinkages_singleObject_missed():
         'num_unknown_truths_partial_linkages' : [0],
         'num_false_positive_pure_linkages' : [0],
         'num_false_positive_partial_linkages' : [0],
-        'num_mixed_clusters' : [1],
-        'num_total_clusters' : [1]
+        'num_mixed_linkages' : [1],
+        'num_total_linkages' : [1]
     })
     
     # Re-arange columns in case order is changed (python 3.5 and earlier)
@@ -447,8 +447,8 @@ def test_analyzeLinkages_singleObject_missed():
         'num_unknown_truths_partial_linkages',
         'num_false_positive_pure_linkages',
         'num_false_positive_partial_linkages',
-        'num_mixed_clusters',
-        'num_total_clusters']]
+        'num_mixed_linkages',
+        'num_total_linkages']]
 
     assert_frame_equal(summary, summary_test)
     
@@ -463,7 +463,7 @@ def test_analyzeLinkages_multiObject():
     linkageMembers_list = []
     observations_list = []
 
-    # Create three randomly sized pure clusters
+    # Create three randomly sized pure linkages
     prev_obs = 0
     min_obs = []
     names = []
@@ -526,7 +526,7 @@ def test_analyzeLinkages_multiObject():
     # Test that the number of members is 1
     np.testing.assert_equal(allLinkages_test["num_members"].values, np.array([1, 1, 1]))
 
-    # Test that the number of clusters is as expected
+    # Test that the number of linkages is as expected
     np.testing.assert_equal(allLinkages_test["pure"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allLinkages_test["partial"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allLinkages_test["mixed"].values, np.array([1, 1, 1]))
@@ -539,7 +539,7 @@ def test_analyzeLinkages_multiObject():
 
     ### Test allTruths
 
-    # Test number of clusters is consistent
+    # Test number of linkages is consistent
     np.testing.assert_equal(allTruths_test["found_pure"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allTruths_test["found_partial"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allTruths_test["found"].values, np.array([0, 0, 0]))
@@ -558,8 +558,8 @@ def test_analyzeLinkages_multiObject():
         'num_unknown_truths_partial_linkages' : [0],
         'num_false_positive_pure_linkages' : [0],
         'num_false_positive_partial_linkages' : [0],
-        'num_mixed_clusters' : [3],
-        'num_total_clusters' : [3]
+        'num_mixed_linkages' : [3],
+        'num_total_linkages' : [3]
     })
 
     # Re-arange columns in case order is changed (python 3.5 and earlier)
@@ -573,8 +573,8 @@ def test_analyzeLinkages_multiObject():
         'num_unknown_truths_partial_linkages',
         'num_false_positive_pure_linkages',
         'num_false_positive_partial_linkages',
-        'num_mixed_clusters',
-        'num_total_clusters']]
+        'num_mixed_linkages',
+        'num_total_linkages']]
 
     assert_frame_equal(summary, summary_test)
 
@@ -600,7 +600,7 @@ def test_analyzeLinkages_multiObject():
     # Test that the number of members is 1
     np.testing.assert_equal(allLinkages_test["num_members"].values, np.array([1, 1, 1]))
 
-    # Test that the number of clusters is as expected
+    # Test that the number of linkages is as expected
     np.testing.assert_equal(allLinkages_test["pure"].values, np.array([0, 0, 1]))
     np.testing.assert_equal(allLinkages_test["partial"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allLinkages_test["mixed"].values, np.array([1, 1, 0]))
@@ -615,7 +615,7 @@ def test_analyzeLinkages_multiObject():
 
     ### Test allTruths
 
-    # Test number of clusters is consistent
+    # Test number of linkages is consistent
     np.testing.assert_equal(allTruths_test["found_pure"].values, np.array([0, 0, 1]))
     np.testing.assert_equal(allTruths_test["found_partial"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allTruths_test["found"].values, np.array([0, 0, 1]))
@@ -634,8 +634,8 @@ def test_analyzeLinkages_multiObject():
         'num_unknown_truths_partial_linkages' : [0],
         'num_false_positive_pure_linkages' : [0],
         'num_false_positive_partial_linkages' : [0],
-        'num_mixed_clusters' : [2],
-        'num_total_clusters' : [3]
+        'num_mixed_linkages' : [2],
+        'num_total_linkages' : [3]
     })
 
     # Re-arange columns in case order is changed (python 3.5 and earlier)
@@ -649,8 +649,8 @@ def test_analyzeLinkages_multiObject():
         'num_unknown_truths_partial_linkages',
         'num_false_positive_pure_linkages',
         'num_false_positive_partial_linkages',
-        'num_mixed_clusters',
-        'num_total_clusters']]
+        'num_mixed_linkages',
+        'num_total_linkages']]
 
     assert_frame_equal(summary, summary_test)
 
@@ -676,7 +676,7 @@ def test_analyzeLinkages_multiObject():
     # Test that the number of members is 1
     np.testing.assert_equal(allLinkages_test["num_members"].values, np.array([1, 1, 1]))
 
-    # Test that the number of clusters is as expected
+    # Test that the number of linkages is as expected
     np.testing.assert_equal(allLinkages_test["pure"].values, np.array([1, 1, 1]))
     np.testing.assert_equal(allLinkages_test["partial"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allLinkages_test["mixed"].values, np.array([0, 0, 0]))
@@ -688,7 +688,7 @@ def test_analyzeLinkages_multiObject():
 
     ### Test allTruths
 
-    # Test number of clusters is consistent
+    # Test number of linkages is consistent
     np.testing.assert_equal(allTruths_test["found_pure"].values, np.array([1, 1, 1]))
     np.testing.assert_equal(allTruths_test["found_partial"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allTruths_test["found"].values, np.array([1, 1, 1]))
@@ -707,8 +707,8 @@ def test_analyzeLinkages_multiObject():
         'num_unknown_truths_partial_linkages' : [0],
         'num_false_positive_pure_linkages' : [0],
         'num_false_positive_partial_linkages' : [0],
-        'num_mixed_clusters' : [0],
-        'num_total_clusters' : [3]
+        'num_mixed_linkages' : [0],
+        'num_total_linkages' : [3]
     })
 
     # Re-arange columns in case order is changed (python 3.5 and earlier)
@@ -722,8 +722,8 @@ def test_analyzeLinkages_multiObject():
         'num_unknown_truths_partial_linkages',
         'num_false_positive_pure_linkages',
         'num_false_positive_partial_linkages',
-        'num_mixed_clusters',
-        'num_total_clusters']]
+        'num_mixed_linkages',
+        'num_total_linkages']]
 
     assert_frame_equal(summary, summary_test)
 
@@ -752,7 +752,7 @@ def test_analyzeLinkages_multiObject():
     # Test that the number of members is 1
     np.testing.assert_equal(allLinkages_test["num_members"].values, np.array([1, 1, 1]))
 
-    # Test that the number of clusters is as expected
+    # Test that the number of linkages is as expected
     np.testing.assert_equal(allLinkages_test["pure"].values, np.array([1, 1, 1]))
     np.testing.assert_equal(allLinkages_test["partial"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allLinkages_test["mixed"].values, np.array([0, 0, 0]))
@@ -764,7 +764,7 @@ def test_analyzeLinkages_multiObject():
 
     ### Test allTruths
 
-    # Test number of clusters is consistent
+    # Test number of linkages is consistent
     np.testing.assert_equal(allTruths_test["found_pure"].values, np.array([1, 1, 1]))
     np.testing.assert_equal(allTruths_test["found_partial"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allTruths_test["found"].values, np.array([1, 1, 1]))
@@ -783,8 +783,8 @@ def test_analyzeLinkages_multiObject():
         'num_unknown_truths_partial_linkages' : [0],
         'num_false_positive_pure_linkages' : [1],
         'num_false_positive_partial_linkages' : [0],
-        'num_mixed_clusters' : [0],
-        'num_total_clusters' : [3]
+        'num_mixed_linkages' : [0],
+        'num_total_linkages' : [3]
     })
 
     # Re-arange columns in case order is changed (python 3.5 and earlier)
@@ -798,8 +798,8 @@ def test_analyzeLinkages_multiObject():
         'num_unknown_truths_partial_linkages',
         'num_false_positive_pure_linkages',
         'num_false_positive_partial_linkages',
-        'num_mixed_clusters',
-        'num_total_clusters']]
+        'num_mixed_linkages',
+        'num_total_linkages']]
 
     assert_frame_equal(summary, summary_test)
 
@@ -830,7 +830,7 @@ def test_analyzeLinkages_multiObject():
     # Test that the number of members is 1
     np.testing.assert_equal(allLinkages_test["num_members"].values, np.array([1, 1, 1]))
 
-    # Test that the number of clusters is as expected
+    # Test that the number of linkages is as expected
     np.testing.assert_equal(allLinkages_test["pure"].values, np.array([1, 1, 1]))
     np.testing.assert_equal(allLinkages_test["partial"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allLinkages_test["mixed"].values, np.array([0, 0, 0]))
@@ -842,7 +842,7 @@ def test_analyzeLinkages_multiObject():
 
     ### Test allTruths
 
-    # Test number of clusters is consistent
+    # Test number of linkages is consistent
     np.testing.assert_equal(allTruths_test["found_pure"].values, np.array([1, 1, 1]))
     np.testing.assert_equal(allTruths_test["found_partial"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allTruths_test["found"].values, np.array([1, 1, 1]))
@@ -861,8 +861,8 @@ def test_analyzeLinkages_multiObject():
         'num_unknown_truths_partial_linkages' : [0],
         'num_false_positive_pure_linkages' : [1],
         'num_false_positive_partial_linkages' : [0],
-        'num_mixed_clusters' : [0],
-        'num_total_clusters' : [3]
+        'num_mixed_linkages' : [0],
+        'num_total_linkages' : [3]
     })
 
     # Re-arange columns in case order is changed (python 3.5 and earlier)
@@ -876,8 +876,8 @@ def test_analyzeLinkages_multiObject():
         'num_unknown_truths_partial_linkages',
         'num_false_positive_pure_linkages',
         'num_false_positive_partial_linkages',
-        'num_mixed_clusters',
-        'num_total_clusters']]
+        'num_mixed_linkages',
+        'num_total_linkages']]
 
     assert_frame_equal(summary, summary_test)
 
@@ -908,7 +908,7 @@ def test_analyzeLinkages_multiObject():
     # Test that the number of members is 1
     np.testing.assert_equal(allLinkages_test["num_members"].values, np.array([1, 1, 1]))
 
-    # Test that the number of clusters is as expected
+    # Test that the number of linkages is as expected
     np.testing.assert_equal(allLinkages_test["pure"].values, np.array([1, 1, 1]))
     np.testing.assert_equal(allLinkages_test["partial"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allLinkages_test["mixed"].values, np.array([0, 0, 0]))
@@ -920,7 +920,7 @@ def test_analyzeLinkages_multiObject():
 
     ### Test allTruths
 
-    # Test number of clusters is consistent
+    # Test number of linkages is consistent
     np.testing.assert_equal(allTruths_test["found_pure"].values, np.array([1, 1, 1]))
     np.testing.assert_equal(allTruths_test["found_partial"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allTruths_test["found"].values, np.array([1, 1, 1]))
@@ -939,8 +939,8 @@ def test_analyzeLinkages_multiObject():
         'num_unknown_truths_partial_linkages' : [0],
         'num_false_positive_pure_linkages' : [1],
         'num_false_positive_partial_linkages' : [0],
-        'num_mixed_clusters' : [0],
-        'num_total_clusters' : [3]
+        'num_mixed_linkages' : [0],
+        'num_total_linkages' : [3]
     })
 
     # Re-arange columns in case order is changed (python 3.5 and earlier)
@@ -954,8 +954,8 @@ def test_analyzeLinkages_multiObject():
         'num_unknown_truths_partial_linkages',
         'num_false_positive_pure_linkages',
         'num_false_positive_partial_linkages',
-        'num_mixed_clusters',
-        'num_total_clusters']]
+        'num_mixed_linkages',
+        'num_total_linkages']]
 
     assert_frame_equal(summary, summary_test)
 
@@ -986,7 +986,7 @@ def test_analyzeLinkages_multiObject():
     # Test that the number of members is 1
     np.testing.assert_equal(allLinkages_test["num_members"].values, np.array([1, 1, 1]))
 
-    # Test that the number of clusters is as expected
+    # Test that the number of linkages is as expected
     np.testing.assert_equal(allLinkages_test["pure"].values, np.array([1, 1, 1]))
     np.testing.assert_equal(allLinkages_test["partial"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allLinkages_test["mixed"].values, np.array([0, 0, 0]))
@@ -998,7 +998,7 @@ def test_analyzeLinkages_multiObject():
 
     ### Test allTruths
 
-    # Test number of clusters is consistent
+    # Test number of linkages is consistent
     np.testing.assert_equal(allTruths_test["found_pure"].values, np.array([1, 1, 1]))
     np.testing.assert_equal(allTruths_test["found_partial"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allTruths_test["found"].values, np.array([1, 1, 1]))
@@ -1017,8 +1017,8 @@ def test_analyzeLinkages_multiObject():
         'num_unknown_truths_partial_linkages' : [0],
         'num_false_positive_pure_linkages' : [1],
         'num_false_positive_partial_linkages' : [0],
-        'num_mixed_clusters' : [0],
-        'num_total_clusters' : [3]
+        'num_mixed_linkages' : [0],
+        'num_total_linkages' : [3]
     })
 
     # Re-arange columns in case order is changed (python 3.5 and earlier)
@@ -1032,8 +1032,8 @@ def test_analyzeLinkages_multiObject():
         'num_unknown_truths_partial_linkages',
         'num_false_positive_pure_linkages',
         'num_false_positive_partial_linkages',
-        'num_mixed_clusters',
-        'num_total_clusters']]
+        'num_mixed_linkages',
+        'num_total_linkages']]
 
     assert_frame_equal(summary, summary_test)
     
@@ -1064,7 +1064,7 @@ def test_analyzeLinkages_multiObject():
     # Test that the number of members is 1
     np.testing.assert_equal(allLinkages_test["num_members"].values, np.array([1, 1, 1]))
 
-    # Test that the number of clusters is as expected
+    # Test that the number of linkages is as expected
     np.testing.assert_equal(allLinkages_test["pure"].values, np.array([0, 1, 1]))
     np.testing.assert_equal(allLinkages_test["partial"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allLinkages_test["mixed"].values, np.array([1, 0, 0]))
@@ -1079,7 +1079,7 @@ def test_analyzeLinkages_multiObject():
 
     ### Test allTruths
 
-    # Test number of clusters is consistent
+    # Test number of linkages is consistent
     np.testing.assert_equal(allTruths_test["found_pure"].values, np.array([0, 1, 1]))
     np.testing.assert_equal(allTruths_test["found_partial"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allTruths_test["found"].values, np.array([0, 1, 1]))
@@ -1098,8 +1098,8 @@ def test_analyzeLinkages_multiObject():
         'num_unknown_truths_partial_linkages' : [0],
         'num_false_positive_pure_linkages' : [1],
         'num_false_positive_partial_linkages' : [0],
-        'num_mixed_clusters' : [1],
-        'num_total_clusters' : [3]
+        'num_mixed_linkages' : [1],
+        'num_total_linkages' : [3]
     })
 
     # Re-arange columns in case order is changed (python 3.5 and earlier)
@@ -1113,8 +1113,8 @@ def test_analyzeLinkages_multiObject():
         'num_unknown_truths_partial_linkages',
         'num_false_positive_pure_linkages',
         'num_false_positive_partial_linkages',
-        'num_mixed_clusters',
-        'num_total_clusters']]
+        'num_mixed_linkages',
+        'num_total_linkages']]
 
     assert_frame_equal(summary, summary_test)
 
@@ -1158,7 +1158,7 @@ def test_analyzeLinkages_multiObject():
     # Test that the number of members is 1
     np.testing.assert_equal(allLinkages_test["num_members"].values, np.array([1, 2, 2]))
 
-    # Test that the number of clusters is as expected
+    # Test that the number of linkages is as expected
     np.testing.assert_equal(allLinkages_test["pure"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allLinkages_test["partial"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allLinkages_test["mixed"].values, np.array([1, 1, 1]))
@@ -1171,7 +1171,7 @@ def test_analyzeLinkages_multiObject():
 
     ### Test allTruths
 
-    # Test number of clusters is consistent
+    # Test number of linkages is consistent
     np.testing.assert_equal(allTruths_test["found_pure"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allTruths_test["found_partial"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allTruths_test["found"].values, np.array([0, 0, 0]))
@@ -1190,8 +1190,8 @@ def test_analyzeLinkages_multiObject():
         'num_unknown_truths_partial_linkages' : [0],
         'num_false_positive_pure_linkages' : [0],
         'num_false_positive_partial_linkages' : [0],
-        'num_mixed_clusters' : [3],
-        'num_total_clusters' : [3]
+        'num_mixed_linkages' : [3],
+        'num_total_linkages' : [3]
     })
 
     # Re-arange columns in case order is changed (python 3.5 and earlier)
@@ -1205,8 +1205,8 @@ def test_analyzeLinkages_multiObject():
         'num_unknown_truths_partial_linkages',
         'num_false_positive_pure_linkages',
         'num_false_positive_partial_linkages',
-        'num_mixed_clusters',
-        'num_total_clusters']]
+        'num_mixed_linkages',
+        'num_total_linkages']]
 
     assert_frame_equal(summary, summary_test)
 
@@ -1237,7 +1237,7 @@ def test_analyzeLinkages_multiObject():
     # Test that the number of members is 1
     np.testing.assert_equal(allLinkages_test["num_members"].values, np.array([1, 2, 2]))
 
-    # Test that the number of clusters is as expected
+    # Test that the number of linkages is as expected
     np.testing.assert_equal(allLinkages_test["pure"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allLinkages_test["partial"].values, np.array([0, 0, 1]))
     np.testing.assert_equal(allLinkages_test["mixed"].values, np.array([1, 1, 0]))
@@ -1254,7 +1254,7 @@ def test_analyzeLinkages_multiObject():
 
     ### Test allTruths
 
-    # Test number of clusters is consistent
+    # Test number of linkages is consistent
     np.testing.assert_equal(allTruths_test["found_pure"].values, np.array([0, 0, 0]))
     np.testing.assert_equal(allTruths_test["found_partial"].values, np.array([0, 0, 1]))
     np.testing.assert_equal(allTruths_test["found"].values, np.array([0, 0, 1]))
@@ -1273,8 +1273,8 @@ def test_analyzeLinkages_multiObject():
         'num_unknown_truths_partial_linkages' : [0],
         'num_false_positive_pure_linkages' : [0],
         'num_false_positive_partial_linkages' : [0],
-        'num_mixed_clusters' : [2],
-        'num_total_clusters' : [3]
+        'num_mixed_linkages' : [2],
+        'num_total_linkages' : [3]
     })
 
     # Re-arange columns in case order is changed (python 3.5 and earlier)
@@ -1288,8 +1288,8 @@ def test_analyzeLinkages_multiObject():
         'num_unknown_truths_partial_linkages',
         'num_false_positive_pure_linkages',
         'num_false_positive_partial_linkages',
-        'num_mixed_clusters',
-        'num_total_clusters']]
+        'num_mixed_linkages',
+        'num_total_linkages']]
 
     assert_frame_equal(summary, summary_test)
 
@@ -1329,7 +1329,7 @@ def test_analyzeLinkages_emptyDataFrames():
 
     # Case 3b: Pass non-empty observations and empty linkageMembers DataFrames
         
-    # Create randomly sized pure cluster
+    # Create randomly sized pure linkage
     num_obs = np.random.randint(2, 100000)
     name = ''.join([random.choice(string.ascii_letters + string.digits) for n in range(np.random.randint(64))])
     truth = [name for i in range(num_obs)]
@@ -1370,7 +1370,7 @@ def test_analyzeLinkages_emptyDataFrames():
 
     ### Test allTruths
 
-    # Test number of clusters is consistent
+    # Test number of linkages is consistent
     np.testing.assert_equal(allTruths_test["found_pure"].values, np.array([0]))
     np.testing.assert_equal(allTruths_test["found_partial"].values, np.array([0]))
     np.testing.assert_equal(allTruths_test["found"].values, np.array([0]))
@@ -1389,8 +1389,8 @@ def test_analyzeLinkages_emptyDataFrames():
         'num_unknown_truths_partial_linkages' : [0],
         'num_false_positive_pure_linkages' : [0],
         'num_false_positive_partial_linkages' : [0],
-        'num_mixed_clusters' : [0],
-        'num_total_clusters' : [0]
+        'num_mixed_linkages' : [0],
+        'num_total_linkages' : [0]
     })
 
     # Re-arange columns in case order is changed (python 3.5 and earlier)
@@ -1404,7 +1404,7 @@ def test_analyzeLinkages_emptyDataFrames():
         'num_unknown_truths_partial_linkages',
         'num_false_positive_pure_linkages',
         'num_false_positive_partial_linkages',
-        'num_mixed_clusters',
-        'num_total_clusters']]
+        'num_mixed_linkages',
+        'num_total_linkages']]
 
     assert_frame_equal(summary, summary_test)
