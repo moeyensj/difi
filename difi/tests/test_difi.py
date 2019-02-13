@@ -533,7 +533,7 @@ def test_analyzeLinkages_multiObject():
         assert math.isnan(i)
 
     # Test the linked truth is nan
-    for i in allLinkages_test["contamination"].values:
+    for i in allLinkages_test["linked_truth"].values:
         assert math.isnan(i)
 
     ### Test allTruths
@@ -607,8 +607,10 @@ def test_analyzeLinkages_multiObject():
         assert math.isnan(i)
 
     # Test the linked truth is nan
-    for i in allLinkages_test["contamination"].values:
+    for i in allLinkages_test["linked_truth"].values[0:2]:
         assert math.isnan(i)
+    # Test the linked truth for other two linkages is correct
+    np.testing.assert_equal(allLinkages_test["linked_truth"].values[-1], names[-1])
 
     ### Test allTruths
 
@@ -680,9 +682,8 @@ def test_analyzeLinkages_multiObject():
     for i in allLinkages_test["contamination"].values:
         assert math.isnan(i)
 
-    # Test the linked truth is nan
-    for i in allLinkages_test["contamination"].values:
-        assert math.isnan(i)
+    # Test the linked truth is equal to names
+    np.testing.assert_equal(allLinkages_test["linked_truth"].values, names)
 
     ### Test allTruths
 
@@ -757,9 +758,8 @@ def test_analyzeLinkages_multiObject():
     for i in allLinkages_test["contamination"].values:
         assert math.isnan(i)
 
-    # Test the linked truth is nan
-    for i in allLinkages_test["contamination"].values:
-        assert math.isnan(i)
+    # Test the linked truth is equal to names
+    np.testing.assert_equal(allLinkages_test["linked_truth"].values, names)
 
     ### Test allTruths
 
@@ -836,9 +836,8 @@ def test_analyzeLinkages_multiObject():
     for i in allLinkages_test["contamination"].values:
         assert math.isnan(i)
 
-    # Test the linked truth is nan
-    for i in allLinkages_test["contamination"].values:
-        assert math.isnan(i)
+    # Test the linked truth is equal to names
+    np.testing.assert_equal(allLinkages_test["linked_truth"].values, names)
 
     ### Test allTruths
 
@@ -915,9 +914,8 @@ def test_analyzeLinkages_multiObject():
     for i in allLinkages_test["contamination"].values:
         assert math.isnan(i)
 
-    # Test the linked truth is nan
-    for i in allLinkages_test["contamination"].values:
-        assert math.isnan(i)
+    # Test the linked truth is equal to names
+    np.testing.assert_equal(allLinkages_test["linked_truth"].values, names)
 
     ### Test allTruths
 
@@ -994,9 +992,8 @@ def test_analyzeLinkages_multiObject():
     for i in allLinkages_test["contamination"].values:
         assert math.isnan(i)
 
-    # Test the linked truth is nan
-    for i in allLinkages_test["contamination"].values:
-        assert math.isnan(i)
+    # Test the linked truth is equal to names
+    np.testing.assert_equal(allLinkages_test["linked_truth"].values, names)
 
     ### Test allTruths
 
@@ -1074,8 +1071,10 @@ def test_analyzeLinkages_multiObject():
         assert math.isnan(i)
 
     # Test the linked truth is nan
-    for i in allLinkages_test["contamination"].values:
-        assert math.isnan(i)
+    assert math.isnan(allLinkages_test["linked_truth"].values[0])
+       
+    # Test the linked truth for other two linkages is correct
+    np.testing.assert_equal(allLinkages_test["linked_truth"].values[1:], names[1:])
 
     ### Test allTruths
 
