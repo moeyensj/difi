@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
    name="difi",
-   version="0.0.1.dev0",
+   version="1.0.0",
    license="BSD 3-Clause License",
    author="Joachim Moeyens",
    author_email="moeyensj@uw.edu",
