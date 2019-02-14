@@ -19,9 +19,12 @@ The example below can be found in great detail in this [Jupyter Notebook](https:
 
 ### Assumed Inputs
 `difi` is designed to analyze a set of linkages made by external software where some of the underlying true linkages are known. It needs just two DataFrames of data:
-- 1) a DataFrame containing observations, with a column for observation ID and a column for the underlying truth (don't worry! -- `difi` can handle false positives and unknown truths as well)
+- 1) a DataFrame containing observations, with a column for observation ID and a column for the underlying truth (don't worry! -- `difi` can handle false positives and unknown truths as well)  
+
 ![observations](docs/images/observations.png "Observations")
-- 2) a DataFrame describing the linkages that were found in the observations by the external software. This DataFrame needs just two columns, one with the linkage id and the other with the observation IDs that form that linkage
+
+- 2) a DataFrame describing the linkages that were found in the observations by the external software. This DataFrame needs just two columns, one with the linkage id and the other with the observation IDs that form that linkage  
+
 ![linkageMembers](docs/images/linkageMembers.png "linkageMembers")
 
 ### What Can I Find? 
