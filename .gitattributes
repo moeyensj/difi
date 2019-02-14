@@ -2,3 +2,5 @@ examples/data/thor/allClusters.txt filter=lfs diff=lfs merge=lfs -text
 examples/data/thor/allObjects.txt filter=lfs diff=lfs merge=lfs -text
 examples/data/thor/clusterMembers.txt filter=lfs diff=lfs merge=lfs -text
 examples/data/thor/projected_obs.txt filter=lfs diff=lfs merge=lfs -text
+examples/data/mops/night_52391_through_52406.track filter=lfs diff=lfs merge=lfs -text
+examples/data/mops/night_52391_through_52406.dets filter=lfs diff=lfs merge=lfs -text
