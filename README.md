@@ -1,5 +1,6 @@
 # difi
 Did I Find It?  
+[![Build Status](https://dev.azure.com/moeyensj/difi/_apis/build/status/moeyensj.difi?branchName=master)](https://dev.azure.com/moeyensj/difi/_build/latest?definitionId=1&branchName=master)
 [![Build Status](https://travis-ci.com/moeyensj/difi.svg?branch=master)](https://travis-ci.com/moeyensj/difi)
 [![Coverage Status](https://coveralls.io/repos/github/moeyensj/difi/badge.svg?branch=master)](https://coveralls.io/github/moeyensj/difi?branch=master)
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
