@@ -386,7 +386,7 @@ def test_analyzeObservations_multiObject():
     np.testing.assert_equal(allTruths_test["findable"].values, np.array([1, 1, 1]))
 
     # Test that the truth is the name
-    np.testing.assert_equal(allTruths_test[columnMapping["truth"]].values, names)
+    np.testing.assert_equal(set(allTruths_test[columnMapping["truth"]].values), set(names))
 
     ### Test summary
     summary = pd.DataFrame({
@@ -428,10 +428,10 @@ def test_analyzeObservations_multiObject():
     assert len(allTruths_test) == 3
 
     # Test number of linkages is consistent
-    np.testing.assert_equal(allTruths_test["findable"].values, np.array([0, 1, 1]))
+    np.testing.assert_equal(allTruths_test["findable"].values, np.array([1, 1, 0]))
 
     # Test that the truth is the name
-    np.testing.assert_equal(allTruths_test[columnMapping["truth"]].values, names)
+    np.testing.assert_equal(set(allTruths_test[columnMapping["truth"]].values), set(names))
 
     ### Test summary
     summary = pd.DataFrame({
@@ -476,7 +476,7 @@ def test_analyzeObservations_multiObject():
     np.testing.assert_equal(allTruths_test["findable"].values, np.array([0, 0, 0]))
 
     # Test that the truth is the name
-    np.testing.assert_equal(allTruths_test[columnMapping["truth"]].values, names)
+    np.testing.assert_equal(set(allTruths_test[columnMapping["truth"]].values), set(names))
 
     ### Test summary
     summary = pd.DataFrame({
@@ -519,10 +519,10 @@ def test_analyzeObservations_multiObject():
     assert len(allTruths_test) == 3
 
     # Test number of linkages is consistent
-    np.testing.assert_equal(allTruths_test["findable"].values, np.array([1, 1, 0]))
+    np.testing.assert_equal(allTruths_test["findable"].values, np.array([0, 1, 1]))
 
     # Test that the truth is the name
-    np.testing.assert_equal(allTruths_test[columnMapping["truth"]].values, names)
+    np.testing.assert_equal(set(allTruths_test[columnMapping["truth"]].values), set(names))
 
     ### Test summary
     summary = pd.DataFrame({
@@ -565,10 +565,10 @@ def test_analyzeObservations_multiObject():
     assert len(allTruths_test) == 3
 
     # Test number of linkages is consistent
-    np.testing.assert_equal(allTruths_test["findable"].values, np.array([1, 1, 0]))
+    np.testing.assert_equal(allTruths_test["findable"].values, np.array([0, 1, 1]))
 
     # Test that the truth is the name
-    np.testing.assert_equal(allTruths_test[columnMapping["truth"]].values, names)
+    np.testing.assert_equal(set(allTruths_test[columnMapping["truth"]].values), set(names))
 
     ### Test summary
     summary = pd.DataFrame({
