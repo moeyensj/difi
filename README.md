@@ -16,7 +16,7 @@ To install pre-requisite software using anaconda:
 
 ## Example
 
-The example below can be found in great detail in this [Jupyter Notebook](https://github.com/moeyensj/difi/tree/master/examples/example_thor.ipynb).
+The example below can be found in greater detail in this [Jupyter Notebook](https://github.com/moeyensj/difi/tree/master/examples/example_thor.ipynb).
 
 ### Assumed Inputs
 `difi` is designed to analyze a set of linkages made by external software where some of the underlying true linkages are known. It needs just two DataFrames of data:
@@ -24,7 +24,7 @@ The example below can be found in great detail in this [Jupyter Notebook](https:
 
 ![observations](docs/images/observations.png "Observations")
 
-- 2) a DataFrame describing the linkages that were found in the observations by the external software. This DataFrame needs just two columns, one with the linkage id and the other with the observation IDs that form that linkage  
+- 2) a DataFrame describing the linkages that were found in the observations by the external software. This DataFrame needs just two columns, one with the linkage ID and the other with the observation IDs that form that linkage  
 
 ![linkageMembers](docs/images/linkageMembers.png "linkageMembers")
 
@@ -38,10 +38,10 @@ Now lets see what the external linking software did find.
 
 `difi` assumes there to be three different types of linkages:
 - 'pure': all observations in a linkage belong to a unique truth
-- 'partial': up to a certain percentage of non-unique thruths are allowed so along as one truth has at least the minimum require number of unique observations
+- 'partial': up to a certain percentage of non-unique thruths are allowed so long as one truth has at least the minimum required number of unique observations
 - 'mixed': a linkage containing different observations belonging to different truths, we avoid using the word 'false' for these linkages as they may contain unknown truths depending on the use case. We leave interpretation up to the user. 
 
-Thanks to the power of `pandas` it can be super easy to isolate the different linkage types and analyze them.
+Thanks to the power of `pandas` it can be super easy to isolate the different linkage types and analyze them separately.
 Selecting 'pure' linkages:
 ![allLinkages_pure](docs/images/allLinkages_pure.png "allLinkages_pure")
 Selecting 'partial' linkages:
@@ -54,5 +54,3 @@ Understanding the specifics behind each linkage is one thing, but how did the li
 
 ### Other examples
 More examples can be found [here](https://github.com/moeyensj/difi/tree/master/examples).
-
-
