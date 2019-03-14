@@ -26,15 +26,28 @@ jobs:
     inputs:
       versionSpec: '$(python.version)'
       architecture: 'x64'
+      
+  - bash: | 
+       sudo apt-get update
+       wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+       bash miniconda.sh -b -p $HOME/miniconda
+       export PATH="$HOME/miniconda/bin:$PATH"
+       hash -r
+       conda update -q conda --yes
+       conda info -a
+       conda update -c defaults -c conda-forge --all --yes
+    displayName: 'Install anaconda'
 
-  - script: python -m pip install --upgrade pip && pip install -r requirements.txt
-    displayName: 'Install dependencies'
+  - bash: | 
+       export PATH="$HOME/miniconda/bin:$PATH"
+       conda create --yes -n difi python=$(python.version) -c defaults -c conda-forge --file requirements.txt
+    displayName: 'Install conda packages'
 
-  - script: |
-      pip install pytest
-      pip install coverage
-      pytest difi --cov=difi --doctest-modules --junitxml=junit/test-results.xml
-    displayName: 'pytest'
+  - bash: |
+      export PATH="$HOME/miniconda/bin:$PATH"
+      source activate difi
+      pytest atm --cov=atm --doctest-modules --junitxml=junit/test-results.xml 
+    displayName: 'Run tests'
 
   - task: PublishTestResults@2
     inputs:
