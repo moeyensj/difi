@@ -46,7 +46,7 @@ jobs:
   - bash: |
       export PATH="$HOME/miniconda/bin:$PATH"
       source activate difi
-      pytest atm --cov=atm --doctest-modules --junitxml=junit/test-results.xml 
+      pytest difi --cov=difi --doctest-modules --junitxml=junit/test-results.xml 
     displayName: 'Run tests'
 
   - task: PublishTestResults@2
