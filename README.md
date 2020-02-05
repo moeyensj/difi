@@ -3,16 +3,50 @@ Did I Find It?
 [![Build Status](https://dev.azure.com/moeyensj/difi/_apis/build/status/moeyensj.difi?branchName=master)](https://dev.azure.com/moeyensj/difi/_build/latest?definitionId=1&branchName=master)
 [![Build Status](https://travis-ci.com/moeyensj/difi.svg?branch=master)](https://travis-ci.com/moeyensj/difi)
 [![Coverage Status](https://coveralls.io/repos/github/moeyensj/difi/badge.svg?branch=master)](https://coveralls.io/github/moeyensj/difi?branch=master)
+[![Docker Pulls](https://img.shields.io/docker/pulls/moeyensj/difi)](https://hub.docker.com/r/moeyensj/difi)  
+[![Python 3.6](https://img.shields.io/badge/Python-3.6%2B-blue)](https://img.shields.io/badge/Python-3.6%2B-blue)
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 
 ## About
-`difi` is a simple package that takes pre-formatted linkage information from software such as [MOPS](https://github.com/lsst/mops_daymops), [pytrax](https://github.com/pytrax/pytrax) or [thor](https://github.com/moeyensj/thor) and analyzes which objects have been found. A key performance criteria is that `difi` needs to be fast by avoiding Python for loops and instead uses clever `pandas.DataFrame` manipulation. 
+`difi` is a simple package that takes pre-formatted linkage information from software such as [MOPS](https://github.com/lsst/mops_daymops), [pytrax](https://github.com/pytrax/pytrax) or [difi](https://github.com/moeyensj/difi) and analyzes which objects have been found. A key performance criteria is that `difi` needs to be fast by avoiding Python for loops and instead uses clever `pandas.DataFrame` manipulation. 
 
 ## Installation
-To install pre-requisite software using anaconda:
 
-```conda install -c defaults -c conda-forge --file requirements.txt```
+We recommend installing the code along one of two installation paths: either a source code installation, or an installation via docker. 
 
+### Source
+Clone this repository using either `ssh` or `https`. Once cloned and downloaded, `cd` into the repository. 
+
+To install difi in its own `conda` enviroment please do the following:  
+
+```conda create -n difi_py36 -c defaults -c conda-forge -c astropy --file requirements.txt python=3.6```  
+
+Or, to install difi in a pre-existing `conda` environment called `env`:  
+
+```conda activate env```  
+```conda install -c defaults -c conda-forge -c astropy --file requirements.txt```  
+
+Or, to install pre-requisite software using `pip`:  
+
+```pip install -r requirements.txt```
+
+Once pre-requisites have been installed using either one of the tree options above, then:  
+
+```python setup.py install```
+
+You should now be able to start Python and import difi. 
+
+### Docker
+
+A Docker container with the latest version of the code can be pulled using:  
+
+```docker pull moeyensj/difi:latest```
+
+To run the container:  
+
+```docker run -it moeyensj/difi:latest```
+
+The difi code is installed the /projects directory, and is by default also installed in the container's Python installation. 
 
 ## Example
 
