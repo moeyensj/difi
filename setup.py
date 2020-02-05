@@ -2,7 +2,6 @@ from setuptools import setup
 
 setup(
    name="difi",
-   version="1.0.0",
    license="BSD 3-Clause License",
    author="Joachim Moeyens",
    author_email="moeyensj@uw.edu",
@@ -18,6 +17,7 @@ setup(
    packages=["difi"],
    package_dir={"difi": "difi"},
    package_data={"difi": ["tests/*.txt"]},
-   setup_requires=["pytest-runner"],
+   use_scm_version=True,
+   setup_requires=["pytest-runner", "setuptools_scm"],
    tests_require=["pytest"],
 )
