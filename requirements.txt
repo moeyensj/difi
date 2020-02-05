@@ -3,3 +3,6 @@ pandas
 pytest
 pytest-cov
 coveralls
+setuptools>=42
+wheel
+setuptools_scm>=3.4
