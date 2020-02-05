@@ -19,5 +19,4 @@ RUN mkdir projects \
 # Create Python 3.6 conda environment and install requirements, then install difi
 RUN cd projects/difi \
 	&& conda install -c defaults -c conda-forge -c astropy --file requirements.txt python=3.6 --y \
-	&& python -m ipykernel install --user --name difi_py36 --display-name "difi (Python 3.6)" \
 	&& python setup.py install
