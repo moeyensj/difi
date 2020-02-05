@@ -4,3 +4,4 @@ include *.toml
 exclude .travis.yaml
 exclude requirements_travis.txt
 exclude azure-pipelines.yml 
+exclude Dockerfile
