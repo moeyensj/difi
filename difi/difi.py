@@ -76,7 +76,7 @@ def analyzeLinkages(observations,
     ------
     TypeError : If the truth column in observations does not have type "Object", 
         or if the obs_id columns in observations and linkageMembers do not have the same type, 
-        or if the linkage_id and truth columns in allLinkages (if passed) and observations do not have the same type, 
+        or if the linkage_id columns in allLinkages (if passed) and observations do not have the same type, 
         or if the truth columns in allTruths (if passed) and observations do not have the same type.
     """
     time_start = time.time()
@@ -99,7 +99,7 @@ def analyzeLinkages(observations,
         allLinkages = pd.DataFrame({
             columnMapping["linkage_id"] : linkage_ids})
     else:
-        _checkColumnTypesEqual(allLinkages, observations, ["linkage_id", "truth"], columnMapping)
+        _checkColumnTypesEqual(allLinkages, observations, ["linkage_id"], columnMapping)
     
     # Prepare allLinkage columns
     allLinkages["num_members"] = np.ones(len(allLinkages)) * np.NaN
