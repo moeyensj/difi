@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd 
 from pandas.testing import assert_frame_equal
 
-from difi import analyzeObservations
+from ..cifi import analyzeObservations
 
 def test_analyzeObservations_singleObject():
     # Case 1a: Single object that should be findable
@@ -25,10 +25,12 @@ def test_analyzeObservations_singleObject():
     }
 
     # Create the observations dataframe
-    observations = pd.DataFrame({
-        columnMapping["obs_id"] : obs_ids,
-        columnMapping["truth"] : truth,
-    })
+    observations = pd.DataFrame(
+        {
+            columnMapping["obs_id"] : obs_ids,
+            columnMapping["truth"] : truth,
+        },
+    )
 
     # Run analysis for case when it should found
     allTruths_test, summary_test = analyzeObservations(observations,    
@@ -89,10 +91,12 @@ def test_analyzeObservations_singleObject():
     }
 
     # Create the observations dataframe
-    observations = pd.DataFrame({
-        columnMapping["obs_id"] : obs_ids,
-        columnMapping["truth"] : truth,
-    })
+    observations = pd.DataFrame(
+        {
+            columnMapping["obs_id"] : obs_ids,
+            columnMapping["truth"] : truth,
+        },
+    )
 
     # Run analysis for case when it should found
     allTruths_test, summary_test = analyzeObservations(observations,    
@@ -153,10 +157,12 @@ def test_analyzeObservations_singleObject():
     }
 
     # Create the observations dataframe
-    observations = pd.DataFrame({
-        columnMapping["obs_id"] : obs_ids,
-        columnMapping["truth"] : truth,
-    })
+    observations = pd.DataFrame(
+        {
+            columnMapping["obs_id"] : obs_ids,
+            columnMapping["truth"] : truth,
+        },
+    )
 
     # Run analysis for case when it should found
     allTruths_test, summary_test = analyzeObservations(observations,    
@@ -218,10 +224,12 @@ def test_analyzeObservations_singleObject():
     }
 
     # Create the observations dataframe
-    observations = pd.DataFrame({
-        columnMapping["obs_id"] : obs_ids,
-        columnMapping["truth"] : truth,
-    })
+    observations = pd.DataFrame(
+        {
+            columnMapping["obs_id"] : obs_ids,
+            columnMapping["truth"] : truth,
+        },
+    )
 
     # Run analysis for case when it should found
     allTruths_test, summary_test = analyzeObservations(observations,    
@@ -283,10 +291,12 @@ def test_analyzeObservations_singleObject():
     }
 
     # Create the observations dataframe
-    observations = pd.DataFrame({
-        columnMapping["obs_id"] : obs_ids,
-        columnMapping["truth"] : truth,
-    })
+    observations = pd.DataFrame(
+        {
+            columnMapping["obs_id"] : obs_ids,
+            columnMapping["truth"] : truth,
+        },
+    )
 
     # Run analysis for case when it should found
     allTruths_test, summary_test = analyzeObservations(observations,    
@@ -353,10 +363,13 @@ def test_analyzeObservations_multiObject():
         obs_ids = np.arange(prev_obs + 1, prev_obs + num_obs + 1)
 
         # Create the observations dataframe
-        observations = pd.DataFrame({
-            columnMapping["obs_id"] : obs_ids,
-            columnMapping["truth"] : truth,
-        })
+        observations = pd.DataFrame(
+            {
+                columnMapping["obs_id"] : obs_ids,
+                columnMapping["truth"] : truth,
+            },
+            dtype=str
+        )
 
         observations_list.append(observations)
 
@@ -379,7 +392,7 @@ def test_analyzeObservations_multiObject():
                                                        verbose=True)
 
     ### Test allTruths
-    # Test the length of allTruths is one
+    # Test the length of allTruths is three
     assert len(allTruths_test) == 3
 
     # Test number of linkages is consistent
@@ -424,7 +437,7 @@ def test_analyzeObservations_multiObject():
                                                        verbose=True)
 
     ### Test allTruths
-    # Test the length of allTruths is one
+    # Test the length of allTruths is three
     assert len(allTruths_test) == 3
 
     # Test number of linkages is consistent
@@ -469,7 +482,7 @@ def test_analyzeObservations_multiObject():
                                                        verbose=True)
 
     ### Test allTruths
-    # Test the length of allTruths is one
+    # Test the length of allTruths is three
     assert len(allTruths_test) == 3
 
     # Test number of linkages is consistent
@@ -515,7 +528,7 @@ def test_analyzeObservations_multiObject():
                                                        verbose=True)
 
     ### Test allTruths
-    # Test the length of allTruths is one
+    # Test the length of allTruths is three
     assert len(allTruths_test) == 3
 
     # Test number of linkages is consistent
@@ -561,7 +574,7 @@ def test_analyzeObservations_multiObject():
                                                        verbose=True)
 
     ### Test allTruths
-    # Test the length of allTruths is one
+    # Test the length of allTruths is three
     assert len(allTruths_test) == 3
 
     # Test number of linkages is consistent

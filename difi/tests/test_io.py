@@ -10,7 +10,14 @@ def test_readLinkagesByLineFile_fromFile():
     linkagesFile = os.path.join(os.path.dirname(__file__), "linkagesByLine.txt")
     
     # Load solution
-    linkageMembers_solution = pd.read_csv(os.path.join(os.path.dirname(__file__), "linkageMembers_solution.txt"), sep=" ", index_col=False, dtype={"obs_id" : str, "linkage_id": np.int64})
+    linkageMembers_solution = pd.read_csv(os.path.join(os.path.dirname(__file__), "linkageMembers_solution.txt"), 
+        sep=" ", 
+        index_col=False,
+        dtype={
+            "obs_id" : str,
+            "linkage_id": np.int64,
+        }
+    )
     
     # Case 1a: Test file comparison
     linkageMembers_test = readLinkagesByLineFile(linkagesFile,
