@@ -10,6 +10,12 @@ from pandas.testing import assert_frame_equal
 from ..difi import analyzeLinkages
 
 def test_analyzeLinkages_fromFile():
+    columnMapping = {
+        "obs_id" : "obs_id",
+        "linkage_id" : "linkage_id",
+        "truth" : "truth"
+    }
+
     # Load sample input
     linkageMembers = pd.read_csv(
         os.path.join(os.path.dirname(__file__), "linkageMembers.txt"), 
@@ -51,8 +57,10 @@ def test_analyzeLinkages_fromFile():
     
     allLinkages_test, allTruths_test, summary_test = analyzeLinkages(observations, 
                                                                      linkageMembers,
+                                                                     allLinkages=allLinkages_solution[["linkage_id"]],
                                                                      minObs=5, 
-                                                                     contaminationThreshold=0.2)
+                                                                     contaminationThreshold=0.2,
+                                                                     columnMapping=columnMapping)
     
     # Re-arange columns in case order is changed (python 3.5 and earlier)
     allLinkages_test = allLinkages_test[["linkage_id", 
