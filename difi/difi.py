@@ -3,6 +3,9 @@ import warnings
 import numpy as np
 import pandas as pd
 
+from .utils import _checkColumnTypes
+from .utils import _checkColumnTypesEqual
+
 __all__ = ["analyzeLinkages"]
 
 def analyzeLinkages(observations, 
@@ -68,6 +71,13 @@ def analyzeLinkages(observations,
         DataFrame with added found_pure, found_partial, found columns. 
     summary : `~pandas.DataFrame`
         DataFrame with columns add to summarize the different type of linkages analyzed
+
+    Raises
+    ------
+    TypeError : If the truth column in observations does not have type "Object", 
+        or if the obs_id columns in observations and linkageMembers do not have the same type, 
+        or if the linkage_id columns in allLinkages (if passed) and linkageMembers do not have the same type, 
+        or if the truth columns in allTruths (if passed) and observations do not have the same type.
     """
     time_start = time.time()
     if verbose is True:
@@ -76,6 +86,11 @@ def analyzeLinkages(observations,
     # Raise error if there are no observations
     if len(observations) == 0: 
         raise ValueError("There are no observations in the observations DataFrame!")
+        
+    # Check column types
+    _checkColumnTypes(observations, ["truth"], columnMapping)
+    _checkColumnTypesEqual(observations, linkageMembers, ["obs_id"], columnMapping)
+    
     
     # If allLinkages DataFrame does not exist, create it
     if allLinkages is None:
@@ -83,6 +98,8 @@ def analyzeLinkages(observations,
         linkage_ids.sort()
         allLinkages = pd.DataFrame({
             columnMapping["linkage_id"] : linkage_ids})
+    else:
+        _checkColumnTypesEqual(allLinkages, linkageMembers, ["linkage_id"], columnMapping)
     
     # Prepare allLinkage columns
     allLinkages["num_members"] = np.ones(len(allLinkages)) * np.NaN
@@ -110,6 +127,7 @@ def analyzeLinkages(observations,
         allTruths["found_pure"] = np.zeros(len(allTruths), dtype=int)
         allTruths["found_partial"] = np.zeros(len(allTruths), dtype=int)
         allTruths["found"] = np.zeros(len(allTruths), dtype=int)
+        _checkColumnTypesEqual(allTruths, observations, ["truth"], columnMapping)
     
     if len(linkageMembers) > 0:
         

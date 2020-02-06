@@ -5,23 +5,62 @@ import random
 import pytest
 import numpy as np
 import pandas as pd 
-from pandas.util.testing import assert_frame_equal
+from pandas.testing import assert_frame_equal
 
-from difi import analyzeLinkages
+from ..difi import analyzeLinkages
 
 def test_analyzeLinkages_fromFile():
+    columnMapping = {
+        "obs_id" : "obs_id",
+        "linkage_id" : "linkage_id",
+        "truth" : "truth"
+    }
+
     # Load sample input
-    linkageMembers = pd.read_csv(os.path.join(os.path.dirname(__file__), "linkageMembers.txt"), sep=" ", index_col=False)
-    observations = pd.read_csv(os.path.join(os.path.dirname(__file__), "observations.txt"), sep=" ", index_col=False)
+    linkageMembers = pd.read_csv(
+        os.path.join(os.path.dirname(__file__), "linkageMembers.txt"), 
+        sep=" ", 
+        index_col=False,
+        dtype={
+            "linkage_id" : int,
+            "obs_id" : int,
+        }
+    )
+    observations = pd.read_csv(
+        os.path.join(os.path.dirname(__file__), "observations.txt"), 
+        sep=" ", 
+        index_col=False,
+        dtype={
+            "truth" : str,
+            "obs_id" : int,
+        }
+    )
     
     # Load solution
-    allLinkages_solution = pd.read_csv(os.path.join(os.path.dirname(__file__), "allLinkages_solution.txt"), sep=" ", index_col=False)
-    allTruths_solution = pd.read_csv(os.path.join(os.path.dirname(__file__), "allTruths_solution.txt"), sep=" ", index_col=False)
+    allLinkages_solution = pd.read_csv(
+        os.path.join(os.path.dirname(__file__), "allLinkages_solution.txt"), 
+        sep=" ",
+        index_col=False,
+        dtype={
+            "linkage_id" : int,
+            "linked_truth" : str,
+        }
+    )
+    allTruths_solution = pd.read_csv(
+        os.path.join(os.path.dirname(__file__), "allTruths_solution.txt"),
+        sep=" ", 
+        index_col=False,
+        dtype={
+            "truth" : str,
+        }
+    )
     
     allLinkages_test, allTruths_test, summary_test = analyzeLinkages(observations, 
                                                                      linkageMembers,
+                                                                     allLinkages=allLinkages_solution[["linkage_id"]],
                                                                      minObs=5, 
-                                                                     contaminationThreshold=0.2)
+                                                                     contaminationThreshold=0.2,
+                                                                     columnMapping=columnMapping)
     
     # Re-arange columns in case order is changed (python 3.5 and earlier)
     allLinkages_test = allLinkages_test[["linkage_id", 
@@ -56,16 +95,21 @@ def test_analyzeLinkages_singleObject_found():
     }
 
     # Create the linkageMembers dataframe
-    linkageMembers = pd.DataFrame({
-        columnMapping["linkage_id"] : linkage_ids,
-        columnMapping["obs_id"] : obs_ids
-                                  })
+    linkageMembers = pd.DataFrame(
+        {
+            columnMapping["linkage_id"] : linkage_ids,
+            columnMapping["obs_id"] : obs_ids
+        },
+    )
 
     # Create the observations dataframe
-    observations = pd.DataFrame({
-        columnMapping["obs_id"] : obs_ids,
-        columnMapping["truth"] : truth,
-    })
+    observations = pd.DataFrame(
+        {
+            columnMapping["obs_id"] : obs_ids,
+            columnMapping["truth"] : truth,
+        },
+    )
+    observations[columnMapping["obs_id"]] = observations[columnMapping["obs_id"]].astype(int)
 
     # Run analysis for case when it should found
     allLinkages_test, allTruths_test, summary_test = analyzeLinkages(observations, 
@@ -299,16 +343,21 @@ def test_analyzeLinkages_singleObject_missed():
     }
 
     # Create the linkageMembers dataframe
-    linkageMembers = pd.DataFrame({
-        columnMapping["linkage_id"] : linkage_ids,
-        columnMapping["obs_id"] : obs_ids
-                                  })
+    linkageMembers = pd.DataFrame(
+        {
+            columnMapping["linkage_id"] : linkage_ids,
+            columnMapping["obs_id"] : obs_ids
+        },
+    )
 
     # Create the observations dataframe
-    observations = pd.DataFrame({
-        columnMapping["obs_id"] : obs_ids,
-        columnMapping["truth"] : truth,
-    })
+    observations = pd.DataFrame(
+        {
+            columnMapping["obs_id"] : obs_ids,
+            columnMapping["truth"] : truth,
+        },
+    )
+    observations[columnMapping["obs_id"]] = observations[columnMapping["obs_id"]].astype(int)
     
     # Run analysis for case when it should not be found
     allLinkages_test, allTruths_test, summary_test = analyzeLinkages(observations, 
@@ -477,16 +526,22 @@ def test_analyzeLinkages_multiObject():
         linkage_ids = [linkage_id for i in range(num_obs)]
 
         # Create the linkageMembers dataframe
-        linkageMembers = pd.DataFrame({
-            columnMapping["linkage_id"] : linkage_ids,
-            columnMapping["obs_id"] : obs_ids
-        })
+        linkageMembers = pd.DataFrame(
+            {
+                columnMapping["linkage_id"] : linkage_ids,
+                columnMapping["obs_id"] : obs_ids
+            },
+
+        )
 
         # Create the observations dataframe
-        observations = pd.DataFrame({
-            columnMapping["obs_id"] : obs_ids,
-            columnMapping["truth"] : truth,
-        })
+        observations = pd.DataFrame(
+            {
+                columnMapping["obs_id"] : obs_ids,
+                columnMapping["truth"] : truth,
+            },
+
+        )
 
         linkageMembers_list.append(linkageMembers)
         observations_list.append(observations)
@@ -497,8 +552,8 @@ def test_analyzeLinkages_multiObject():
 
     # Concatenate dataframes and grab number of observations for each
     # unique object
-    linkageMembers = pd.concat(linkageMembers_list)
-    observations = pd.concat(observations_list)
+    linkageMembers = pd.concat(linkageMembers_list, sort=False)
+    observations = pd.concat(observations_list, sort=False)
     minObs = np.array(min_obs)
     names = np.array(names)
     
@@ -1208,9 +1263,11 @@ def test_analyzeLinkages_multiObject():
         'num_mixed_linkages',
         'num_total_linkages']]
 
+    print(summary['num_unique_known_truths_missed'])
+    print(summary_test['num_unique_known_truths_missed'])
     assert_frame_equal(summary, summary_test)
 
-    # Case 2b: Run analysis such that the contaminationThreshold doesn't allows
+    # Case 2b: Run analysis such that the contaminationThreshold doesn't allow
     # only the last object to be found
 
     allLinkages_test, allTruths_test, summary_test = analyzeLinkages(observations, 
@@ -1305,16 +1362,20 @@ def test_analyzeLinkages_emptyDataFrames():
 
 
     # Create the linkageMembers dataframe
-    linkageMembers_empty = pd.DataFrame(columns=[
-        columnMapping["linkage_id"],
-        columnMapping["obs_id"]
-    ])
+    linkageMembers_empty = pd.DataFrame(
+        columns=[
+            columnMapping["linkage_id"],
+            columnMapping["obs_id"]
+        ],
+        dtype=int
+    )
 
     # Create the observations dataframe
     observations_empty = pd.DataFrame(columns=[
         columnMapping["obs_id"],
         columnMapping["truth"]
     ])
+    observations_empty[columnMapping["obs_id"]] = observations_empty[columnMapping["obs_id"]].astype(int)
 
     # Test an error is raised when the observations dataframe is empy
     with pytest.raises(ValueError):
@@ -1341,16 +1402,22 @@ def test_analyzeLinkages_emptyDataFrames():
     }
 
     # Create the linkageMembers dataframe
-    linkageMembers_empty = pd.DataFrame(columns=[
-        columnMapping["linkage_id"],
-        columnMapping["obs_id"]
-    ])
+    linkageMembers_empty = pd.DataFrame(
+        columns=[
+            columnMapping["linkage_id"],
+            columnMapping["obs_id"]
+        ],
+        dtype=int
+    )
 
     # Create the observations dataframe
-    observations = pd.DataFrame({
-        columnMapping["obs_id"] : obs_ids,
-        columnMapping["truth"] : truth,
-    })
+    observations = pd.DataFrame(
+        {
+            columnMapping["obs_id"] : obs_ids,
+            columnMapping["truth"] : truth,
+        },
+    )
+    observations[columnMapping["obs_id"]] = observations[columnMapping["obs_id"]].astype(int)
 
     # Run analysis for case when it should found
     allLinkages_test, allTruths_test, summary_test = analyzeLinkages(observations, 

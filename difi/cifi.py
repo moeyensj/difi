@@ -2,6 +2,8 @@ import time
 import numpy as np
 import pandas as pd
 
+from .utils import _checkColumnTypes
+
 __all__ = ["analyzeObservations"]
 
 def analyzeObservations(observations,
@@ -59,6 +61,10 @@ def analyzeObservations(observations,
         Object summary DataFrame.
     summary : `~pandas.DataFrame`
         Overall summary DataFrame. 
+        
+    Raises
+    ------
+    TypeError : If the truth column in observations does not have type "Object"
     """
     time_start = time.time()
     if verbose == True:
@@ -67,6 +73,9 @@ def analyzeObservations(observations,
     # Raise error if there are no observations
     if len(observations) == 0: 
         raise ValueError("There are no observations in the observations DataFrame!")
+        
+    # Check column types
+    _checkColumnTypes(observations, ["truth"], columnMapping)
     
     # Count number of false positive observations, real observations, unknown observations, the number of unique truths, and those 
     # that should be findable
