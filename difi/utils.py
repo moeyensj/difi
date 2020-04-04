@@ -1,8 +1,10 @@
+import numpy as np
 from pandas.api.types import is_object_dtype
 
 __all__ = [
     "_checkColumnTypes",
-    "_checkColumnTypesEqual"
+    "_checkColumnTypesEqual",
+    "_classHandler"
 ]
 
 
@@ -78,4 +80,79 @@ def _checkColumnTypesEqual(df1, df2, cols, columnMapping):
         raise TypeError(error_text)
     return
 
-                   
+def _classHandler(classes, dataframe, columnMapping):
+    """
+    Tests that the `classes` keyword argument is defined correctly.
+    `classes` should one of the following:
+        str : Name of the column in the dataframe which identifies 
+            the class of each truth.
+        dict : A dictionary with class names as keys and a list of unique 
+            truths belonging to each class as values.
+        None : If there are no classes of truths.
+
+    Parameters
+    ----------
+    classes : {str, dict, or None}
+        Declares if the truths in a data frame have classes. 
+    dataframe : `~pandas.DataFrame`
+        A pandas data frame containing a column of truths and optionally
+        a column that specifies the class (if classes is a str).
+    columnMapping : dict
+        Column name mapping to internally used column names (truth, class).
+
+    Returns
+    -------
+    class_list : list
+        A list of class names. 
+    truths_list : list
+        A list of the truths belonging to each class. 
+    """
+    class_list = ["all"]
+    truths_list = [[]]
+    
+    if type(classes) == str:
+        if classes not in dataframe.columns:
+            err = (
+                "Could not find class column ({}) in observations."
+            )
+            raise ValueError(err.format(classes))
+        else:
+            
+            for c in dataframe[classes].unique():
+                class_list.append(c)
+                truths_list.append(dataframe[dataframe[c].isin([c])][columnMapping["truth"]].unique())
+            
+    elif type(classes) == dict:
+        for c, t in classes.items():
+            if len(np.unique(t)) != len(t):
+                err = (
+                    "Truths for class {} are not unique."
+                )
+                raise ValueError(err.format(c))
+            else:
+                class_list.append(c)
+                truths_list[0].append(t)
+                if type(t) is list:
+                    truths_list.append(np.array(t))
+                else:
+                    truths_list.append(t)
+
+        truths_list[0] = np.hstack(truths_list[0])
+
+    elif classes == None:
+        truths_list = [dataframe[columnMapping["truth"]].unique()]
+
+    else:
+        err = (
+            "Classes should be one of:\n" \
+            "  str : Name of the column in the dataframe which\n" \
+            "    identifies the class of each truth.\n" \
+            "  dict : A dictionary with class names as keys\n" \
+            "    and a list of unique truths belonging to each class\n" \
+            "    as values.\n" \
+            "  None : If there are no classes of truths."
+        )
+        raise ValueError(err)
+        
+    return class_list, truths_list
+        
