@@ -4,7 +4,8 @@ from pandas.api.types import is_object_dtype
 __all__ = [
     "_checkColumnTypes",
     "_checkColumnTypesEqual",
-    "_classHandler"
+    "_classHandler",
+    "_percentHandler"
 ]
 
 
@@ -155,4 +156,27 @@ def _classHandler(classes, dataframe, columnMapping):
         raise ValueError(err)
         
     return class_list, truths_list
+
+def _percentHandler(number, number_total):
+    """
+    Returns a percentage value of number / number_total. Returns
+    np.NaN is number total is zero. 
+
+    Parameters
+    ----------
+    number : int or float
+        Numerator (number out of number_total).
+    number_total : int or float
+        Denominator (total number).
+
+    Returns
+    -------
+    percent : float
+    """
+    if number_total == 0:
+        percent_total = np.NaN
+    else:
+        percent_total = 100. * number / number_total
+    
+    return percent_total
         
