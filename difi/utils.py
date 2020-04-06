@@ -108,10 +108,13 @@ def _classHandler(classes, dataframe, columnMapping):
     truths_list : list
         A list of the truths belonging to each class. 
     """
-    class_list = ["all"]
+    class_list = ["All"]
     truths_list = [[]]
+
+    if classes == None:
+        truths_list = [dataframe[columnMapping["truth"]].unique()]
     
-    if type(classes) == str:
+    elif type(classes) == str:
         if classes not in dataframe.columns:
             err = (
                 "Could not find class column ({}) in observations."
@@ -121,7 +124,9 @@ def _classHandler(classes, dataframe, columnMapping):
             
             for c in dataframe[classes].unique():
                 class_list.append(c)
-                truths_list.append(dataframe[dataframe[c].isin([c])][columnMapping["truth"]].unique())
+                truths_list.append(dataframe[dataframe[classes].isin([c])][columnMapping["truth"]].unique())
+
+        truths_list[0] = dataframe[columnMapping["truth"]].unique()
             
     elif type(classes) == dict:
         for c, t in classes.items():
@@ -140,17 +145,14 @@ def _classHandler(classes, dataframe, columnMapping):
 
         truths_list[0] = np.hstack(truths_list[0])
 
-    elif classes == None:
-        truths_list = [dataframe[columnMapping["truth"]].unique()]
-
     else:
         err = (
             "Classes should be one of:\n" \
             "  str : Name of the column in the dataframe which\n" \
-            "    identifies the class of each truth.\n" \
+            "        identifies the class of each truth.\n" \
             "  dict : A dictionary with class names as keys\n" \
-            "    and a list of unique truths belonging to each class\n" \
-            "    as values.\n" \
+            "        and a list of unique truths belonging to each class\n" \
+            "        as values.\n" \
             "  None : If there are no classes of truths."
         )
         raise ValueError(err)
