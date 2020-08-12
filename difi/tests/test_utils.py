@@ -4,6 +4,7 @@ import pandas as pd
 
 from ..utils import _checkColumnTypes
 from ..utils import _checkColumnTypesEqual
+from ..utils import _percentHandler
 
 
 def test__checkColumnTypes():
@@ -91,4 +92,19 @@ def test__checkColumnTypesEqual():
     
     _checkColumnTypesEqual(df1, df1, ["truth", "obs_id", "linkage_id"], columnMapping)
     
+    return
+
+def test__percentHandler():
+    # If the denominator is 0, then _percentHandler should return np.NaN
+    number = np.random.choice(np.arange(0, 10000))
+    total_number = 0
+    assert np.isnan(_percentHandler(number, total_number))
+    
+    # Test that a percentage is calculated correctly
+    for i in range(1000):
+        number = np.random.choice(np.arange(1, 10000))
+        total_number = number = np.random.choice(np.arange(1, 10000))
+        percent = 100. * number / total_number
+        assert percent == _percentHandler(number, total_number)
+        
     return
