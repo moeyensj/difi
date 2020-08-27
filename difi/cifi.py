@@ -8,10 +8,9 @@ from .utils import _classHandler
 __all__ = ["analyzeObservations"]
 
 def analyzeObservations(observations,
-                        minObs=5, 
+                        min_obs=5, 
                         classes=None,
-                        verbose=True,
-                        columnMapping={"linkage_id": "linkage_id",
+                        column_mapping={"linkage_id": "linkage_id",
                                        "obs_id": "obs_id",
                                        "truth": "truth"}):
     """
@@ -26,7 +25,7 @@ def analyzeObservations(observations,
     observations : `~pandas.DataFrame`
         Pandas DataFrame with at least two columns: observation IDs and the truth values
         (the object to which the observation belongs to).
-    minObs : int, optional
+    min_obs : int, optional
         The minimum number of observations required for a truth to be considered
         findable. 
         [Default = 5]
@@ -37,15 +36,12 @@ def analyzeObservations(observations,
         dict : A dictionary with class names as keys and a list of unique 
             truths belonging to each class as values.
         None : If there are no classes of truths.
-    verbose : bool, optional
-        Print progress statements? 
-        [Default = True]
-    columnMapping : dict, optional
+    column_mapping : dict, optional
         Column name mapping of observations to internally used column names. 
     
     Returns
     -------
-    allTruths : `~pandas.DataFrame`
+    all_truths : `~pandas.DataFrame`
         Object summary DataFrame.
     summary : `~pandas.DataFrame`
         Overall summary DataFrame. 
@@ -54,43 +50,54 @@ def analyzeObservations(observations,
     ------
     TypeError : If the truth column in observations does not have type "Object"
     """
-    time_start = time.time()
-    if verbose == True:
-        print("Analyzing observations...")
+    truth_col = column_mapping["truth"]
 
     # Raise error if there are no observations
     if len(observations) == 0: 
         raise ValueError("There are no observations in the observations DataFrame!")
         
     # Check column types
-    _checkColumnTypes(observations, ["truth"], columnMapping)
+    _checkColumnTypes(observations, ["truth"], column_mapping)
     
     num_observations_list = []
     num_truths_list = []
     num_findable_list = []
         
-    # Populate allTruths DataFrame
-    allTruths = pd.DataFrame(columns=[
-        columnMapping["truth"], 
-        "num_obs", 
-        "findable"])
+    # Populate all_truths DataFrame
+    dtypes = np.dtype([
+        (truth_col, str),
+        ("num_obs", int),
+        ("findable", int)])
+    data = np.empty(0, dtype=dtypes)
+    all_truths = pd.DataFrame(data)
     
-    num_obs_per_object = observations[columnMapping["truth"]].value_counts().values
-    num_obs_descending = observations[columnMapping["truth"]].value_counts().index.values
-    findable = num_obs_descending[np.where(num_obs_per_object >= minObs)[0]]
-    allTruths[columnMapping["truth"]] = num_obs_descending
-    allTruths["num_obs"] = num_obs_per_object
-    allTruths.loc[(allTruths[columnMapping["truth"]].isin(findable)), "findable"] = 1
-    allTruths.loc[allTruths["findable"] != 1, ["findable"]] = 0
+    num_obs_per_object = observations[truth_col].value_counts().values
+    num_obs_descending = observations[truth_col].value_counts().index.values
+    findable = num_obs_descending[np.where(num_obs_per_object >= min_obs)[0]]
+    all_truths[truth_col] = num_obs_descending
+    all_truths["num_obs"] = num_obs_per_object
+    all_truths.loc[:, "findable"] = 0
+    all_truths.loc[(all_truths[truth_col].isin(findable)), "findable"] = 1
     
-    class_list, truths_list = _classHandler(classes, observations, columnMapping)
+    all_truths["findable"] = all_truths["findable"].astype(int)
+    all_truths.sort_values(
+        by=["num_obs", truth_col], 
+        ascending=[False, True], 
+        inplace=True
+    )
+    all_truths.reset_index(
+        inplace=True, 
+        drop=True
+    )
+    
+    class_list, truths_list = _classHandler(classes, observations, column_mapping)
 
     for c, v in zip(class_list, truths_list):
         
-        num_obs = len(observations[observations[columnMapping["truth"]].isin(v)])
-        unique_truths = observations[observations[columnMapping["truth"]].isin(v)][columnMapping["truth"]].unique()
+        num_obs = len(observations[observations[truth_col].isin(v)])
+        unique_truths = observations[observations[truth_col].isin(v)][truth_col].unique()
         num_unique_truths = len(unique_truths)
-        findable = allTruths[allTruths[columnMapping["truth"]].isin(v)]["findable"].sum()
+        findable = int(all_truths[all_truths[truth_col].isin(v)]["findable"].sum())
         
         num_observations_list.append(num_obs)
         num_truths_list.append(num_unique_truths)
@@ -99,12 +106,11 @@ def analyzeObservations(observations,
     # Prepare summary DataFrame
     summary = pd.DataFrame({
         "class" : class_list,
+        "num_members" : num_truths_list,
         "num_obs" : num_observations_list,
-        "num_truths" : num_truths_list,
         "findable" : num_findable_list
     })
-    summary.sort_values(by="class", inplace=True)
+    summary.sort_values(by=["num_obs", "class"], ascending=False, inplace=True)
     summary.reset_index(inplace=True, drop=True)
     
-    time_end = time.time()
-    return allTruths, summary
+    return all_truths, summary

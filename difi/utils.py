@@ -9,7 +9,7 @@ __all__ = [
 ]
 
 
-def _checkColumnTypes(df, cols, columnMapping):
+def _checkColumnTypes(df, cols, column_mapping):
     """
     Checks that each dataframe column listed in cols has Pandas dtype "Object".
     
@@ -19,7 +19,7 @@ def _checkColumnTypes(df, cols, columnMapping):
         Pandas dataframe
     cols : list
         Columns to check for appropriate data type. 
-    columnMapping : dict
+    column_mapping : dict
         Column name mapping to internally used column names (truth, linkage_id, obs_id).
     
     Raises
@@ -32,7 +32,7 @@ def _checkColumnTypes(df, cols, columnMapping):
     """
     error_text = ""
     for col in cols:
-        value = columnMapping[col]
+        value = column_mapping[col]
         if not is_object_dtype(df[value].dtype):
             error = "\n{1} column ('{0}') should have type string. " \
                     "Please convert column using: \n" \
@@ -44,7 +44,7 @@ def _checkColumnTypes(df, cols, columnMapping):
         raise TypeError(error_text)
     return
 
-def _checkColumnTypesEqual(df1, df2, cols, columnMapping):
+def _checkColumnTypesEqual(df1, df2, cols, column_mapping):
     """
     Checks that each column listed in cols have the same Pandas dtype in df1 and df2.
     
@@ -56,7 +56,7 @@ def _checkColumnTypesEqual(df1, df2, cols, columnMapping):
         Pandas dataframe
     cols : list
         Columns to check for data type equality. 
-    columnMapping : dict
+    column_mapping : dict
         Column name mapping to internally used column names (truth, linkage_id, obs_id).
     
     Raises
@@ -69,7 +69,7 @@ def _checkColumnTypesEqual(df1, df2, cols, columnMapping):
     """
     error_text = ""
     for col in cols:
-        value = columnMapping[col]
+        value = column_mapping[col]
         if not (df1[value].dtype == df2[value].dtype):
             error = "\n{1} column ('{0}') in the first data frame has type: {2}\n" \
                     "{1} column ('{0}') in the second data frame has type: {3}\n" \
@@ -81,7 +81,7 @@ def _checkColumnTypesEqual(df1, df2, cols, columnMapping):
         raise TypeError(error_text)
     return
 
-def _classHandler(classes, dataframe, columnMapping):
+def _classHandler(classes, dataframe, column_mapping):
     """
     Tests that the `classes` keyword argument is defined correctly.
     `classes` should one of the following:
@@ -98,7 +98,7 @@ def _classHandler(classes, dataframe, columnMapping):
     dataframe : `~pandas.DataFrame`
         A pandas data frame containing a column of truths and optionally
         a column that specifies the class (if classes is a str).
-    columnMapping : dict
+    column_mapping : dict
         Column name mapping to internally used column names (truth, class).
 
     Returns
@@ -112,7 +112,7 @@ def _classHandler(classes, dataframe, columnMapping):
     truths_list = [[]]
 
     if classes == None:
-        truths_list = [dataframe[columnMapping["truth"]].unique()]
+        truths_list = [dataframe[column_mapping["truth"]].unique()]
     
     elif type(classes) == str:
         if classes not in dataframe.columns:
@@ -124,9 +124,9 @@ def _classHandler(classes, dataframe, columnMapping):
             
             for c in dataframe[classes].unique():
                 class_list.append(c)
-                truths_list.append(dataframe[dataframe[classes].isin([c])][columnMapping["truth"]].unique())
+                truths_list.append(dataframe[dataframe[classes].isin([c])][column_mapping["truth"]].unique())
 
-        truths_list[0] = dataframe[columnMapping["truth"]].unique()
+        truths_list[0] = dataframe[column_mapping["truth"]].unique()
             
     elif type(classes) == dict:
         for c, t in classes.items():
