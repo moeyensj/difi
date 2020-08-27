@@ -41,10 +41,33 @@ def analyzeObservations(observations,
     
     Returns
     -------
-    all_truths : `~pandas.DataFrame`
-        Object summary DataFrame.
+     all_truths: `~pandas.DataFrame`
+        A per-truth summary.
+        
+        Columns:
+            "truth" : str
+                Truth
+            "num_obs" : int
+                Number of observations in the observations dataframe
+                for each truth
+            "findable" : int
+                1 if the object is findable, 0 if the object is not findable.
+                (NaN if no findable column is found in the all_truths dataframe)
+
     summary : `~pandas.DataFrame`
-        Overall summary DataFrame. 
+        A per-class summary.
+        
+        Columns:
+            "class" : str
+                Name of class (if none are defined, will only contain) "All". 
+            "num_members" : int
+                Number of unique truths that belong to the class.
+            "num_obs" : int
+                Number of observations of truths belonging to the class in 
+                the observations dataframe. 
+            "findable" : int
+                Number of truths deemed findable (all_truths must be passed to this 
+                function with a findable column)
         
     Raises
     ------

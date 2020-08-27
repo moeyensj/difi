@@ -1,4 +1,3 @@
-import time
 import warnings
 import numpy as np
 import pandas as pd
@@ -52,18 +51,15 @@ def analyzeLinkages(observations,
         If None, all_truths will be created.
         [Default = None]
     min_obs : int, optional
-        The minimum number of observations belonging to one object for a linkage to be pure. 
-        The minimum number of observations belonging to one object in a contaminated linkage
-        (number of contaminated observations allowed is set by the contamination_percentage)
-        for the linkage to be partial. For example, if min_obs is 5 then any linkage with 5 or more 
-        detections belonging to a unique object, with no detections belonging to any other object will be 
-        considered a pure linkage and the object is found. Likewise, if min_obs is 5 and contamination_percentage is 
-        0.2 then a linkage with 10 members, where 8 belong to one object and 2 belong to other objects, will 
-        be considered a partial linkage, and the object with 8 detections is considered found. 
-        [Default = 5]
+        The minimum number of observations belonging to one object in a pure linkage for 
+        that object to be considered found. In a partial linkage, for an object to be considered
+        found it must have equal to or more than this number of observations for it to be considered
+        found. 
     contamination_percentage : float, optional 
-        Number of detections expressed as a percentage [0-100] belonging to other objects in a linkage
-        allowed for the object with the most detections in the linkage to be considered found. 
+        Number of detections expressed as a percentage [0-100] belonging to other objects in a linkage 
+        for that linkage to considered partial. For example, if contamination_percentage is 
+        20% then a linkage with 10 members, where 8 belong to one object and 2 belong to other objects, will 
+        be considered a partial linkage.
         [Default = 20]
     classes : {dict, str, None}
         Analyze observations for truths grouped in different classes. 
@@ -232,7 +228,6 @@ def analyzeLinkages(observations,
         or if the linkage_id columns in all_linkages (if passed) and linkage_members do not have the same type, 
         or if the truth columns in all_truths (if passed) and observations do not have the same type.
     """
-
     # Get column names
     linkage_id_col = column_mapping["linkage_id"]
     truth_col = column_mapping["truth"]
@@ -264,7 +259,7 @@ def analyzeLinkages(observations,
         
     # If it does exist, add columns
     else:
-        if "findable" not in all_truths.columns():
+        if "findable" not in all_truths.columns:
             warn = (
                 "No findable column found in all_truths. Completeness\n" \
                 "statistics can not be calculated."
@@ -280,7 +275,7 @@ def analyzeLinkages(observations,
     _checkColumnTypes(linkage_members, ["obs_id"], column_mapping)
     _checkColumnTypesEqual(observations, linkage_members, ["obs_id"], column_mapping)
 
-    if len(linkage_members) > 0:
+    if len(linkage_members) > -1:
         
         # Grab only observation IDs and truth from observations
         all_linkages = observations[[obs_id_col, truth_col]].copy()
@@ -669,7 +664,7 @@ def analyzeLinkages(observations,
             "pure",
             "pure_complete",
             "partial",
-            #"partial_contaminant",
+            # "partial_contaminant", # UNCOMMENT FOR DEBUG
             "mixed",
             "contamination_percentage_in_linkages",
             "found_pure",
@@ -705,10 +700,7 @@ def analyzeLinkages(observations,
         ]]
         
         summary = pd.DataFrame(summary)
-        summary.sort_values(
-            by=["num_obs"], 
-            ascending=False,
-            inplace=True)
+        summary.sort_values(by=["num_obs", "class"], ascending=False, inplace=True)
         summary.reset_index(inplace=True, drop=True)
         
     else:
@@ -728,6 +720,10 @@ def analyzeLinkages(observations,
                 "found",
                 "linked_truth"
             ]
+        )
+
+        summary = pd.DataFrame(
+            columns=summary_cols
         )
 
     return all_linkages, all_truths, summary

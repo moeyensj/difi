@@ -19,7 +19,7 @@ def createPureLinkage(truth, observations, all_linkages, all_truths, summary, mi
         This dictionary is converted into a `pandas.DataFrame` by the 
         createTestData function.
     all_truths : `~pandas.DataFrame`
-
+        
 
     summary : `~pandas.DataFrame`
 
@@ -53,6 +53,7 @@ def createPureLinkage(truth, observations, all_linkages, all_truths, summary, mi
     # Select observations to form the linkage
     linkage = np.random.choice(observations[observations["truth"] == truth]["obs_id"].values, num_obs, replace=False)
     linkage.sort()
+    is_found = (len(linkage) >= min_obs)
     
     # Update attributes in the all_linkages dictionary accordingly
     all_linkages["num_obs"].append(len(linkage))
@@ -91,7 +92,7 @@ def createPureLinkage(truth, observations, all_linkages, all_truths, summary, mi
         summary.loc[summary_mask, "obs_in_pure_complete_linkages"] += len(linkage)
         summary.loc[summary["class"] == "All", "pure_complete_linkages"] += 1
         summary.loc[summary["class"] == "All", "obs_in_pure_complete_linkages"] += len(linkage)
-    if len(linkage) >= min_obs:
+    if is_found:
         summary.loc[summary_mask, "found_pure_linkages"] += 1
         summary.loc[summary["class"] == "All", "found_pure_linkages"] += 1
         
@@ -101,7 +102,7 @@ def createPureLinkage(truth, observations, all_linkages, all_truths, summary, mi
     if is_complete:
         all_truths.loc[all_truths_mask, "pure_complete"] += 1
         all_truths.loc[all_truths_mask, "obs_in_pure_complete"] += len(linkage)
-    if len(linkage) >= min_obs:
+    if is_found:
         all_truths.loc[all_truths_mask, "found"] += 1
         all_truths.loc[all_truths_mask, "found_pure"] += 1
 
@@ -153,22 +154,38 @@ def createPartialLinkage(truth,
     if max_obs < min_linkage_length:
         return None
     
+    # Randomly select a number of correct observations 
     num_correct_obs = np.random.choice(np.arange(min_linkage_length, max_obs + 1))
     
+    # If the total number of observations in the linkage is lower than
+    # the minimum linkage length, don't create a linkage
     if (num_correct_obs + num_contaminated_obs) < min_linkage_length:
         return None
-        
+    
+    # Grab correct observation IDs
     linkage_correct = np.random.choice(observations[observations["truth"] == truth]["obs_id"].values, num_correct_obs, replace=False)
+    
+    # Grab incorrect observation IDs
     linkage_contaminated = np.random.choice(observations[observations["truth"] != truth]["obs_id"].values, num_contaminated_obs, replace=False)
+    
+    # Calculate the total number of members in the linkage
     members = observations[observations["obs_id"].isin(linkage_contaminated)]["truth"].nunique() + 1
     
+    # Combine the observation IDs and sort them
     linkage = np.concatenate([linkage_correct, linkage_contaminated])
     linkage.sort()
     
+    # Calculate the contamination percentage, if it is higher than the maximum allowed
+    # stop and do not create a linkage
     cp = 100. * num_contaminated_obs / (num_contaminated_obs + num_correct_obs)
     if cp > contamination_percentage:
         return None
     
+    # If the number of correct observations is equal to or 
+    # greater than min_obs we consider the object found
+    found = (num_correct_obs >= min_obs)
+    
+    # Update the all_linkage dictionary
     all_linkages["num_obs"].append(len(linkage))
     all_linkages["num_members"].append(members)
     all_linkages["pure"].append(0)
@@ -177,7 +194,7 @@ def createPartialLinkage(truth,
     all_linkages["mixed"].append(0)
     all_linkages["contamination_percentage"].append(cp)
     all_linkages["found_pure"].append(0)
-    if num_correct_obs >= min_obs:
+    if found:
         all_linkages["found_partial"].append(1)
         all_linkages["found"].append(1)
     else:
@@ -185,32 +202,35 @@ def createPartialLinkage(truth,
         all_linkages["found"].append(0)
     all_linkages["linked_truth"].append(truth)
     
+    # Create masks
     truth_class = observations[observations["truth"] == truth]["class"].values[0]
     summary_mask = (summary["class"] == truth_class)
     all_truths_mask = (all_truths["truth"] == truth)
     observations_mask_contaminated = observations["obs_id"].isin(linkage_contaminated)
-                                                                 
+                 
+    # Update the summary dataframe
     summary.loc[summary_mask, "linkages"] += 1
     summary.loc[summary_mask, "partial_linkages"] += 1
     summary.loc[summary_mask, "obs_in_partial_linkages"] += num_correct_obs
+    summary.loc[summary["class"] == "All", "linkages"] += 1
+    summary.loc[summary["class"] == "All", "partial_linkages"] += 1
+    summary.loc[summary["class"] == "All", "obs_in_partial_linkages"] += num_correct_obs
+    summary.loc[summary["class"] == "All", "partial_contaminant_linkages"] += 1
     
-    for c in observations[observations_mask_contaminated]["class"].unique():
+    # For each truth class of the contaminant observations, update the summay dataframe
+    for c in observations[observations_mask_contaminated]["class"].unique():        
         summary.loc[summary["class"] == c, "partial_contaminant_linkages"] += 1
-        summary.loc[summary["class"] == "All", "partial_contaminant_linkages"] += 1
-        summary.loc[summary["class"] == c, "linkages"] += 1
+        if c != truth_class:
+            summary.loc[summary["class"] == c, "linkages"] += 1
         
         obs_contaminated = observations[observations_mask_contaminated & observations["class"].isin([c])]["obs_id"].nunique()
         summary.loc[summary["class"] == c, "obs_in_partial_contaminant_linkages"] += obs_contaminated
         summary.loc[summary["class"] == "All", "obs_in_partial_contaminant_linkages"] += obs_contaminated
-        
-    summary.loc[summary["class"] == "All", "linkages"] += 1
-    summary.loc[summary["class"] == "All", "partial_linkages"] += 1
-    summary.loc[summary["class"] == "All", "obs_in_partial_linkages"] += num_correct_obs
-    if num_correct_obs >= min_obs:
+    
+    # Update if the object is found or not
+    if found:
         summary.loc[summary_mask, "found_partial_linkages"] += 1
         summary.loc[summary["class"] == "All", "found_partial_linkages"] += 1
-                                      
-    if num_correct_obs >= min_obs:
         all_truths.loc[all_truths_mask, "found"] += 1
         all_truths.loc[all_truths_mask, "found_partial"] += 1
     all_truths.loc[all_truths_mask, "partial"] += 1                  
@@ -474,7 +494,7 @@ def createTestDataSet(min_obs, min_linkage_length, max_contamination_percentage)
         
         # Add pure linkages
         for ti in np.random.choice(t, len(t)):
-            
+
             linkage = createPureLinkage(
                 ti, 
                 observations, 
@@ -495,7 +515,7 @@ def createTestDataSet(min_obs, min_linkage_length, max_contamination_percentage)
             
 
         # Add partial linkages
-        for ti in np.random.choice(t, len(t) - 2, replace=False):
+        for ti in np.random.choice(t, len(t) - 1, replace=False):
             
             linkage = createPartialLinkage(
                 ti, 
@@ -515,6 +535,7 @@ def createTestDataSet(min_obs, min_linkage_length, max_contamination_percentage)
                 all_linkages["linkage_id"].append(linkage_id)
                                        
                 linkage_id_iter += 1
+                
     
     # Create 10 mixed linkages           
     for i in range(10):
