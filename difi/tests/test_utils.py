@@ -162,3 +162,51 @@ def test__classHandler():
         assert np.all(t_i == t_test_i)
     
     return
+
+def test__classHandler_errors():
+    ### Test _classHandler for error raises
+    
+    column_mapping = {
+        "truth" : "obj_id"
+    }
+
+    classes_dict = {}
+    all_truths = []
+    
+    # Create list of expected outputs from _classHandler
+    class_list_test = ["All"]
+    truths_list_test = []
+    
+    # Add to the expected outputs and build the expected
+    # input observations dataframe and classes dictionary
+    for c in ["green", "blue", "red"]:
+        truths = ["{}{:02d}".format(c, i) for i in range(10)]
+        truths_list_test.append(truths)
+        all_truths += truths
+        classes_dict[c] = truths
+        class_list_test.append(c)
+    truths_list_test.insert(0, all_truths)
+
+    observations = pd.DataFrame({
+        "obs_id" : ["obs{:02d}".format(i) for i in range(len(all_truths))],
+        "obj_id" : all_truths})
+    for c in ["green", "blue", "red"]:
+        observations.loc[observations["obj_id"].isin(classes_dict[c]), "class"] = c
+    
+    # Test for ValueError when an unsupported class argument is given
+    with pytest.raises(ValueError):
+        class_list, truths_list = _classHandler([], observations, column_mapping)
+    
+    # Test for ValueError when a truth appears twice for the same class
+    with pytest.raises(ValueError):
+        classes_dict_ = classes_dict.copy()
+        classes_dict_["green"].append(classes_dict_["green"][-1])
+    
+        class_list, truths_list = _classHandler(classes_dict_, observations, column_mapping)
+        
+    # Test for ValueError when an incorrect column name is given
+    with pytest.raises(ValueError):
+       
+        class_list, truths_list = _classHandler("abc", observations, column_mapping)
+    
+    return
