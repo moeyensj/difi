@@ -10,9 +10,11 @@ __all__ = ["analyzeObservations"]
 def analyzeObservations(observations,
                         min_obs=5, 
                         classes=None,
-                        column_mapping={"linkage_id": "linkage_id",
-                                       "obs_id": "obs_id",
-                                       "truth": "truth"}):
+                        column_mapping={
+                            "linkage_id": "linkage_id",
+                            "obs_id": "obs_id",
+                            "truth": "truth"
+                        }):
     """
     Can I Find It?
 

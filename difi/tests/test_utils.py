@@ -5,6 +5,7 @@ import pandas as pd
 from ..utils import _checkColumnTypes
 from ..utils import _checkColumnTypesEqual
 from ..utils import _percentHandler
+from ..utils import _classHandler
 
 
 def test__checkColumnTypes():
@@ -107,4 +108,57 @@ def test__percentHandler():
         percent = 100. * number / total_number
         assert percent == _percentHandler(number, total_number)
         
+    return
+
+def test__classHandler():
+    ### Test _classHandler for three different class arguments: None, dictionary and column
+    # name in observations dataframe
+    
+    column_mapping = {
+        "truth" : "obj_id"
+    }
+
+    classes_dict = {}
+    all_truths = []
+    
+    # Create list of expected outputs from _classHandler
+    class_list_test = ["All"]
+    truths_list_test = []
+    
+    # Add to the expected outputs and build the expected
+    # input observations dataframe and classes dictionary
+    for c in ["green", "blue", "red"]:
+        truths = ["{}{:02d}".format(c, i) for i in range(10)]
+        truths_list_test.append(truths)
+        all_truths += truths
+        classes_dict[c] = truths
+        class_list_test.append(c)
+    truths_list_test.insert(0, all_truths)
+
+    observations = pd.DataFrame({
+        "obs_id" : ["obs{:02d}".format(i) for i in range(len(all_truths))],
+        "obj_id" : all_truths})
+    for c in ["green", "blue", "red"]:
+        observations.loc[observations["obj_id"].isin(classes_dict[c]), "class"] = c
+    
+    # Test when no classes are given
+    class_list, truths_list = _classHandler(None, observations, column_mapping)
+    
+    assert np.all(class_list[0] == class_list_test[0])
+    assert np.all(truths_list[0] == truths_list_test[0])
+    
+    # Test when a class dictionary is given
+    class_list, truths_list = _classHandler(classes_dict, observations, column_mapping)
+    
+    assert np.all(class_list == class_list_test)
+    for t_i, t_test_i in zip(truths_list, truths_list_test):
+        assert np.all(t_i == t_test_i)
+        
+    # Test when a class column is given
+    class_list, truths_list = _classHandler("class", observations, column_mapping)
+    
+    assert np.all(class_list == class_list_test)
+    for t_i, t_test_i in zip(truths_list, truths_list_test):
+        assert np.all(t_i == t_test_i)
+    
     return

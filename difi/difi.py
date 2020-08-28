@@ -275,7 +275,7 @@ def analyzeLinkages(observations,
     _checkColumnTypes(linkage_members, ["obs_id"], column_mapping)
     _checkColumnTypesEqual(observations, linkage_members, ["obs_id"], column_mapping)
 
-    if len(linkage_members) > -1:
+    if len(linkage_members) > 0:
         
         # Grab only observation IDs and truth from observations
         all_linkages = observations[[obs_id_col, truth_col]].copy()
@@ -326,8 +326,8 @@ def analyzeLinkages(observations,
             inplace=True
         )
 
-        # Merge with num_obs_in_linkage to get the total 
-        # number of observations in each linkage
+        # Merge with num_truths_in_linkage to get the total 
+        # number of truths in each linkage
         all_linkages = all_linkages.merge(
             num_truth_in_linkage,
             left_on=linkage_id_col, 
