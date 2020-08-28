@@ -157,11 +157,6 @@ def createPartialLinkage(truth,
     # Randomly select a number of correct observations 
     num_correct_obs = np.random.choice(np.arange(min_linkage_length, max_obs + 1))
     
-    # If the total number of observations in the linkage is lower than
-    # the minimum linkage length, don't create a linkage
-    if (num_correct_obs + num_contaminated_obs) < min_linkage_length:
-        return None
-    
     # Grab correct observation IDs
     linkage_correct = np.random.choice(observations[observations["truth"] == truth]["obs_id"].values, num_correct_obs, replace=False)
     
