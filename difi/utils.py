@@ -1,12 +1,15 @@
+import numpy as np
 from pandas.api.types import is_object_dtype
 
 __all__ = [
     "_checkColumnTypes",
-    "_checkColumnTypesEqual"
+    "_checkColumnTypesEqual",
+    "_classHandler",
+    "_percentHandler"
 ]
 
 
-def _checkColumnTypes(df, cols, columnMapping):
+def _checkColumnTypes(df, cols, column_mapping):
     """
     Checks that each dataframe column listed in cols has Pandas dtype "Object".
     
@@ -16,7 +19,7 @@ def _checkColumnTypes(df, cols, columnMapping):
         Pandas dataframe
     cols : list
         Columns to check for appropriate data type. 
-    columnMapping : dict
+    column_mapping : dict
         Column name mapping to internally used column names (truth, linkage_id, obs_id).
     
     Raises
@@ -29,7 +32,7 @@ def _checkColumnTypes(df, cols, columnMapping):
     """
     error_text = ""
     for col in cols:
-        value = columnMapping[col]
+        value = column_mapping[col]
         if not is_object_dtype(df[value].dtype):
             error = "\n{1} column ('{0}') should have type string. " \
                     "Please convert column using: \n" \
@@ -41,7 +44,7 @@ def _checkColumnTypes(df, cols, columnMapping):
         raise TypeError(error_text)
     return
 
-def _checkColumnTypesEqual(df1, df2, cols, columnMapping):
+def _checkColumnTypesEqual(df1, df2, cols, column_mapping):
     """
     Checks that each column listed in cols have the same Pandas dtype in df1 and df2.
     
@@ -53,7 +56,7 @@ def _checkColumnTypesEqual(df1, df2, cols, columnMapping):
         Pandas dataframe
     cols : list
         Columns to check for data type equality. 
-    columnMapping : dict
+    column_mapping : dict
         Column name mapping to internally used column names (truth, linkage_id, obs_id).
     
     Raises
@@ -66,7 +69,7 @@ def _checkColumnTypesEqual(df1, df2, cols, columnMapping):
     """
     error_text = ""
     for col in cols:
-        value = columnMapping[col]
+        value = column_mapping[col]
         if not (df1[value].dtype == df2[value].dtype):
             error = "\n{1} column ('{0}') in the first data frame has type: {2}\n" \
                     "{1} column ('{0}') in the second data frame has type: {3}\n" \
@@ -78,4 +81,104 @@ def _checkColumnTypesEqual(df1, df2, cols, columnMapping):
         raise TypeError(error_text)
     return
 
-                   
+def _classHandler(classes, dataframe, column_mapping):
+    """
+    Tests that the `classes` keyword argument is defined correctly.
+    `classes` should one of the following:
+        str : Name of the column in the dataframe which identifies 
+            the class of each truth.
+        dict : A dictionary with class names as keys and a list of unique 
+            truths belonging to each class as values.
+        None : If there are no classes of truths.
+
+    Parameters
+    ----------
+    classes : {str, dict, or None}
+        Declares if the truths in a data frame have classes. 
+    dataframe : `~pandas.DataFrame`
+        A pandas data frame containing a column of truths and optionally
+        a column that specifies the class (if classes is a str).
+    column_mapping : dict
+        Column name mapping to internally used column names (truth, class).
+
+    Returns
+    -------
+    class_list : list
+        A list of class names. 
+    truths_list : list
+        A list of the truths belonging to each class. 
+    """
+    class_list = ["All"]
+    truths_list = [[]]
+
+    if classes == None:
+        truths_list = [dataframe[column_mapping["truth"]].unique()]
+    
+    elif type(classes) == str:
+        if classes not in dataframe.columns:
+            err = (
+                "Could not find class column ({}) in observations."
+            )
+            raise ValueError(err.format(classes))
+        else:
+            
+            for c in dataframe[classes].unique():
+                class_list.append(c)
+                truths_list.append(dataframe[dataframe[classes].isin([c])][column_mapping["truth"]].unique())
+
+        truths_list[0] = dataframe[column_mapping["truth"]].unique()
+            
+    elif type(classes) == dict:
+        for c, t in classes.items():
+            if len(np.unique(t)) != len(t):
+                err = (
+                    "Truths for class {} are not unique."
+                )
+                raise ValueError(err.format(c))
+            else:
+                class_list.append(c)
+                truths_list[0].append(t)
+                if type(t) is list:
+                    truths_list.append(np.array(t))
+                else:
+                    truths_list.append(t)
+
+        truths_list[0] = np.hstack(truths_list[0])
+
+    else:
+        err = (
+            "Classes should be one of:\n" \
+            "  str : Name of the column in the dataframe which\n" \
+            "        identifies the class of each truth.\n" \
+            "  dict : A dictionary with class names as keys\n" \
+            "        and a list of unique truths belonging to each class\n" \
+            "        as values.\n" \
+            "  None : If there are no classes of truths."
+        )
+        raise ValueError(err)
+        
+    return class_list, truths_list
+
+def _percentHandler(number, number_total):
+    """
+    Returns a percentage value of number / number_total. Returns
+    np.NaN is number total is zero. 
+
+    Parameters
+    ----------
+    number : int or float
+        Numerator (number out of number_total).
+    number_total : int or float
+        Denominator (total number).
+
+    Returns
+    -------
+    percent : float
+    """
+    if number_total == 0:
+        percent_total = np.NaN
+    else:
+        percent_total = 100. * number / number_total
+    
+    return percent_total
+        

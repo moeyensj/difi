@@ -3,64 +3,22 @@ import numpy as np
 import pandas as pd 
 from pandas.testing import assert_frame_equal
 
-from difi import readLinkagesByLineFile
+from ..io import readLinkagesByLineFile
+from .create_test_data import createTestDataSet
 
-def test_readLinkagesByLineFile_fromFile():
-    # Set sample input
-    linkagesFile = os.path.join(os.path.dirname(__file__), "linkagesByLine.txt")
-    
-    # Load solution
-    linkageMembers_solution = pd.read_csv(os.path.join(os.path.dirname(__file__), "linkageMembers_solution.txt"), 
-        sep=" ", 
-        index_col=False,
-        dtype={
-            "obs_id" : str,
-            "linkage_id": np.int64,
-        }
-    )
-    
-    # Case 1a: Test file comparison
-    linkageMembers_test = readLinkagesByLineFile(linkagesFile,
-                                                 readCSVKwargs={"header": None},
-                                                 linkageIDStart=1,
-                                                 columnMapping={"obs_id": "obs_id",
-                                                                "linkage_id" : "linkage_id"})
-    
-    # Re-arange columns in case order is changed (python 3.5 and earlier)
-    linkageMembers_test = linkageMembers_test[["linkage_id", 
-                                               "obs_id"]]
-    
-    # Assert dataframes are equal
-    assert_frame_equal(linkageMembers_test, linkageMembers_solution)
-    
-    # Case 1b: Test different column names
-    linkageMembers_test = readLinkagesByLineFile(linkagesFile,
-                                                 readCSVKwargs={"header": None},
-                                                 linkageIDStart=1,
-                                                 columnMapping={"obs_id": "obsID",
-                                                                "linkage_id" : "linkageID"})
-    
-    # Re-arange columns in case order is changed (python 3.5 and earlier)
-    linkageMembers_test = linkageMembers_test[["linkageID", 
-                                               "obsID"]]
-    linkageMembers_solution.rename(columns={"obs_id": "obsID", "linkage_id" : "linkageID"}, inplace=True)
-    
-    # Assert dataframes are equal
-    assert_frame_equal(linkageMembers_test, linkageMembers_solution)
-    
-    # Case 1c: Test different linkage IDs
-    linkageMembers_test = readLinkagesByLineFile(linkagesFile,
-                                                 readCSVKwargs={"header": None},
-                                                 linkageIDStart=21311232,
-                                                 columnMapping={"obs_id": "obsID",
-                                                                "linkage_id" : "linkageID"})
-    
-    # Re-arange columns in case order is changed (python 3.5 and earlier)
-    linkageMembers_test = linkageMembers_test[["linkageID", 
-                                               "obsID"]]
-    linkageMembers_solution.rename(columns={"obs_id": "obsID", "linkage_id" : "linkageID"}, inplace=True)
-    linkageMembers_solution["linkageID"] += 21311232
-    
-    # Assert dataframes are equal
-    assert_frame_equal(linkageMembers_test, linkageMembers_solution)
+def test_readLinkagesByLineFile():
+    ### Test readLinkagesByLineFile using test data set
+    observations_test, all_truths_test, linkage_members_test, all_linkages_test, summary_test = createTestDataSet(5, 5, 30)
 
+    linkages_by_line = linkage_members_test.groupby("linkage_id")["obs_id"].apply(np.array).to_frame()
+    linkages_by_line_file = os.path.join(os.path.dirname(__file__), "linkagesByLine.txt")
+    with open(linkages_by_line_file, "w") as f: 
+        for linkage in linkages_by_line["obs_id"].values:
+            f.write(" ".join(linkage) + "\n")
+
+   
+    linkage_members = readLinkagesByLineFile(linkages_by_line_file)
+
+    assert_frame_equal(linkage_members[["obs_id"]], linkage_members_test[["obs_id"]])
+
+    return

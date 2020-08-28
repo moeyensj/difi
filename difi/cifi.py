@@ -3,132 +3,139 @@ import numpy as np
 import pandas as pd
 
 from .utils import _checkColumnTypes
+from .utils import _classHandler
 
 __all__ = ["analyzeObservations"]
 
 def analyzeObservations(observations,
-                        minObs=5, 
-                        unknownIDs=[],
-                        falsePositiveIDs=[],
-                        verbose=True,
-                        columnMapping={"linkage_id": "linkage_id",
-                                       "obs_id": "obs_id",
-                                       "truth": "truth"}):
+                        min_obs=5, 
+                        classes=None,
+                        column_mapping={
+                            "linkage_id": "linkage_id",
+                            "obs_id": "obs_id",
+                            "truth": "truth"
+                        }):
     """
     Can I Find It?
 
     Analyzes a DataFrame containing observations. These observations need at least two columns:
     i) the observation ID column
     ii) the truth column
-
-    We assume there to be three kinds of truths:
-    i) known truth: an observation that has a known source
-    ii) unknown truth: an observation that has an unknown source (this could be several unknown sources)
-    iii) false positive truth: a false positive observation 
-
-    By definiton, these three kinds of labels or truths can be separated into what is assumed known
-    and assumed unknown. Known truths are sources that can be used to test algorithms. Unknown truths is the 
-    default source for observations, it is up to the linking algorithm to identify and associate. False positive truths
-    are useful when testing how linking algorithms work in the presence of noise. 
-
-    This function assumes that only known truths can be findable, a findable known truth is a truth 
-    that has at least the minObs number of observations.
     
     Parameters
     ----------
     observations : `~pandas.DataFrame`
         Pandas DataFrame with at least two columns: observation IDs and the truth values
         (the object to which the observation belongs to).
-    minObs : int, optional
+    min_obs : int, optional
         The minimum number of observations required for a truth to be considered
         findable. 
         [Default = 5]
-    unknownIDs : list, optional
-        Values in the name column for unknown observations.
-        [Default = []]
-    falsePositiveIDs : list, optional
-        Names of false positive IDs.
-        [Default = []]
-    verbose : bool, optional
-        Print progress statements? 
-        [Default = True]
-    columnMapping : dict, optional
+    classes : {dict, str, None}
+        Analyze observations for truths grouped in different classes. 
+        str : Name of the column in the dataframe which identifies 
+            the class of each truth.
+        dict : A dictionary with class names as keys and a list of unique 
+            truths belonging to each class as values.
+        None : If there are no classes of truths.
+    column_mapping : dict, optional
         Column name mapping of observations to internally used column names. 
     
     Returns
     -------
-    allTruths : `~pandas.DataFrame`
-        Object summary DataFrame.
+     all_truths: `~pandas.DataFrame`
+        A per-truth summary.
+        
+        Columns:
+            "truth" : str
+                Truth
+            "num_obs" : int
+                Number of observations in the observations dataframe
+                for each truth
+            "findable" : int
+                1 if the object is findable, 0 if the object is not findable.
+                (NaN if no findable column is found in the all_truths dataframe)
+
     summary : `~pandas.DataFrame`
-        Overall summary DataFrame. 
+        A per-class summary.
+        
+        Columns:
+            "class" : str
+                Name of class (if none are defined, will only contain) "All". 
+            "num_members" : int
+                Number of unique truths that belong to the class.
+            "num_obs" : int
+                Number of observations of truths belonging to the class in 
+                the observations dataframe. 
+            "findable" : int
+                Number of truths deemed findable (all_truths must be passed to this 
+                function with a findable column)
         
     Raises
     ------
     TypeError : If the truth column in observations does not have type "Object"
     """
-    time_start = time.time()
-    if verbose == True:
-        print("Analyzing observations...")
+    truth_col = column_mapping["truth"]
 
     # Raise error if there are no observations
     if len(observations) == 0: 
         raise ValueError("There are no observations in the observations DataFrame!")
         
     # Check column types
-    _checkColumnTypes(observations, ["truth"], columnMapping)
+    _checkColumnTypes(observations, ["truth"], column_mapping)
     
-    # Count number of false positive observations, real observations, unknown observations, the number of unique truths, and those 
-    # that should be findable
-    num_fp_obs = len(observations[observations[columnMapping["truth"]].isin(falsePositiveIDs)])
-    num_unknown_obs = len(observations[observations[columnMapping["truth"]].isin(unknownIDs)])
-    num_truth_obs = len(observations[~observations[columnMapping["truth"]].isin(unknownIDs + falsePositiveIDs)])
-    num_truths = observations[columnMapping["truth"]].nunique()
-    unique_truths = observations[~observations[columnMapping["truth"]].isin(unknownIDs + falsePositiveIDs)][columnMapping["truth"]].unique()
-    num_unique_truths = len(unique_truths)
-    num_obs_per_object = observations[columnMapping["truth"]].value_counts().values
-    num_obs_descending = observations[columnMapping["truth"]].value_counts().index.values
-    findable = num_obs_descending[np.where(num_obs_per_object >= minObs)[0]]
+    num_observations_list = []
+    num_truths_list = []
+    num_findable_list = []
+        
+    # Populate all_truths DataFrame
+    dtypes = np.dtype([
+        (truth_col, str),
+        ("num_obs", int),
+        ("findable", int)])
+    data = np.empty(0, dtype=dtypes)
+    all_truths = pd.DataFrame(data)
     
-    # Populate allTruths DataFrame
-    allTruths = pd.DataFrame(columns=[
-        columnMapping["truth"], 
-        "num_obs", 
-        "findable"])
+    num_obs_per_object = observations[truth_col].value_counts().values
+    num_obs_descending = observations[truth_col].value_counts().index.values
+    findable = num_obs_descending[np.where(num_obs_per_object >= min_obs)[0]]
+    all_truths[truth_col] = num_obs_descending
+    all_truths["num_obs"] = num_obs_per_object
+    all_truths.loc[:, "findable"] = 0
+    all_truths.loc[(all_truths[truth_col].isin(findable)), "findable"] = 1
     
-    allTruths[columnMapping["truth"]] = num_obs_descending
-    allTruths["num_obs"] = num_obs_per_object
-    allTruths.loc[(allTruths[columnMapping["truth"]].isin(findable)) & (~allTruths[columnMapping["truth"]].isin(unknownIDs + falsePositiveIDs)), "findable"] = 1
-    allTruths.loc[allTruths["findable"] != 1, ["findable"]] = 0
-    num_findable = len(allTruths[allTruths["findable"] == 1])
-    percent_known = num_truth_obs / len(observations) * 100.0
-    percent_unknown = num_unknown_obs / len(observations) * 100.0
-    percent_false_positive = num_fp_obs / len(observations) * 100.0
+    all_truths["findable"] = all_truths["findable"].astype(int)
+    all_truths.sort_values(
+        by=["num_obs", truth_col], 
+        ascending=[False, True], 
+        inplace=True
+    )
+    all_truths.reset_index(
+        inplace=True, 
+        drop=True
+    )
+    
+    class_list, truths_list = _classHandler(classes, observations, column_mapping)
+
+    for c, v in zip(class_list, truths_list):
+        
+        num_obs = len(observations[observations[truth_col].isin(v)])
+        unique_truths = observations[observations[truth_col].isin(v)][truth_col].unique()
+        num_unique_truths = len(unique_truths)
+        findable = int(all_truths[all_truths[truth_col].isin(v)]["findable"].sum())
+        
+        num_observations_list.append(num_obs)
+        num_truths_list.append(num_unique_truths)
+        num_findable_list.append(findable)
 
     # Prepare summary DataFrame
-    summary = pd.DataFrame(index=[0]) 
-    summary["num_unique_truths"] = num_truths, 
-    summary["num_unique_known_truths"] = num_unique_truths,
-    summary["num_unique_known_truths_findable"] = num_findable,
-    summary["num_known_truth_observations"] = num_truth_obs
-    summary["num_unknown_truth_observations"] = num_unknown_obs
-    summary["num_false_positive_observations"] = num_fp_obs
-    summary["percent_known_truth_observations"] = percent_known
-    summary["percent_unknown_truth_observations"] = percent_unknown
-    summary["percent_false_positive_observations"] = percent_false_positive
+    summary = pd.DataFrame({
+        "class" : class_list,
+        "num_members" : num_truths_list,
+        "num_obs" : num_observations_list,
+        "findable" : num_findable_list
+    })
+    summary.sort_values(by=["num_obs", "class"], ascending=False, inplace=True)
+    summary.reset_index(inplace=True, drop=True)
     
-    time_end = time.time()
-    if verbose == True:
-        print("Known truth observations: {}".format(num_truth_obs))
-        print("Unknown truth observations: {}".format(num_unknown_obs))
-        print("False positive observations: {}".format(num_fp_obs))
-        print("Percent known truth observations (%): {:1.3f}".format(percent_known))
-        print("Percent unknown truth observations (%): {:1.3f}".format(percent_unknown))
-        print("Percent false positive observations (%): {:1.3f}".format(percent_false_positive))
-        print("Unique truths: {}".format(num_truths))
-        print("Unique known truths : {}".format(num_unique_truths))
-        print("Unique known truths with at least {} detections: {}".format(minObs, num_findable))
-        print("") 
-        print("Total time in seconds: {}".format(time_end - time_start))
-        print("")
-        
-    return allTruths, summary
+    return all_truths, summary
