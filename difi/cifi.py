@@ -141,7 +141,7 @@ def analyzeObservations(observations,
         raise ValueError(err)
 
     all_truths.loc[:, "findable"] = 0
-    all_truths.loc[all_truths[truth_col].isin(findable_observations.index), "findable"] = 1
+    all_truths.loc[all_truths[truth_col].isin(findable_observations[truth_col].values), "findable"] = 1
         
     all_truths["findable"] = all_truths["findable"].astype(int)
     all_truths.sort_values(

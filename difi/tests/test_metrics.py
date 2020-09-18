@@ -26,15 +26,15 @@ def test_calcFindableMinObs():
     
         findable_observations = calcFindableMinObs(observations_test, min_obs=min_obs, column_mapping=column_mapping)
 
-        for truth in findable_observations.index:
+        for truth in findable_observations[column_mapping["truth"]].unique():
 
             # Make sure all observations are correctly identified as findable
-            obs_ids = findable_observations[findable_observations.index == truth]["obs_ids"].values[0]
+            obs_ids = findable_observations[findable_observations[column_mapping["truth"]].isin([truth])]["obs_ids"].values[0]
             np.testing.assert_array_equal(obs_ids, observations_test[observations_test["truth"] == truth]["obs_id"].values)
 
             # Make sure all objects with not findable are not included in the findable_observations dataframe
             not_findable_truths_test = all_truths_test[all_truths_test["findable"] == 0]["truth"].values
-            assert len(findable_observations[findable_observations.index.isin(not_findable_truths_test)]) == 0
+            assert len(findable_observations[findable_observations[column_mapping["truth"]].isin(not_findable_truths_test)]) == 0
 
     return
 
@@ -80,13 +80,13 @@ def test_calcFindableNightlyLinkages():
         column_mapping=column_mapping
     )
 
-    for truth in findable_observations.index:
+    for truth in findable_observations[column_mapping["truth"]].unique():
         # Make sure all observations are correctly identified as findable
-        obs_ids = findable_observations[findable_observations.index == truth]["obs_ids"].values[0]
+        obs_ids = findable_observations[findable_observations[column_mapping["truth"]].isin([truth])]["obs_ids"].values[0]
         np.testing.assert_array_equal(obs_ids, observations_test[observations_test["truth"] == truth]["obs_id"].values)
 
     # Make sure that only reds were found
-    classes_found = observations_test[observations_test["truth"].isin(findable_observations.index.values)]["class"].unique()
+    classes_found = observations_test[observations_test["truth"].isin(findable_observations[column_mapping["truth"]].values)]["class"].unique()
     np.testing.assert_array_equal(classes_found, np.array(["red"]))
 
     # With a maximum separation of 0.5 reds and blues should be findable
@@ -98,13 +98,13 @@ def test_calcFindableNightlyLinkages():
         column_mapping=column_mapping
     )
 
-    for truth in findable_observations.index:
+    for truth in findable_observations[column_mapping["truth"]].unique():
         # Make sure all observations are correctly identified as findable
-        obs_ids = findable_observations[findable_observations.index == truth]["obs_ids"].values[0]
+        obs_ids = findable_observations[findable_observations[column_mapping["truth"]].isin([truth])]["obs_ids"].values[0]
         np.testing.assert_array_equal(obs_ids, observations_test[observations_test["truth"] == truth]["obs_id"].values)
         
     # Make sure that only reds and blues were found
-    classes_found = observations_test[observations_test["truth"].isin(findable_observations.index.values)]["class"].unique()
+    classes_found = observations_test[observations_test["truth"].isin(findable_observations[column_mapping["truth"]].values)]["class"].unique()
     np.testing.assert_array_equal(classes_found, np.array(["red", "blue"]))
 
     # With a minimum linkage length of 1, everything should be findable
@@ -116,13 +116,13 @@ def test_calcFindableNightlyLinkages():
         column_mapping=column_mapping
     )
 
-    for truth in findable_observations.index:
+    for truth in findable_observations[column_mapping["truth"]].unique():
         # Make sure all observations are correctly identified as findable
-        obs_ids = findable_observations[findable_observations.index == truth]["obs_ids"].values[0]
+        obs_ids = findable_observations[findable_observations[column_mapping["truth"]].isin([truth])]["obs_ids"].values[0]
         np.testing.assert_array_equal(obs_ids, observations_test[observations_test["truth"] == truth]["obs_id"].values)
         
     # Make sure that only reds and blues were found
-    classes_found = observations_test[observations_test["truth"].isin(findable_observations.index.values)]["class"].unique()
+    classes_found = observations_test[observations_test["truth"].isin(findable_observations[column_mapping["truth"]].values)]["class"].unique()
     np.testing.assert_array_equal(classes_found, np.array(["red", "blue", "green"]))
 
     return

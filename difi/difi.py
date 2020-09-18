@@ -723,7 +723,7 @@ def analyzeLinkages(observations,
     )
 
     all_truths = all_truths[[
-        "truth",
+        truth_col,
         #"class",
         "num_obs",
         "findable",

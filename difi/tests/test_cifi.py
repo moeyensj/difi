@@ -179,6 +179,10 @@ def test_analyzeObservations_customMetric():
         findable_objects = object_num_obs.index.values
         findable_observations = observations[observations[column_mapping["truth"]].isin(findable_objects)]
         findable = findable_observations.groupby(by=[column_mapping["truth"]])[column_mapping["obs_id"]].apply(np.array).to_frame("obs_ids")
+        findable.reset_index(
+            inplace=True,
+            drop=False
+        )
         return findable
         
     # Create test data
