@@ -4,17 +4,21 @@ import pandas as pd
 
 from .utils import _checkColumnTypes
 from .utils import _classHandler
+from .metrics import calcFindableMinObs
+from .metrics import calcFindableNightlyLinkages
+
 
 __all__ = ["analyzeObservations"]
 
 def analyzeObservations(observations,
-                        min_obs=5, 
                         classes=None,
+                        metric="min_obs",
                         column_mapping={
                             "linkage_id": "linkage_id",
                             "obs_id": "obs_id",
                             "truth": "truth"
-                        }):
+                        },
+                        **metric_kwargs):
     """
     Can I Find It?
 
@@ -27,10 +31,21 @@ def analyzeObservations(observations,
     observations : `~pandas.DataFrame`
         Pandas DataFrame with at least two columns: observation IDs and the truth values
         (the object to which the observation belongs to).
-    min_obs : int, optional
-        The minimum number of observations required for a truth to be considered
-        findable. 
-        [Default = 5]
+    metric : {'min_obs', 'nightly_linkages', callable}
+        The desired findability metric that calculates which truths are actually findable. 
+        If 'min_obs' [default]:
+            Finds all truths with a minimum of min_obs observations and the observations
+            that makes them findable.
+            See `~difi.calcFindableMinObs` for more details.
+        If 'nightly_linkages':
+            Finds the truths that have at least min_linkage_nights linkages of length
+            linkage_min_obs or more. Observations are considered to be in a possible intra-night
+            linkage if their observation time does not exceed max_obs_separation.
+            See `~difi.calcFindableNightlyLinkages` for more details.
+        If callable:
+            A user-defined function call also be passed, this function must return a `~pandas.DataFrame` 
+            with the truth IDs that are findable as an index, and a column named
+            'obs_ids' containing `~numpy.ndarray`s of the observations that made each truth findable.
     classes : {dict, str, None}
         Analyze observations for truths grouped in different classes. 
         str : Name of the column in the dataframe which identifies 
@@ -39,11 +54,16 @@ def analyzeObservations(observations,
             truths belonging to each class as values.
         None : If there are no classes of truths.
     column_mapping : dict, optional
-        Column name mapping of observations to internally used column names. 
+        The mapping of columns in observations to internally used names. 
+        Needs at least the following: "truth": ... and "obs_id" : ... . Other
+        columns may be needed for different findability metrics.
+    **metric_kwargs 
+        Any additional keyword arguments are passed to the desired findability metric. 
+        Note that column_mapping is also passed to the findability metric.
     
     Returns
     -------
-     all_truths: `~pandas.DataFrame`
+    all_truths: `~pandas.DataFrame`
         A per-truth summary.
         
         Columns:
@@ -55,6 +75,12 @@ def analyzeObservations(observations,
             "findable" : int
                 1 if the object is findable, 0 if the object is not findable.
                 (NaN if no findable column is found in the all_truths dataframe)
+
+    findable_observations : `~pandas.DataFrame`
+        A breakdown of the which observations made each object findable.
+        Columns : 
+            "obs_ids" : `~numpy.ndarray`
+                Observation IDs that made each truth findable.
 
     summary : `~pandas.DataFrame`
         A per-class summary.
@@ -98,12 +124,25 @@ def analyzeObservations(observations,
     
     num_obs_per_object = observations[truth_col].value_counts().values
     num_obs_descending = observations[truth_col].value_counts().index.values
-    findable = num_obs_descending[np.where(num_obs_per_object >= min_obs)[0]]
     all_truths[truth_col] = num_obs_descending
     all_truths["num_obs"] = num_obs_per_object
-    all_truths.loc[:, "findable"] = 0
-    all_truths.loc[(all_truths[truth_col].isin(findable)), "findable"] = 1
     
+    if metric == "min_obs":
+        findable_observations = calcFindableMinObs(observations, column_mapping=column_mapping, **metric_kwargs)
+    elif metric == "nightly_linkages":
+        findable_observations = calcFindableNightlyLinkages(observations, column_mapping=column_mapping, **metric_kwargs)
+    elif callable(metric):
+        findable_observations = metric(observations, column_mapping=column_mapping, **metric_kwargs)
+    else:
+        err = (
+            "\nmetric should be either 'min_obs', 'nightly_linkages', or a user-defined function that returns\n"
+            "a `~pandas.DataFrame` with the truth IDs that are findable as an index, and a column named\n"
+            "'obs_ids' containing `~numpy.ndarray`s of the observations that made each truth findable")
+        raise ValueError(err)
+
+    all_truths.loc[:, "findable"] = 0
+    all_truths.loc[all_truths[truth_col].isin(findable_observations.index), "findable"] = 1
+        
     all_truths["findable"] = all_truths["findable"].astype(int)
     all_truths.sort_values(
         by=["num_obs", truth_col], 
@@ -138,4 +177,5 @@ def analyzeObservations(observations,
     summary.sort_values(by=["num_obs", "class"], ascending=False, inplace=True)
     summary.reset_index(inplace=True, drop=True)
     
-    return all_truths, summary
+    return all_truths, findable_observations, summary
+

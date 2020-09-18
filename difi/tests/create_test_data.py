@@ -2,7 +2,13 @@ import numpy as np
 import pandas as pd
 
 
-def createPureLinkage(truth, observations, all_linkages, all_truths, summary, min_obs=5, min_linkage_length=5):
+def createPureLinkage(truth, 
+                      observations, 
+                      all_linkages, 
+                      all_truths, 
+                      summary, 
+                      min_obs=5, 
+                      min_linkage_length=5):
     """
     Create a pure linkage: a linkage containing only the observations of 
     one unique truth. 
@@ -19,11 +25,9 @@ def createPureLinkage(truth, observations, all_linkages, all_truths, summary, mi
         This dictionary is converted into a `pandas.DataFrame` by the 
         createTestData function.
     all_truths : `~pandas.DataFrame`
-        
-
+        A per-truth summary.
     summary : `~pandas.DataFrame`
-
-    
+        A per-class summary which is modified by this function.
     min_obs : int, optional
         The minimum number of observations to be considered found.
     min_linkage_length : int, optional
@@ -124,12 +128,6 @@ def createPartialLinkage(truth,
     ----------
     truth : str
         The name / object ID of the truth
-    num_correct_obs : int
-        Number of observations the linkage should contain of the given
-        truth.
-    num_contaminated_obs : int
-        Number of observations the linkage should contain of different 
-        truths. 
     observations : `~pandas.DataFrame`
         A dataframe containing observations. Must have at least the following
         two columns: 1) an observation ID column and 2) a truth column.
@@ -137,6 +135,20 @@ def createPartialLinkage(truth,
         Dictionary of various linkage properties that is updated by this function.
         This dictionary is converted into a `pandas.DataFrame` by the 
         createTestData function.
+    all_truths : `~pandas.DataFrame`
+        A per-truth summary.
+    summary : `~pandas.DataFrame`
+        A per-class summary which is modified by this function.
+    contamination_percentage : float, optional 
+        Number of detections expressed as a percentage [0-100] belonging to other objects in a linkage 
+        for that linkage to considered partial. For example, if contamination_percentage is 
+        20% then a linkage with 10 members, where 8 belong to one object and 2 belong to other objects, will 
+        be considered a partial linkage.
+    min_obs : int, optional
+        The minimum number of observations to be considered found.
+    min_linkage_length : int, optional
+        The minimum length of a linkage. If the truth does not have equal to or 
+        more than this many observations no linkage will be created. 
 
     Returns
     -------
@@ -240,15 +252,17 @@ def createPartialLinkage(truth,
                                        
     return linkage
     
-def createMixedLinkage(observations, all_linkages, all_truths, summary, min_linkage_length=5):
+def createMixedLinkage(observations, 
+                       all_linkages, 
+                       all_truths, 
+                       summary, 
+                       min_linkage_length=5):
     """
     Create a mixed linkage: a linkage containing observations of many truths.
     These are typically noise or spurrious linkages. 
     
     Parameters
     ----------
-    num_obs : int
-        Number of observations the linkage should contain.
     observations : `~pandas.DataFrame`
         A dataframe containing observations. Must have at least the following
         two columns: 1) an observation ID column and 2) a truth column.
@@ -256,6 +270,13 @@ def createMixedLinkage(observations, all_linkages, all_truths, summary, min_link
         Dictionary of various linkage properties that is updated by this function.
         This dictionary is converted into a `pandas.DataFrame` by the 
         createTestData function.
+    all_truths : `~pandas.DataFrame`
+        A per-truth summary.
+    summary : `~pandas.DataFrame`
+        A per-class summary which is modified by this function.
+    min_linkage_length : int, optional
+        The minimum length of a linkage. If the truth does not have equal to or 
+        more than this many observations no linkage will be created. 
 
     Returns
     -------
@@ -307,7 +328,9 @@ def createMixedLinkage(observations, all_linkages, all_truths, summary, min_link
     return linkage
 
 
-def createTruthClass(name, num_truths, num_obs):
+def createTruthClass(name, 
+                     num_truths, 
+                     num_obs):
     """
     Create a simple class of truths with support data products. 
     
@@ -320,9 +343,16 @@ def createTruthClass(name, num_truths, num_obs):
     num_obs : list (num_truths)
         List with the number of observations to make 
         for each truth.
-    
+
+    Returns
+    -------
+    observations : `~pandas.DataFrame`
+        A dataframe containing observations.
+    all_truths : `~pandas.DataFrame`
+        A per-truth summary.
+    summary : `~pandas.DataFrame`
+        A per-class summary which is modified by this function.
     """
-    
     observations = {
         "obs_id" : [],
         "truth" : [],
@@ -379,7 +409,9 @@ def createTruthClass(name, num_truths, num_obs):
     summary = pd.DataFrame(summary)
     return observations, all_truths, summary
 
-def createTestDataSet(min_obs, min_linkage_length, max_contamination_percentage):
+def createTestDataSet(min_obs, 
+                      min_linkage_length, 
+                      max_contamination_percentage):
     
     np.random.seed(42)
 
