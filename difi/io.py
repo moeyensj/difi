@@ -68,5 +68,7 @@ def readLinkagesByLineFile(linkages_file,
     linkage_members[column_mapping["obs_id"]].replace("", np.nan, inplace=True)
     linkage_members.dropna(inplace=True)
     linkage_members.reset_index(drop=True, inplace=True)
+    linkage_members[column_mapping["linkage_id"]] = linkage_members[column_mapping["linkage_id"]].astype(str)
+    linkage_members[column_mapping["obs_id"]] = linkage_members[column_mapping["obs_id"]].astype(str)
 
     return linkage_members
