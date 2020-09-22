@@ -121,8 +121,18 @@ def test_calcFindableNightlyLinkages():
         obs_ids = findable_observations[findable_observations[column_mapping["truth"]].isin([truth])]["obs_ids"].values[0]
         np.testing.assert_array_equal(obs_ids, observations_test[observations_test["truth"] == truth]["obs_id"].values)
         
-    # Make sure that only reds and blues were found
+    # Make sure that all reds, blues, and greens were found
     classes_found = observations_test[observations_test["truth"].isin(findable_observations[column_mapping["truth"]].values)]["class"].unique()
     np.testing.assert_array_equal(classes_found, np.array(["red", "blue", "green"]))
+
+    # With a minimum linkage length of 100, nothing should be findable
+    findable_observations = calcFindableNightlyLinkages(
+        observations_test,
+        linkage_min_obs=100,
+        max_obs_separation=0.5,
+        min_linkage_nights=1,
+        column_mapping=column_mapping
+    )
+    assert len(findable_observations) == 0
 
     return

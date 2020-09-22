@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 __all__ = [
     "_findNightlyLinkages",
@@ -114,26 +115,37 @@ def calcFindableNightlyLinkages(observations,
 
     # Now, find which of the possible objects actually have observations in a linkage that meet the maximum time criterion
     track_observations = observations[observations[column_mapping["truth"]].isin(possible_objects)]
-    findable_observations = track_observations.groupby(
-        by=column_mapping["truth"]
-    ).apply(_findNightlyLinkages, 
-        linkage_min_obs=linkage_min_obs,
-        max_obs_separation=max_obs_separation, 
-        column_mapping=column_mapping
-    ).to_frame(name="obs_ids")
 
-    # Some observations may have been to far apart and been removed by the previous function, make sure that the total
-    # number of observations per object still meets the minimum required
-    findable_objects = findable_observations["obs_ids"].apply(len).to_frame("num_obs")
-    findable_objects = findable_objects[findable_objects["num_obs"] >= min_linkage_nights * linkage_min_obs].index.values
+    # If nothing is findable, return an empty dataframe
+    if len(track_observations) > 0:
+        findable_observations = track_observations.groupby(
+            by=column_mapping["truth"]
+        ).apply(_findNightlyLinkages, 
+            linkage_min_obs=linkage_min_obs,
+            max_obs_separation=max_obs_separation, 
+            column_mapping=column_mapping
+        ).to_frame(name="obs_ids")
 
-    findable = findable_observations[findable_observations.index.isin(findable_objects)]
-    findable.reset_index(
-        inplace=True,
-        drop=False
-    )
+        # Some observations may have been to far apart and been removed by the previous function, make sure that the total
+        # number of observations per object still meets the minimum required
+        findable_objects = findable_observations["obs_ids"].apply(len).to_frame("num_obs")
+        findable_objects = findable_objects[findable_objects["num_obs"] >= min_linkage_nights * linkage_min_obs].index.values
+
+        findable = findable_observations[findable_observations.index.isin(findable_objects)]
+        findable.reset_index(
+            inplace=True,
+            drop=False
+        )
+
+    else:
+        findable = pd.DataFrame(
+            columns=[
+                column_mapping["truth"],
+                "obs_ids"
+            ]
+        )
+        
     return findable
-
 
 def calcFindableMinObs(observations, 
                        min_obs=5, 
