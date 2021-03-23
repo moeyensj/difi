@@ -9,7 +9,7 @@ __all__ = [
 
 def _findNightlyLinkages(object_observations, 
                          linkage_min_obs=2,
-                         max_obs_separation=0.1/24, 
+                         max_obs_separation=1.5/24, 
                          min_linkage_nights=3, 
                          column_mapping={"obs_id" : "obs_id", 
                                          "time" : "time",
@@ -63,12 +63,11 @@ def _findNightlyLinkages(object_observations,
         linkage_nights, night_counts = np.unique(nights[np.isin(obs_ids, linkage_obs)], return_counts=True)
 
         # Make sure that the number of unique nights on which a linkage is made
-        # is still equal to or greater than the minimum number of nights
-        if len(night_counts[night_counts >= linkage_min_obs]) < min_linkage_nights:
+        # is still equal to or greater than the minimum number of nights.
+        # Also make sure that the number of observations is still linkage_min_obs * min_linkage_nights
+        if (len(night_counts[night_counts >= linkage_min_obs]) < min_linkage_nights) or (len(linkage_obs) < (linkage_min_obs * min_linkage_nights)):
             return np.array([])
-        # Make sure that the number of observations is still linkage_min_obs * min_linkage_nights
-        if len(linkage_obs) < (linkage_min_obs * min_linkage_nights):
-            return np.array([])
+
     else:
         linkage_obs = obs_ids
     

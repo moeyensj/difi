@@ -191,11 +191,6 @@ def test_calcFindableNightlyLinkages():
         column_mapping=column_mapping
     )
 
-    for truth in findable_observations[column_mapping["truth"]].unique():
-        # Make sure all observations are correctly identified as findable
-        obs_ids = findable_observations[findable_observations[column_mapping["truth"]].isin([truth])]["obs_ids"].values[0]
-        np.testing.assert_array_equal(obs_ids, observations_test[observations_test["truth"] == truth]["obs_id"].values[:-1])
-
     # Red05 should no longer be findable
     classes_found = observations_test[observations_test["truth"].isin(findable_observations[column_mapping["truth"]].values)]["class"].unique()
     np.testing.assert_array_equal(classes_found, np.array([]))
@@ -252,11 +247,6 @@ def test_calcFindableNightlyLinkages():
         min_linkage_nights=3,
         column_mapping=column_mapping
     )
-
-    for truth in findable_observations[column_mapping["truth"]].unique():
-        # Make sure all observations are correctly identified as findable
-        obs_ids = findable_observations[findable_observations[column_mapping["truth"]].isin([truth])]["obs_ids"].values[0]
-        np.testing.assert_array_equal(obs_ids, observations_test[observations_test["truth"] == truth]["obs_id"].values)
 
     # Red05 should no longer be findable
     classes_found = observations_test[observations_test["truth"].isin(findable_observations[column_mapping["truth"]].values)]["class"].unique()
