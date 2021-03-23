@@ -9,9 +9,11 @@ __all__ = [
 
 def _findNightlyLinkages(object_observations, 
                          linkage_min_obs=2,
-                         max_obs_separation=0.1/24, 
+                         max_obs_separation=1.5/24, 
+                         min_linkage_nights=3, 
                          column_mapping={"obs_id" : "obs_id", 
-                                         "time" : "time"}):
+                                         "time" : "time",
+                                         "night" : "night"}):
     """
     Given observations belonging to one object, finds all observations that are within
     max_obs_separation of each other.
@@ -28,9 +30,11 @@ def _findNightlyLinkages(object_observations,
         Maximum temporal separation between two observations for them
         to be considered to be in a linkage (in the same units of decimal days).
         Maximum timespan between two observations. 
+    min_linkage_nights : int, optional
+        Minimum number of nights on which a linkage should appear.
     column_mapping : dict, optional
         The mapping of columns in observations to internally used names. 
-        Needs the following: obs_id" : ..., "time" : ... .
+        Needs the following: obs_id" : ..., "time" : ... , "night" : ....
 
     Returns
     -------
@@ -40,6 +44,7 @@ def _findNightlyLinkages(object_observations,
     # Grab times and observation IDs from grouped observations
     times = object_observations[column_mapping["time"]].values
     obs_ids = object_observations[column_mapping["obs_id"]].values
+    nights = object_observations[column_mapping["night"]].values
 
     if linkage_min_obs > 1:
         # Calculate the time difference between observations
@@ -55,7 +60,14 @@ def _findNightlyLinkages(object_observations,
         # Combine times and select all observations match the linkage times
         linkage_times = np.unique(np.concatenate([start_times, end_times]))
         linkage_obs = obs_ids[np.isin(times, linkage_times)]
-    
+        linkage_nights, night_counts = np.unique(nights[np.isin(obs_ids, linkage_obs)], return_counts=True)
+
+        # Make sure that the number of unique nights on which a linkage is made
+        # is still equal to or greater than the minimum number of nights.
+        # Also make sure that the number of observations is still linkage_min_obs * min_linkage_nights
+        if (len(night_counts[night_counts >= linkage_min_obs]) < min_linkage_nights) or (len(linkage_obs) < (linkage_min_obs * min_linkage_nights)):
+            return np.array([])
+
     else:
         linkage_obs = obs_ids
     
@@ -123,13 +135,14 @@ def calcFindableNightlyLinkages(observations,
         ).apply(_findNightlyLinkages, 
             linkage_min_obs=linkage_min_obs,
             max_obs_separation=max_obs_separation, 
+            min_linkage_nights=min_linkage_nights,
             column_mapping=column_mapping
         ).to_frame(name="obs_ids")
 
-        # Some observations may have been to far apart and been removed by the previous function, make sure that the total
-        # number of observations per object still meets the minimum required
+        # Some observations may have been to far apart and been removed by the previous function, remove
+        # the objects that are no longer findable
         findable_objects = findable_observations["obs_ids"].apply(len).to_frame("num_obs")
-        findable_objects = findable_objects[findable_objects["num_obs"] >= min_linkage_nights * linkage_min_obs].index.values
+        findable_objects = findable_objects[findable_objects["num_obs"] != 0].index.values
 
         findable = findable_observations[findable_observations.index.isin(findable_objects)]
         findable.reset_index(
