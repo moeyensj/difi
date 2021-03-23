@@ -198,6 +198,51 @@ def test_calcFindableNightlyLinkages():
     # Set the observation back to its original time
     observations_test.loc[observations_test["obs_id"] == "obs00096", "time"] = 2.25
 
+    # Keep min_linkage nights to 3 with a maximum separation of 0.25, set the two of the observations on night 1 to not be 
+    # findable, red05 should still be findable with the remaining observations but those unfindable observations should not 
+    # be returned as findable observations
+    observations_test.loc[observations_test["obs_id"] == "obs00057", "time"] = 1.51
+    observations_test.loc[observations_test["obs_id"] == "obs00070", "time"] = 1.77
+    # This observation needs to be shifted so that it is more than 0.25 from the previous exposure time
+    # so we dont count a linkage across nights
+    observations_test.loc[observations_test["obs_id"] == "obs00085", "time"] = 2.10
+
+    #  obs_id   truth class time night findable
+    # obs00000  red05  red  0.00  0        Y
+    # obs00008  red05  red  0.25  0        Y
+    # obs00013  red05  red  0.50  0        Y
+    # obs00024  red05  red  0.75  0        Y
+    # obs00049  red05  red  1.00  1        Y
+    # obs00051  red05  red  1.25  1        Y
+    # obs00057  red05  red  1.51  1        N
+    # obs00070  red05  red  1.76  1        N
+    # obs00085  red05  red  2.10  2        Y
+    # obs00096  red05  red  2.25  2        Y
+    # red05 findable : Y
+    findable_observations = calcFindableNightlyLinkages(
+        observations_test,
+        linkage_min_obs=2,
+        max_obs_separation=0.25,
+        min_linkage_nights=3,
+        column_mapping=column_mapping
+    )
+
+    for truth in findable_observations[column_mapping["truth"]].unique():
+        # Make sure all observations are correctly identified as findable
+        obs_ids = findable_observations[findable_observations[column_mapping["truth"]].isin([truth])]["obs_ids"].values[0]
+        np.testing.assert_array_equal(obs_ids, observations_test[(observations_test["truth"] == truth) & (~observations_test["obs_id"].isin(["obs00057", "obs00070"]))]["obs_id"].values)
+
+    # Make sure that only red05 should be findable
+    classes_found = observations_test[observations_test["truth"].isin(findable_observations[column_mapping["truth"]].values)]["class"].unique()
+    np.testing.assert_array_equal(classes_found, np.array(["red"]))
+    np.testing.assert_array_equal(findable_observations["truth"].values, np.array(["red05"]))
+
+    # Set the observations back to their previous values
+    observations_test.loc[observations_test["obs_id"] == "obs00057", "time"] = 1.50
+    observations_test.loc[observations_test["obs_id"] == "obs00070", "time"] = 1.75
+    observations_test.loc[observations_test["obs_id"] == "obs00085", "time"] = 2.00
+
+
     # Keep min_linkage nights to 3 with a maximum separation of 0.25, remove some of red05's observations 
     # so that there are only two observations on each night -- it should still be the only object findable
     observations_test = observations_test[~observations_test["obs_id"].isin(["obs00000", "obs00008", "obs00057", "obs00070"])]
