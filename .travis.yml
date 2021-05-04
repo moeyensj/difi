@@ -6,7 +6,7 @@ os:
 sudo: false
 branches:
   only:
-    - master
+    - main
 python:
   - "3.6"
   
