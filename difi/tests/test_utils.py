@@ -210,3 +210,53 @@ def test__classHandler_errors():
         class_list, truths_list = _classHandler("abc", observations, column_mapping)
     
     return
+
+def test__classHandler_warnings():
+    ### Test _classHandler for warnings
+    
+    column_mapping = {
+        "truth" : "obj_id"
+    }
+
+    classes_dict = {}
+    all_truths = []
+    
+    # Create list of expected outputs from _classHandler
+    class_list_test = ["All"]
+    truths_list_test = []
+    
+    # Add to the expected outputs and build the expected
+    # input observations dataframe and classes dictionary
+    for c in ["green", "blue", "red", "orange"]:
+        truths = ["{}{:02d}".format(c, i) for i in range(10)]
+        truths_list_test.append(truths)
+        all_truths += truths
+        classes_dict[c] = truths
+        class_list_test.append(c)
+    truths_list_test.insert(0, all_truths)
+
+    observations = pd.DataFrame({
+        "obs_id" : ["obs{:02d}".format(i) for i in range(len(all_truths))],
+        "obj_id" : all_truths})
+    for c in ["green", "blue", "red", "orange"]:
+        observations.loc[observations["obj_id"].isin(classes_dict[c]), "class"] = c
+
+    # Remove the orange class from classes dict
+    classes_dict_ = classes_dict.copy()
+    classes_dict_.pop("orange")
+    observations.loc[observations["class"].isin(["orange"]), "class"] = np.NaN
+    
+    # Test for UserWarning when not all truths have an assigned class
+    with pytest.warns(UserWarning):
+        class_list, truths_list = _classHandler(classes_dict_, observations, column_mapping)
+
+        assert "Unclassified" in class_list
+        assert np.all(truths_list[-1] == classes_dict["orange"])
+
+    with pytest.warns(UserWarning):
+        class_list, truths_list = _classHandler("class", observations, column_mapping)
+
+        assert "Unclassified" in class_list
+        assert np.all(truths_list[-1] == classes_dict["orange"])
+    
+    return

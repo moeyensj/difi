@@ -1,3 +1,4 @@
+import warnings
 import numpy as np
 from pandas.api.types import is_object_dtype
 
@@ -107,12 +108,18 @@ def _classHandler(classes, dataframe, column_mapping):
         A list of class names. 
     truths_list : list
         A list of the truths belonging to each class. 
+
+    Raises
+    ------
+    UserWarning : If not all truths in the dataframe are assigned a class
     """
     class_list = ["All"]
     truths_list = [[]]
+    unique_truths = []
 
     if classes == None:
         truths_list = [dataframe[column_mapping["truth"]].unique()]
+        unique_truths = [truths_list[0]]
     
     elif type(classes) == str:
         if classes not in dataframe.columns:
@@ -122,9 +129,11 @@ def _classHandler(classes, dataframe, column_mapping):
             raise ValueError(err.format(classes))
         else:
             
-            for c in dataframe[classes].unique():
+            for c in dataframe[~dataframe[classes].isna()][classes].unique():
                 class_list.append(c)
-                truths_list.append(dataframe[dataframe[classes].isin([c])][column_mapping["truth"]].unique())
+                class_truths = dataframe[dataframe[classes].isin([c])][column_mapping["truth"]].unique()
+                unique_truths.append(class_truths)
+                truths_list.append(class_truths)
 
         truths_list[0] = dataframe[column_mapping["truth"]].unique()
             
@@ -138,6 +147,7 @@ def _classHandler(classes, dataframe, column_mapping):
             else:
                 class_list.append(c)
                 truths_list[0].append(t)
+                unique_truths.append(t)
                 if type(t) is list:
                     truths_list.append(np.array(t))
                 else:
@@ -156,6 +166,26 @@ def _classHandler(classes, dataframe, column_mapping):
             "  None : If there are no classes of truths."
         )
         raise ValueError(err)
+
+    # Test that the unique truths are in fact unique
+    unique_truths = np.concatenate(unique_truths)
+    if not len(np.unique(unique_truths)) == len(unique_truths):
+        err = (
+            "Some truths are duplicated in multiple classes."
+        )
+        raise ValueError(err)
+
+    if not dataframe[column_mapping["truth"]].isin(unique_truths).all():
+        warning = (
+            "Some truths do not have an assigned class.\n" \
+            "Unclassified truths have been added as 'Unclassified'."
+        )
+
+        unclassified = dataframe[~dataframe[column_mapping["truth"]].isin(unique_truths)][column_mapping["truth"]].unique()
+        class_list.append("Unclassified")
+        truths_list.append(unclassified)
+        truths_list[0] = np.concatenate([truths_list[0], unclassified])
+        warnings.warn(warning, UserWarning)
         
     return class_list, truths_list
 
