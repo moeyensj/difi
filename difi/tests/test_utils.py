@@ -1,3 +1,4 @@
+import copy
 import pytest
 import numpy as np
 import pandas as pd
@@ -199,16 +200,20 @@ def test__classHandler_errors():
     
     # Test for ValueError when a truth appears twice for the same class
     with pytest.raises(ValueError):
-        classes_dict_ = classes_dict.copy()
+        classes_dict_ = copy.deepcopy(classes_dict)
         classes_dict_["green"].append(classes_dict_["green"][-1])
     
         class_list, truths_list = _classHandler(classes_dict_, observations, column_mapping)
         
     # Test for ValueError when an incorrect column name is given
     with pytest.raises(ValueError):
-       
         class_list, truths_list = _classHandler("abc", observations, column_mapping)
-    
+
+    # Test for ValueError when a truth appears in more than two classes
+    classes_dict["blue"].append(classes_dict["green"][-1])
+    with pytest.raises(ValueError):
+        class_list, truths_list = _classHandler(classes_dict, observations, column_mapping)
+        
     return
 
 def test__classHandler_warnings():
@@ -242,7 +247,7 @@ def test__classHandler_warnings():
         observations.loc[observations["obj_id"].isin(classes_dict[c]), "class"] = c
 
     # Remove the orange class from classes dict
-    classes_dict_ = classes_dict.copy()
+    classes_dict_ = copy.deepcopy(classes_dict)
     classes_dict_.pop("orange")
     observations.loc[observations["class"].isin(["orange"]), "class"] = np.NaN
     
