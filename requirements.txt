@@ -5,4 +5,4 @@ pytest-cov
 coveralls
 setuptools>=42
 wheel
-setuptools_scm>=3.4
+setuptools_scm>=6.0
