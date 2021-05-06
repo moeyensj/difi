@@ -1,5 +1,4 @@
 FROM continuumio/miniconda3
-MAINTAINER Joachim Moeyens <moeyensj@gmail.com>
 
 # Set shell to bash
 SHELL ["/bin/bash", "-c"]
@@ -11,12 +10,10 @@ RUN apt-get update \
 # Update conda
 RUN conda update -n base -c defaults conda
 
-# Download difi
+# Download difi, create a Python 3.8 conda environment, install requirements, then install difi
 RUN mkdir projects \
 	&& cd projects \
-	&& git clone https://github.com/moeyensj/difi.git --depth=1
-
-# Create Python 3.6 conda environment and install requirements, then install difi
-RUN cd projects/difi \
-	&& conda install -c defaults -c conda-forge -c astropy --file requirements.txt python=3.6 --y \
+	&& git clone https://github.com/moeyensj/difi.git --depth=1 \
+	&& cd difi \
+	&& conda install -c defaults -c conda-forge --file requirements.txt python=3.8 --y \
 	&& python setup.py install
