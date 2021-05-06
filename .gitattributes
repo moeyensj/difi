@@ -1,2 +1,0 @@
-examples/linkages.txt filter=lfs diff=lfs merge=lfs -text
-examples/observations.txt filter=lfs diff=lfs merge=lfs -text
