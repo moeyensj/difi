@@ -8,45 +8,57 @@ Did I Find It?
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 
 ## About
-`difi` is a simple package that takes pre-formatted linkage information from software such as [MOPS](https://github.com/lsst/mops_daymops), [pytrax](https://github.com/pytrax/pytrax) or [difi](https://github.com/moeyensj/difi) and analyzes which objects have been found. A key performance criteria is that `difi` needs to be fast by avoiding Python for loops and instead uses clever `pandas.DataFrame` manipulation. 
+`difi` is a simple package that takes pre-formatted linkage information from software such as [MOPS](https://github.com/lsst/mops_daymops), [pytrax](https://github.com/pytrax/pytrax), or [THOR](https://github.com/moeyensj/thor) and analyzes which objects have been found given a set of known labels (or truths). A key performance criteria is that `difi` needs to be fast by avoiding Python for loops and instead uses clever `pandas.DataFrame` manipulation. 
 
 ## Installation
 
-We recommend installing the code along one of two installation paths: either a source code installation, or an installation via docker. 
+The following installation paths are available:  
+[Anaconda](#Anaconda)  
+[PyPi](#PyPi)  
+[Docker](#Docker)  
+[Source](#Source)  
+
+### Anaconda
+`difi` can be downloaded directly from anaconda:  
+```conda install -c moeyensj difi```
+
+Or, if preferred, installed into its own environment via:  
+```conda create -n difi_py38 -c moeyensj difi python=3.8```
+
+### PyPi
+`difi` is also available from the Python package index:  
+```pip install difi```
+
+### Docker
+
+A Docker container with the latest version of the code can be pulled using:  
+```docker pull moeyensj/difi:latest```
+
+To run the container:  
+```docker run -it moeyensj/difi:latest```
+
+The difi code is installed the /projects directory, and is by default also installed in the container's Python installation. 
 
 ### Source
 Clone this repository using either `ssh` or `https`. Once cloned and downloaded, `cd` into the repository. 
 
 To install difi in its own `conda` enviroment please do the following:  
+```conda create -n difi_py38 -c defaults -c conda-forge --file requirements.txt python=3.8```  
 
-```conda create -n difi_py36 -c defaults -c conda-forge -c astropy --file requirements.txt python=3.6```  
-
-Or, to install difi in a pre-existing `conda` environment called `env`:  
-
-```conda activate env```  
-```conda install -c defaults -c conda-forge -c astropy --file requirements.txt```  
+Or, to install difi in a pre-existing `conda` environment called `difi_py38`:  
+```conda activate difi_py38```  
+```conda install -c defaults -c conda-forge --file requirements.txt```  
 
 Or, to install pre-requisite software using `pip`:  
-
 ```pip install -r requirements.txt```
 
-Once pre-requisites have been installed using either one of the tree options above, then:  
-
+Once pre-requisites have been installed using either one of the three options above, then:  
 ```python setup.py install```
 
+Or, if you would like to make an editable install then:  
+```python setup.py develop```
+
 You should now be able to start Python and import difi. 
-
-### Docker
-
-A Docker container with the latest version of the code can be pulled using:  
-
-```docker pull moeyensj/difi:latest```
-
-To run the container:  
-
-```docker run -it moeyensj/difi:latest```
-
-The difi code is installed the /projects directory, and is by default also installed in the container's Python installation. 
 
 ## Example
 
