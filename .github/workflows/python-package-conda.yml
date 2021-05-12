@@ -33,7 +33,7 @@ jobs:
     #    $CONDA/bin/flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Install package
       run: |
-        python setup.py install  
+        $CONDA/bin/python setup.py install
     - name: Test with pytest
       run: |
         $CONDA/bin/pytest . --cov=.
