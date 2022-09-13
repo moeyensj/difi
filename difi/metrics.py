@@ -66,11 +66,11 @@ def _findNightlyLinkages(object_observations,
         linkage_nights, night_counts = np.unique(nights[np.isin(obs_ids, linkage_obs)], return_counts=True)
 
         # Make sure that the number of observations is still linkage_min_obs * min_linkage_nights
-        enough_obs = len(linkage_obs) < (linkage_min_obs * min_linkage_nights)
+        enough_obs = len(linkage_obs) >= (linkage_min_obs * min_linkage_nights)
 
         # Make sure that the number of unique nights on which a linkage is made
         # is still equal to or greater than the minimum number of nights.
-        enough_nights = len(night_counts[night_counts >= linkage_min_obs]) < min_linkage_nights
+        enough_nights = len(night_counts[night_counts >= linkage_min_obs]) >= min_linkage_nights
 
         # ensure that the observations all occur within a detection window
         diff_nights = np.diff(linkage_nights)
