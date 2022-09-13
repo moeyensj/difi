@@ -89,7 +89,8 @@ def _findNightlyLinkages(object_observations,
 def calcFindableNightlyLinkages(observations, 
                                 linkage_min_obs=2, 
                                 max_obs_separation=1.5/24, 
-                                min_linkage_nights=3, 
+                                min_linkage_nights=3,
+                                detection_window=15,
                                 column_mapping={"obs_id" : "obs_id", 
                                                 "truth" : "truth",
                                                 "time" : "time", 
@@ -113,6 +114,8 @@ def calcFindableNightlyLinkages(observations,
         to be considered to be in a linkage (in the same units of decimal days).
     min_linkage_nights : int, optional
         Minimum number of nights on which a linkage should appear.
+    detection_window : int, optional
+        Number of nights in the detection window in which a minimum of `min_linkage_nights` must occur
     column_mapping : dict, optional
         The mapping of columns in observations to internally used names. 
         Needs the following: "truth": ..., "obs_id" : ..., "time" : ..., "night" : ... .
@@ -149,6 +152,7 @@ def calcFindableNightlyLinkages(observations,
             linkage_min_obs=linkage_min_obs,
             max_obs_separation=max_obs_separation, 
             min_linkage_nights=min_linkage_nights,
+            detection_window=detection_window,
             column_mapping=column_mapping
         ).to_frame(name="obs_ids")
 
