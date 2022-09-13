@@ -7,7 +7,9 @@ __all__ = [
     "_checkColumnTypesEqual",
     "_classHandler",
     "_percentHandler",
-    "calcFirstFindableNight"
+    "calcFirstFindableNight",
+    "_firstFindableNightMinObs",
+    "_firstFindableNightNightlyLinkages"
 ]
 
 
@@ -214,12 +216,12 @@ def _percentHandler(number, number_total):
     return percent_total
 
 
-def firstFindableNightMinObs(obs_ids, observations,
-                             column_mapping={
-                                "obs_id": "obs_id",
-                                "night_id": "night_id"
-                             },
-                             min_obs=6):
+def _firstFindableNightMinObs(obs_ids, observations,
+                              column_mapping={
+                                 "obs_id": "obs_id",
+                                 "night_id": "night_id"
+                              },
+                              min_obs=6):
     """For a particular findable object, find the first night on which it
     becomes findable when requiring a minimum of `min_obs` observations.
 
@@ -245,13 +247,13 @@ def firstFindableNightMinObs(obs_ids, observations,
     return observations.loc[obs_ids[min_obs - 1]][column_mapping["night_id"]]
 
 
-def firstFindableNightNightlyLinkages(obs_ids, observations,
-                                      column_mapping={
-                                          "obs_id": "obs_id",
-                                          "night_id": "night_id"
-                                      },
-                                      min_linkage_nights=3,
-                                      detection_window=15):
+def _firstFindableNightNightlyLinkages(obs_ids, observations,
+                                       column_mapping={
+                                           "obs_id": "obs_id",
+                                           "night_id": "night_id"
+                                       },
+                                       min_linkage_nights=3,
+                                       detection_window=15):
     """For a particular findable object, find the first night on which it
     becomes findable when requiring a minimum of `min_linkage_nights`
     nights of linkages within a `detection_window` night range.
@@ -339,7 +341,7 @@ def calcFirstFindableNight(findable_obs, observations,
     TypeError : If the truth column in observations does not have type "Object"
     """
     if metric == "min_obs":
-        first_findable_night = findable_obs["obs_ids"].apply(firstFindableNightMinObs, observations=observations, column_mapping=column_mapping, **metric_kwargs)
+        first_findable_night = findable_obs["obs_ids"].apply(_firstFindableNightMinObs, observations=observations, column_mapping=column_mapping, **metric_kwargs)
     elif metric == "nightly_linkages":
-        first_findable_night = findable_obs["obs_ids"].apply(firstFindableNightNightlyLinkages, observations=observations, column_mapping=column_mapping, **metric_kwargs)
+        first_findable_night = findable_obs["obs_ids"].apply(_firstFindableNightNightlyLinkages, observations=observations, column_mapping=column_mapping, **metric_kwargs)
     return first_findable_night
