@@ -48,7 +48,7 @@ jobs:
   - bash: |
       export PATH="$HOME/miniconda/bin:$PATH"
       source activate difi
-      python setup.py install 
+      pip install . --no-deps
     displayName: 'Install difi'
 
   - bash: |
