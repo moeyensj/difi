@@ -18,6 +18,7 @@ def analyzeObservations(observations,
                             "truth": "truth"
                         },
                         detection_window=15,
+                        ignore_after_detected=True,
                         **metric_kwargs):
     """
     Can I Find It?
@@ -56,6 +57,9 @@ def analyzeObservations(observations,
     detection_window : int, optional
         Number of nights within which the metric for detection must be met. Set `detection_window=None` to
         ignore this requirement.
+    ignore_after_detected : bool, optional
+        For use with `detection_window` - Whether to ignore an object in subsequent windows after it has been
+        detected in an earlier window.
     column_mapping : dict, optional
         The mapping of columns in observations to internally used names. 
         Needs at least the following: "truth": ... and "obs_id" : ... . Other
@@ -84,6 +88,9 @@ def analyzeObservations(observations,
         Columns : 
             "obs_ids" : `~numpy.ndarray`
                 Observation IDs that made each truth findable.
+            "window_start_night" : int
+                The start night of the window in which this object was detected. Note: column only exists if
+                `detection_window` is not `None` and there are at least 2 potential detection windows.
 
     summary : `~pandas.DataFrame`
         A per-class summary.
@@ -153,19 +160,26 @@ def analyzeObservations(observations,
     metric_func = metric if callable(metric) else metric_func_mapper[metric]
 
     # if user wants to use a detection window and there are more nights than the window length
+    detected_truths = np.array([])
     if detection_window is not None and len(night_range) > detection_window:
         all_findable_observations = []
 
         # loop over potential detection windows
         for i in range(night_range[0], night_range[0] + len(night_range) - detection_window + 1):
-            # create a mask for the observations for this window
+            # create a mask for this window, for objects that haven't been detected in prior windows
             window_mask = ((observations[column_mapping["night"]] >= i)
-                         & (observations[column_mapping["night"]] <= i + detection_window))
+                         & (observations[column_mapping["night"]] <= i + detection_window)
+                         & ~observations[column_mapping["truth"]].isin(detected_truths))
 
             # work out which observations are findable in this window
             window_findable_observations = metric_func(observations[window_mask],
                                                        column_mapping=column_mapping,
                                                        **metric_kwargs)
+
+            # if user only wants the first detection window then update the detected truths
+            if ignore_after_detected:
+                window_detected_truths = window_findable_observations[column_mapping["truth"]].values
+                detected_truths = np.concatenate([detected_truths, window_detected_truths])
 
             # add a column recording in which window this object was detected
             window_findable_observations["window_start_night"] = i
