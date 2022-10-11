@@ -166,13 +166,16 @@ def analyzeObservations(observations,
 
         # loop over potential detection windows
         for i in range(night_range[0], night_range[0] + len(night_range) - detection_window + 1):
-            # create a mask for this window, for objects that haven't been detected in prior windows
-            window_mask = ((observations[column_mapping["night"]] >= i)
-                         & (observations[column_mapping["night"]] <= i + detection_window)
-                         & ~observations[column_mapping["truth"]].isin(detected_truths))
+            # mask observations to just this window
+            win_obs = observations[((observations[column_mapping["night"]] >= i)
+                                  & (observations[column_mapping["night"]] <= i + detection_window))]
+
+            # if ignoring previous detections then mask them out as well
+            if ignore_after_detected and len(detected_truths) > 0:
+                win_obs = win_obs[~win_obs[column_mapping["truth"]].isin(detected_truths)]
 
             # work out which observations are findable in this window
-            window_findable_observations = metric_func(observations[window_mask],
+            window_findable_observations = metric_func(win_obs,
                                                        column_mapping=column_mapping,
                                                        **metric_kwargs)
 
@@ -187,7 +190,7 @@ def analyzeObservations(observations,
 
         # combine the findable observations tables
         findable_observations = pd.concat(all_findable_observations).reset_index()
-    
+
     # otherwise just continue without a detection_window
     else:
         findable_observations = metric_func(observations, column_mapping=column_mapping, **metric_kwargs)
