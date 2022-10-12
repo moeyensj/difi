@@ -159,16 +159,16 @@ def analyzeObservations(observations,
     # get the metric function
     metric_func = metric if callable(metric) else metric_func_mapper[metric]
 
-    # if user wants to use a detection window and there are more nights than the window length
+    # if user wants to use a detection window
     detected_truths = np.array([])
-    if detection_window is not None and len(night_range) > detection_window:
+    if detection_window is not None:
         all_findable_observations = []
 
         # loop over potential detection windows
-        for i in range(night_range[0], night_range[0] + len(night_range) - detection_window + 1):
+        for night in night_range:
             # mask observations to just this window
-            win_obs = observations[((observations[column_mapping["night"]] >= i)
-                                  & (observations[column_mapping["night"]] <= i + detection_window))]
+            win_obs = observations[((observations[column_mapping["night"]] >= night)
+                                  & (observations[column_mapping["night"]] < night + detection_window))]
 
             # if ignoring previous detections then mask them out as well
             if ignore_after_detected and len(detected_truths) > 0:
@@ -185,7 +185,7 @@ def analyzeObservations(observations,
                 detected_truths = np.concatenate([detected_truths, window_detected_truths])
 
             # add a column recording in which window this object was detected
-            window_findable_observations["window_start_night"] = i
+            window_findable_observations["window_start_night"] = night
             all_findable_observations.append(window_findable_observations)
 
         # combine the findable observations tables
