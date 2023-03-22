@@ -1,8 +1,7 @@
 # difi
 Did I Find It?  
-[![Build Status](https://dev.azure.com/moeyensj/difi/_apis/build/status/moeyensj.difi?branchName=master)](https://dev.azure.com/moeyensj/difi/_build/latest?definitionId=1&branchName=master)
-[![Build Status](https://travis-ci.com/moeyensj/difi.svg?branch=master)](https://travis-ci.com/moeyensj/difi)
-[![Coverage Status](https://coveralls.io/repos/github/moeyensj/difi/badge.svg?branch=master)](https://coveralls.io/github/moeyensj/difi?branch=master)
+[![Build Status](https://dev.azure.com/moeyensj/difi/_apis/build/status/moeyensj.difi?branchName=main)](https://dev.azure.com/moeyensj/difi/_build/latest?definitionId=1&branchName=main)
+[![Coverage Status](https://coveralls.io/repos/github/moeyensj/difi/badge.svg?branch=main)](https://coveralls.io/github/moeyensj/difi?branch=main)
 [![Docker Pulls](https://img.shields.io/docker/pulls/moeyensj/difi)](https://hub.docker.com/r/moeyensj/difi)  
 [![Python 3.7+](https://img.shields.io/badge/Python-3.7%2B-blue)](https://img.shields.io/badge/Python-3.7%2B-blue)
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
@@ -63,7 +62,7 @@ You should now be able to start Python and import difi.
 
 ## Example
 
-The example below can be found in greater detail in this [Jupyter Notebook](https://github.com/moeyensj/difi/tree/master/examples/tutorial.ipynb).
+The example below can be found in greater detail in this [Jupyter Notebook](https://github.com/moeyensj/difi/tree/main/examples/tutorial.ipynb).
 
 ### Assumed Inputs
 `difi` is designed to analyze a set of linkages made by external software where some of the underlying true linkages are known. It needs just two DataFrames of data:
@@ -121,4 +120,4 @@ Understanding the specifics behind each linkage is one thing, but how did the li
 ![allTruths](docs/images/difi_all_truths.png "all_truths")
 
 ### Tutorial
-A detailed tutorial on `difi` functionality can be found [here](https://github.com/moeyensj/difi/tree/master/examples).
+A detailed tutorial on `difi` functionality can be found [here](https://github.com/moeyensj/difi/tree/main/examples).
