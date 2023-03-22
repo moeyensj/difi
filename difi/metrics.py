@@ -10,7 +10,7 @@ __all__ = [
 def _findNightlyLinkages(object_observations, 
                          linkage_min_obs=2,
                          max_obs_separation=1.5/24, 
-                         min_linkage_nights=3, 
+                         min_linkage_nights=3,
                          column_mapping={"obs_id" : "obs_id", 
                                          "time" : "time",
                                          "night" : "night"}):
@@ -56,27 +56,31 @@ def _findNightlyLinkages(object_observations,
         mask = (delta_t <= max_obs_separation)
         start_times = times[np.where(mask)[0]]
         end_times = times[np.where(mask)[0] + 1]
-        
+
         # Combine times and select all observations match the linkage times
         linkage_times = np.unique(np.concatenate([start_times, end_times]))
         linkage_obs = obs_ids[np.isin(times, linkage_times)]
         linkage_nights, night_counts = np.unique(nights[np.isin(obs_ids, linkage_obs)], return_counts=True)
 
+        # Make sure that the number of observations is still linkage_min_obs * min_linkage_nights
+        enough_obs = len(linkage_obs) >= (linkage_min_obs * min_linkage_nights)
+
         # Make sure that the number of unique nights on which a linkage is made
         # is still equal to or greater than the minimum number of nights.
-        # Also make sure that the number of observations is still linkage_min_obs * min_linkage_nights
-        if (len(night_counts[night_counts >= linkage_min_obs]) < min_linkage_nights) or (len(linkage_obs) < (linkage_min_obs * min_linkage_nights)):
+        enough_nights = len(night_counts[night_counts >= linkage_min_obs]) >= min_linkage_nights
+
+        if not enough_obs or not enough_nights:
             return np.array([])
 
     else:
         linkage_obs = obs_ids
-    
+
     return linkage_obs
 
 def calcFindableNightlyLinkages(observations, 
                                 linkage_min_obs=2, 
                                 max_obs_separation=1.5/24, 
-                                min_linkage_nights=3, 
+                                min_linkage_nights=3,
                                 column_mapping={"obs_id" : "obs_id", 
                                                 "truth" : "truth",
                                                 "time" : "time", 
