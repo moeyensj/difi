@@ -1,6 +1,5 @@
 # difi
 Did I Find It?  
-[![Build Status](https://dev.azure.com/moeyensj/difi/_apis/build/status/moeyensj.difi?branchName=main)](https://dev.azure.com/moeyensj/difi/_build/latest?definitionId=1&branchName=main)
 [![Coverage Status](https://coveralls.io/repos/github/moeyensj/difi/badge.svg?branch=main)](https://coveralls.io/github/moeyensj/difi?branch=main)
 [![Docker Pulls](https://img.shields.io/docker/pulls/moeyensj/difi)](https://hub.docker.com/r/moeyensj/difi)  
 [![Python 3.7+](https://img.shields.io/badge/Python-3.7%2B-blue)](https://img.shields.io/badge/Python-3.7%2B-blue)
