@@ -1,3 +1,5 @@
+from typing import Callable, Optional, Tuple, Union
+
 import numpy as np
 import pandas as pd
 
@@ -8,14 +10,18 @@ __all__ = ["analyzeObservations"]
 
 
 def analyzeObservations(
-    observations,
-    classes=None,
-    metric="min_obs",
-    column_mapping={"linkage_id": "linkage_id", "obs_id": "obs_id", "truth": "truth"},
-    detection_window=15,
-    ignore_after_detected=True,
+    observations: pd.DataFrame,
+    classes: Optional[dict] = None,
+    metric: Union[str, Callable] = "min_obs",
+    column_mapping: dict[str, str] = {
+        "linkage_id": "linkage_id",
+        "obs_id": "obs_id",
+        "truth": "truth",
+    },
+    detection_window: int = 15,
+    ignore_after_detected: bool = True,
     **metric_kwargs
-):
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Can I Find It?
 
@@ -155,7 +161,7 @@ def analyzeObservations(
         )
         raise ValueError(err)
     # get the metric function
-    metric_func = metric if callable(metric) else metric_func_mapper[metric]
+    metric_func: Callable = metric if callable(metric) else metric_func_mapper[metric]  # type: ignore
 
     # if user wants to use a detection window
     detected_truths = np.array([])

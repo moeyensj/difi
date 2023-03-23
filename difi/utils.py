@@ -1,6 +1,8 @@
 import warnings
+from typing import Union
 
 import numpy as np
+import pandas as pd
 from pandas.api.types import is_object_dtype
 
 __all__ = [
@@ -14,7 +16,7 @@ __all__ = [
 ]
 
 
-def _checkColumnTypes(df, cols, column_mapping):
+def _checkColumnTypes(df: pd.DataFrame, cols: list, column_mapping: dict[str, str]):
     """
     Checks that each dataframe column listed in cols has Pandas dtype "Object".
 
@@ -52,7 +54,9 @@ def _checkColumnTypes(df, cols, column_mapping):
     return
 
 
-def _checkColumnTypesEqual(df1, df2, cols, column_mapping):
+def _checkColumnTypesEqual(
+    df1: pd.DataFrame, df2: pd.DataFrame, cols: list, column_mapping: dict[str, str]
+):
     """
     Checks that each column listed in cols have the same Pandas dtype in df1 and df2.
 
@@ -92,7 +96,11 @@ def _checkColumnTypesEqual(df1, df2, cols, column_mapping):
     return
 
 
-def _classHandler(classes, dataframe, column_mapping):
+def _classHandler(
+    classes: Union[str, dict, None],
+    dataframe: pd.DataFrame,
+    column_mapping: dict[str, str],
+):
     """
     Tests that the `classes` keyword argument is defined correctly.
     `classes` should one of the following:
@@ -124,10 +132,10 @@ def _classHandler(classes, dataframe, column_mapping):
     UserWarning : If not all truths in the dataframe are assigned a class
     """
     class_list = ["All"]
-    truths_list = [[]]
+    truths_list = [[]]  # type: ignore
     unique_truths = []
 
-    if classes == None:
+    if classes is None:
         truths_list = [dataframe[column_mapping["truth"]].unique()]
         unique_truths = [truths_list[0]]
 
@@ -197,7 +205,7 @@ def _classHandler(classes, dataframe, column_mapping):
     return class_list, truths_list
 
 
-def _percentHandler(number, number_total):
+def _percentHandler(number: float, number_total: float) -> float:
     """
     Returns a percentage value of number / number_total. Returns
     np.NaN is number total is zero.
@@ -222,11 +230,11 @@ def _percentHandler(number, number_total):
 
 
 def _firstFindableNightMinObs(
-    obs_ids,
-    observations,
-    column_mapping={"obs_id": "obs_id", "night_id": "night_id"},
-    min_obs=6,
-):
+    obs_ids: list[str],
+    observations: pd.DataFrame,
+    column_mapping: dict[str, str] = {"obs_id": "obs_id", "night_id": "night_id"},
+    min_obs: int = 6,
+) -> int:
     """For a particular findable object, find the first night on which it
     becomes findable when requiring a minimum of `min_obs` observations.
 
@@ -253,12 +261,12 @@ def _firstFindableNightMinObs(
 
 
 def _firstFindableNightNightlyLinkages(
-    obs_ids,
-    observations,
-    column_mapping={"obs_id": "obs_id", "night_id": "night_id"},
-    min_linkage_nights=3,
-    detection_window=15,
-):
+    obs_ids: list[str],
+    observations: pd.DataFrame,
+    column_mapping: dict[str, str] = {"obs_id": "obs_id", "night_id": "night_id"},
+    min_linkage_nights: int = 3,
+    detection_window: int = 15,
+) -> int:
     """For a particular findable object, find the first night on which it
     becomes findable when requiring a minimum of `min_linkage_nights`
     nights of linkages within a `detection_window` night range.
@@ -313,12 +321,12 @@ def _firstFindableNightNightlyLinkages(
 
 
 def calcFirstFindableNight(
-    findable_obs,
-    observations,
-    metric="min_obs",
-    column_mapping={"obs_id": "obs_id", "night_id": "night_id"},
+    findable_obs: pd.DataFrame,
+    observations: pd.DataFrame,
+    metric: str = "min_obs",
+    column_mapping: dict[str, str] = {"obs_id": "obs_id", "night_id": "night_id"},
     **metric_kwargs
-):
+) -> pd.Series:
     """
     Calculate the first night on which a truth becomes findable based
     on the `findable_obs` table returned by `analyzeObservations`.

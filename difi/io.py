@@ -5,10 +5,10 @@ __all__ = ["readLinkagesByLineFile"]
 
 
 def readLinkagesByLineFile(
-    linkages_file,
-    linkage_id_start=1,
-    column_mapping={"obs_id": "obs_id", "linkage_id": "linkage_id"},
-):
+    linkages_file: str,
+    linkage_id_start: int = 1,
+    column_mapping: dict[str, str] = {"obs_id": "obs_id", "linkage_id": "linkage_id"},
+) -> pd.DataFrame:
     """
     Reads a file that contains linkages where each linkage is written in terms of its
     observations line by line.

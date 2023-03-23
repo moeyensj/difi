@@ -1,4 +1,5 @@
 import warnings
+from typing import Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -9,14 +10,18 @@ __all__ = ["analyzeLinkages"]
 
 
 def analyzeLinkages(
-    observations,
-    linkage_members,
-    all_truths=None,
-    min_obs=5,
-    contamination_percentage=20.0,
-    classes=None,
-    column_mapping={"linkage_id": "linkage_id", "obs_id": "obs_id", "truth": "truth"},
-):
+    observations: pd.DataFrame,
+    linkage_members: pd.DataFrame,
+    all_truths: Optional[pd.DataFrame] = None,
+    min_obs: int = 5,
+    contamination_percentage: float = 20.0,
+    classes: Optional[dict] = None,
+    column_mapping: dict[str, str] = {
+        "linkage_id": "linkage_id",
+        "obs_id": "obs_id",
+        "truth": "truth",
+    },
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Did I Find It?
 
@@ -314,7 +319,7 @@ def analyzeLinkages(
         "obs_in_partial_contaminant_linkages",
         "obs_in_mixed_linkages",
     ]
-    summary = {c: [] for c in summary_cols}
+    summary: dict = {c: [] for c in summary_cols}
 
     if len(linkage_members) > 0:
         # Grab only observation IDs and truth from observations
@@ -817,8 +822,8 @@ def analyzeLinkages(
         ]
     ]
 
-    summary = pd.DataFrame(summary)
-    summary.sort_values(by=["num_obs", "class"], ascending=False, inplace=True)
-    summary.reset_index(inplace=True, drop=True)
+    summary_df = pd.DataFrame(summary)
+    summary_df.sort_values(by=["num_obs", "class"], ascending=False, inplace=True)
+    summary_df.reset_index(inplace=True, drop=True)
 
-    return all_linkages, all_truths, summary
+    return all_linkages, all_truths, summary_df

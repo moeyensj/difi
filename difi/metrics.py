@@ -5,12 +5,16 @@ __all__ = ["_findNightlyLinkages", "calcFindableNightlyLinkages", "calcFindableM
 
 
 def _findNightlyLinkages(
-    object_observations,
-    linkage_min_obs=2,
-    max_obs_separation=1.5 / 24,
-    min_linkage_nights=3,
-    column_mapping={"obs_id": "obs_id", "time": "time", "night": "night"},
-):
+    object_observations: pd.DataFrame,
+    linkage_min_obs: int = 2,
+    max_obs_separation: float = 1.5 / 24,
+    min_linkage_nights: int = 3,
+    column_mapping: dict[str, str] = {
+        "obs_id": "obs_id",
+        "time": "time",
+        "night": "night",
+    },
+) -> np.ndarray:
     """
     Given observations belonging to one object, finds all observations that are within
     max_obs_separation of each other.
@@ -80,17 +84,17 @@ def _findNightlyLinkages(
 
 
 def calcFindableNightlyLinkages(
-    observations,
-    linkage_min_obs=2,
-    max_obs_separation=1.5 / 24,
-    min_linkage_nights=3,
-    column_mapping={
+    observations: pd.DataFrame,
+    linkage_min_obs: int = 2,
+    max_obs_separation: float = 1.5 / 24,
+    min_linkage_nights: int = 3,
+    column_mapping: dict[str, str] = {
         "obs_id": "obs_id",
         "truth": "truth",
         "time": "time",
         "night": "night",
     },
-):
+) -> pd.DataFrame:
     """
     Finds the truths that have at least min_linkage_nights linkages of length
     linkage_min_obs or more. Observations are considered to be in a possible intra-night
@@ -187,8 +191,10 @@ def calcFindableNightlyLinkages(
 
 
 def calcFindableMinObs(
-    observations, min_obs=5, column_mapping={"truth": "truth", "obs_id": "obs_id"}
-):
+    observations: pd.DataFrame,
+    min_obs: int = 5,
+    column_mapping: dict[str, str] = {"truth": "truth", "obs_id": "obs_id"},
+) -> pd.DataFrame:
     """
     Finds all truths with a minimum of min_obs observations and the observations
     that makes them findable.
