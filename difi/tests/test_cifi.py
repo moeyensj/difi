@@ -25,7 +25,10 @@ def test_analyzeObservations_noClasses():
 
         # Build the all_truths and summary data frames
         all_truths, findable_observations, summary = analyzeObservations(
-            observations_test, min_obs=min_obs, classes=None
+            observations_test,
+            min_obs=min_obs,
+            classes=None,
+            detection_window=None,
         )
 
         # Assert equality among the returned columns
@@ -58,7 +61,10 @@ def test_analyzeObservations_withClassesColumn():
 
         # Build the all_truths and summary data frames
         all_truths, findable_observations, summary = analyzeObservations(
-            observations_test, min_obs=min_obs, classes="class"
+            observations_test,
+            min_obs=min_obs,
+            classes="class",
+            detection_window=None,
         )
 
         # Assert equality among the returned columns
@@ -94,7 +100,10 @@ def test_analyzeObservations_withClassesDictionary():
 
         # Build the all_truths and summary data frames
         all_truths, findable_observations, summary = analyzeObservations(
-            observations_test, min_obs=min_obs, classes=classes
+            observations_test,
+            min_obs=min_obs,
+            classes=classes,
+            detection_window=None,
         )
 
         # Assert equality among the returned columns
@@ -123,7 +132,9 @@ def test_analyzeObservations_noObservations():
     with pytest.raises(ValueError):
         # Build the all_truths and summary data frames
         all_truths, findable_observations, summary = analyzeObservations(
-            observations_test, min_obs=5, classes=None
+            observations_test,
+            min_obs=5,
+            classes=None,
         )
 
     return
@@ -143,7 +154,10 @@ def test_analyzeObservations_errors():
     with pytest.raises(ValueError):
         # Build the all_truths and summary data frames
         all_truths, findable_observations, summary = analyzeObservations(
-            observations_test, min_obs=5, metric="wrong_metric", classes=None
+            observations_test,
+            min_obs=5,
+            metric="wrong_metric",
+            classes=None,
         )
 
     return
@@ -233,6 +247,7 @@ def test_analyzeObservations_customMetric():
             metric=_customMetric,
             min_observations=min_obs,
             classes=None,
+            detection_window=None,
         )
 
         # Assert equality among the returned columns
