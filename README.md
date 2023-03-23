@@ -7,7 +7,7 @@ Did I Find It?
 [![DOI](https://zenodo.org/badge/152989392.svg)](https://zenodo.org/badge/latestdoi/152989392)
 
 ## About
-`difi` is a simple package that takes pre-formatted linkage information from software such as [MOPS](https://github.com/lsst/mops_daymops), [pytrax](https://github.com/pytrax/pytrax), or [THOR](https://github.com/moeyensj/thor) and analyzes which objects have been found given a set of known labels (or truths). A key performance criteria is that `difi` needs to be fast by avoiding Python for loops and instead uses clever `pandas.DataFrame` manipulation. 
+`difi` is a simple package that takes pre-formatted linkage information from software such as [MOPS](https://github.com/lsst/mops_daymops), [pytrax](https://github.com/pytrax/pytrax), or [THOR](https://github.com/moeyensj/thor) and analyzes which objects have been found given a set of known labels (or truths). A key performance criteria is that `difi` needs to be fast by avoiding Python for loops and instead uses clever `pandas.DataFrame` manipulation.
 
 ## Installation
 
@@ -36,10 +36,10 @@ A Docker container with the latest version of the code can be pulled using:
 To run the container:  
 ```docker run -it moeyensj/difi:latest```
 
-The difi code is installed the /projects directory, and is by default also installed in the container's Python installation. 
+The difi code is installed the /projects directory, and is by default also installed in the container's Python installation.
 
 ### Source
-Clone this repository using either `ssh` or `https`. Once cloned and downloaded, `cd` into the repository. 
+Clone this repository using either `ssh` or `https`. Once cloned and downloaded, `cd` into the repository.
 
 To install difi in its own `conda` enviroment please do the following:  
 ```conda create -n difi_py38 -c defaults -c conda-forge --file requirements.txt python=3.8```  
@@ -57,7 +57,7 @@ Once pre-requisites have been installed using either one of the three options ab
 Or, if you would like to make an editable install then:  
 ```python setup.py develop```
 
-You should now be able to start Python and import difi. 
+You should now be able to start Python and import difi.
 
 ## Example
 
@@ -73,8 +73,8 @@ The example below can be found in greater detail in this [Jupyter Notebook](http
 
 ![linkage_members](docs/images/linkage_members.png "linkage_members")
 
-### What Can I Find? 
-In most cases the user can determine what known truths in their observations dataframe can be found by their respective linking algorithm. `difi` has two simple findability metrics: 
+### What Can I Find?
+In most cases the user can determine what known truths in their observations dataframe can be found by their respective linking algorithm. `difi` has two simple findability metrics:
 
 The 'min_obs' metric: any object with this many or more observations is considered findable.  
 ![analyzeObservations](docs/images/cifi_min_obs.png "min_obs")
@@ -91,15 +91,15 @@ What observations made each object findable?
 A summary of what kinds of objects are findable might be useful.  
 ![summary](docs/images/cifi_summary_min_obs.png "summary")
 
-### Did I Find It? 
-Now lets see what the external linking software did find. 
+### Did I Find It?
+Now lets see what the external linking software did find.
 
 ![analyzeLinkages](docs/images/difi.png "analyzeLinkages.png")
 
 `difi` assumes there to be three different types of linkages:
 - 'pure': all observations in a linkage belong to a unique truth
 - 'partial': up to a certain percentage of non-unique thruths are allowed so long as one truth has at least the minimum required number of unique observations
-- 'mixed': a linkage containing different observations belonging to different truths, we avoid using the word 'false' for these linkages as they may contain unknown truths depending on the use case. We leave interpretation up to the user. 
+- 'mixed': a linkage containing different observations belonging to different truths, we avoid using the word 'false' for these linkages as they may contain unknown truths depending on the use case. We leave interpretation up to the user.
 
 Thanks to the power of `pandas` it can be super easy to isolate the different linkage types and analyze them separately.
 Selecting 'pure' linkages:
@@ -115,7 +115,7 @@ Selecting 'mixed' linkages:
 ![all_linkages_mixed](docs/images/mixed_linkages.png "all_linkages_mixed")
 
 
-Understanding the specifics behind each linkage is one thing, but how did the linking algorithm perform on an object by object basis. 
+Understanding the specifics behind each linkage is one thing, but how did the linking algorithm perform on an object by object basis.
 ![allTruths](docs/images/difi_all_truths.png "all_truths")
 
 ### Tutorial

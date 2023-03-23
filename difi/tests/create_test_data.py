@@ -101,9 +101,7 @@ def createPureLinkage(
         summary.loc[summary_mask, "pure_complete_linkages"] += 1
         summary.loc[summary_mask, "obs_in_pure_complete_linkages"] += len(linkage)
         summary.loc[summary["class"] == "All", "pure_complete_linkages"] += 1
-        summary.loc[summary["class"] == "All", "obs_in_pure_complete_linkages"] += len(
-            linkage
-        )
+        summary.loc[summary["class"] == "All", "obs_in_pure_complete_linkages"] += len(linkage)
     if is_found:
         summary.loc[summary_mask, "found_pure_linkages"] += 1
         summary.loc[summary["class"] == "All", "found_pure_linkages"] += 1
@@ -195,12 +193,7 @@ def createPartialLinkage(
     )
 
     # Calculate the total number of members in the linkage
-    members = (
-        observations[observations["obs_id"].isin(linkage_contaminated)][
-            "truth"
-        ].nunique()
-        + 1
-    )
+    members = observations[observations["obs_id"].isin(linkage_contaminated)]["truth"].nunique() + 1
 
     # Combine the observation IDs and sort them
     linkage = np.concatenate([linkage_correct, linkage_contaminated])
@@ -254,15 +247,11 @@ def createPartialLinkage(
         if c != truth_class:
             summary.loc[summary["class"] == c, "linkages"] += 1
 
-        obs_contaminated = observations[
-            observations_mask_contaminated & observations["class"].isin([c])
-        ]["obs_id"].nunique()
-        summary.loc[
-            summary["class"] == c, "obs_in_partial_contaminant_linkages"
-        ] += obs_contaminated
-        summary.loc[
-            summary["class"] == "All", "obs_in_partial_contaminant_linkages"
-        ] += obs_contaminated
+        obs_contaminated = observations[observations_mask_contaminated & observations["class"].isin([c])][
+            "obs_id"
+        ].nunique()
+        summary.loc[summary["class"] == c, "obs_in_partial_contaminant_linkages"] += obs_contaminated
+        summary.loc[summary["class"] == "All", "obs_in_partial_contaminant_linkages"] += obs_contaminated
 
     # Update if the object is found or not
     if found:
@@ -272,24 +261,18 @@ def createPartialLinkage(
         all_truths.loc[all_truths_mask, "found_partial"] += 1
     all_truths.loc[all_truths_mask, "partial"] += 1
 
-    truths_occurences = observations[observations["obs_id"].isin(linkage)][
-        "truth"
-    ].value_counts()
+    truths_occurences = observations[observations["obs_id"].isin(linkage)]["truth"].value_counts()
     for t_i, obs_i in zip(truths_occurences.index.values, truths_occurences.values):
         if t_i == truth:
             all_truths.loc[all_truths_mask, "obs_in_partial"] += obs_i
         else:
-            all_truths.loc[
-                all_truths["truth"] == t_i, "obs_in_partial_contaminant"
-            ] += obs_i
+            all_truths.loc[all_truths["truth"] == t_i, "obs_in_partial_contaminant"] += obs_i
             all_truths.loc[all_truths["truth"] == t_i, "partial_contaminant"] += 1
 
     return linkage
 
 
-def createMixedLinkage(
-    observations, all_linkages, all_truths, summary, min_linkage_length=5
-):
+def createMixedLinkage(observations, all_linkages, all_truths, summary, min_linkage_length=5):
     """
     Create a mixed linkage: a linkage containing observations of many truths.
     These are typically noise or spurrious linkages.
@@ -346,18 +329,14 @@ def createMixedLinkage(
         summary.loc[summary_mask, "linkages"] += 1
         summary.loc[summary_mask, "mixed_linkages"] += 1
 
-        obs_class = observations[observations_mask & observations["class"].isin([tc])][
-            "obs_id"
-        ].nunique()
+        obs_class = observations[observations_mask & observations["class"].isin([tc])]["obs_id"].nunique()
         summary.loc[summary_mask, "obs_in_mixed_linkages"] += obs_class
         summary.loc[summary["class"] == "All", "obs_in_mixed_linkages"] += obs_class
 
     summary.loc[summary["class"] == "All", "linkages"] += 1
     summary.loc[summary["class"] == "All", "mixed_linkages"] += 1
 
-    truths_occurences = observations[observations["obs_id"].isin(linkage)][
-        "truth"
-    ].value_counts()
+    truths_occurences = observations[observations["obs_id"].isin(linkage)]["truth"].value_counts()
     for tti, obs_i in zip(truths_occurences.index.values, truths_occurences.values):
         all_truths.loc[all_truths["truth"] == tti, "obs_in_mixed"] += obs_i
         all_truths.loc[all_truths["truth"] == tti, "mixed"] += 1
@@ -432,9 +411,7 @@ def createTruthClass(name, num_truths, num_obs):
     for i, j in enumerate(num_obs):
         observations["truth"] += [truths[i] for _ in range(j)]
         all_truths["num_obs"].append(j)
-    observations["obs_id"] = [
-        "obs{:05d}".format(i) for i in range(len(observations["truth"]))
-    ]
+    observations["obs_id"] = ["obs{:05d}".format(i) for i in range(len(observations["truth"]))]
     observations["class"] = [name for _ in range(len(observations["truth"]))]
 
     observations = pd.DataFrame(observations)
@@ -450,28 +427,20 @@ def createTestDataSet(min_obs, min_linkage_length, max_contamination_percentage)
     # red: 6 truths with ranging between 5-10 observations each
     # blue: 6 truths with ranging between 5-10 observations each
     # green: 20 truths with 1 observation each
-    observations_reds, all_truths_reds, summary_reds = createTruthClass(
-        "red", 6, [5, 6, 7, 8, 9, 10]
-    )
-    observations_blues, all_truths_blues, summary_blues = createTruthClass(
-        "blue", 6, [5, 6, 7, 8, 9, 10]
-    )
+    observations_reds, all_truths_reds, summary_reds = createTruthClass("red", 6, [5, 6, 7, 8, 9, 10])
+    observations_blues, all_truths_blues, summary_blues = createTruthClass("blue", 6, [5, 6, 7, 8, 9, 10])
     observations_greens, all_truths_greens, summary_greens = createTruthClass(
         "green", 30, [1 for i in range(30)]
     )
 
     # Concatenate their dataframes into a single dataset
-    observations = pd.concat(
-        [observations_reds, observations_blues, observations_greens]
-    )
+    observations = pd.concat([observations_reds, observations_blues, observations_greens])
     observations = observations.sample(frac=1)
     observations.reset_index(inplace=True, drop=True)
     observations["obs_id"] = ["obs{:05}".format(i) for i in range(len(observations))]
 
     all_truths = pd.concat([all_truths_reds, all_truths_blues, all_truths_greens])
-    all_truths.sort_values(
-        by=["num_obs", "truth"], ascending=[False, True], inplace=True
-    )
+    all_truths.sort_values(by=["num_obs", "truth"], ascending=[False, True], inplace=True)
     all_truths.reset_index(inplace=True, drop=True)
 
     # Add the "All" class to the summary dataframe
@@ -513,9 +482,7 @@ def createTestDataSet(min_obs, min_linkage_length, max_contamination_percentage)
     )
 
     summary = summary.append(summary_all)
-    summary.sort_values(
-        by=["num_obs", "num_members"], ascending=[False, True], inplace=True
-    )
+    summary.sort_values(by=["num_obs", "num_members"], ascending=[False, True], inplace=True)
     summary.reset_index(inplace=True, drop=True)
 
     all_truths.loc[:, "findable"] = 0
@@ -572,9 +539,7 @@ def createTestDataSet(min_obs, min_linkage_length, max_contamination_percentage)
 
             if linkage is not None:
                 linkage_id = "linkage{:05d}".format(linkage_id_iter)
-                linkage_members["linkage_id"] += [
-                    linkage_id for _ in range(len(linkage))
-                ]
+                linkage_members["linkage_id"] += [linkage_id for _ in range(len(linkage))]
                 linkage_members["obs_id"] += list(linkage)
                 all_linkages["linkage_id"].append(linkage_id)
 
@@ -595,9 +560,7 @@ def createTestDataSet(min_obs, min_linkage_length, max_contamination_percentage)
 
             if linkage is not None:
                 linkage_id = "linkage{:05d}".format(linkage_id_iter)
-                linkage_members["linkage_id"] += [
-                    linkage_id for _ in range(len(linkage))
-                ]
+                linkage_members["linkage_id"] += [linkage_id for _ in range(len(linkage))]
                 linkage_members["obs_id"] += list(linkage)
                 all_linkages["linkage_id"].append(linkage_id)
 
@@ -629,56 +592,34 @@ def createTestDataSet(min_obs, min_linkage_length, max_contamination_percentage)
         summary_mask = summary["class"] == c
 
         # Number of unique truths found
-        found = all_truths[all_truths_mask & (all_truths["found"] >= 1)][
-            "truth"
-        ].nunique()
+        found = all_truths[all_truths_mask & (all_truths["found"] >= 1)]["truth"].nunique()
 
         # Number of unique truths findable
         findable = all_truths[all_truths_mask]["findable"].sum()
 
         # Number of findable truths found
         findable_found = len(
-            all_truths[
-                all_truths_mask
-                & (all_truths["findable"] == 1)
-                & (all_truths["found"] >= 1)
-            ]
+            all_truths[all_truths_mask & (all_truths["findable"] == 1) & (all_truths["found"] >= 1)]
         )
 
         # Number of not findable truths found
         not_findable_found = len(
-            all_truths[
-                all_truths_mask
-                & (all_truths["findable"] == 0)
-                & (all_truths["found"] >= 1)
-            ]
+            all_truths[all_truths_mask & (all_truths["findable"] == 0) & (all_truths["found"] >= 1)]
         )
 
         # Number of findable truths not found (missed)
         findable_missed = len(
-            all_truths[
-                all_truths_mask
-                & (all_truths["findable"] == 1)
-                & (all_truths["found"] == 0)
-            ]
+            all_truths[all_truths_mask & (all_truths["findable"] == 1) & (all_truths["found"] == 0)]
         )
 
         # Number of not findable truths found
         not_findable_found = len(
-            all_truths[
-                all_truths_mask
-                & (all_truths["findable"] == 0)
-                & (all_truths["found"] >= 1)
-            ]
+            all_truths[all_truths_mask & (all_truths["findable"] == 0) & (all_truths["found"] >= 1)]
         )
 
         # Number of not findable truths not found
         not_findable_missed = len(
-            all_truths[
-                all_truths_mask
-                & (all_truths["findable"] == 0)
-                & (all_truths["found"] == 0)
-            ]
+            all_truths[all_truths_mask & (all_truths["findable"] == 0) & (all_truths["found"] == 0)]
         )
 
         summary.loc[summary_mask, "found"] = found
@@ -703,9 +644,7 @@ def createTestDataSet(min_obs, min_linkage_length, max_contamination_percentage)
             pure.append(all_linkages[all_linkages_mask]["linked_truth"].values[0])
 
         if all_linkages[all_linkages_mask]["pure_complete"].values[0] == 1:
-            pure_complete.append(
-                all_linkages[all_linkages_mask]["linked_truth"].values[0]
-            )
+            pure_complete.append(all_linkages[all_linkages_mask]["linked_truth"].values[0])
 
         if all_linkages[all_linkages_mask]["partial"].values[0] == 1:
             linked_truth = all_linkages[all_linkages_mask]["linked_truth"].values[0]
@@ -715,17 +654,11 @@ def createTestDataSet(min_obs, min_linkage_length, max_contamination_percentage)
             obs_contaminant_mask = (observations["obs_id"].isin(obs_ids)) & (
                 ~observations["truth"].isin([linked_truth])
             )
-            partial_contaminant += list(
-                observations[obs_contaminant_mask]["truth"].values
-            )
+            partial_contaminant += list(observations[obs_contaminant_mask]["truth"].values)
 
         if all_linkages[all_linkages_mask]["mixed"].values[0] == 1:
-            obs_ids = linkage_members[linkage_members["linkage_id"] == linkage_id][
-                "obs_id"
-            ].values
-            truths = observations[observations["obs_id"].isin(obs_ids)][
-                "truth"
-            ].unique()
+            obs_ids = linkage_members[linkage_members["linkage_id"] == linkage_id]["obs_id"].values
+            truths = observations[observations["obs_id"].isin(obs_ids)]["truth"].unique()
             mixed += list(truths)
 
     pure = np.unique(pure)
@@ -753,22 +686,14 @@ def createTestDataSet(min_obs, min_linkage_length, max_contamination_percentage)
         unique_in_mixed = mixed_set
 
         summary.loc[summary_mask, "unique_in_pure_linkages"] = len(unique_in_pure)
-        summary.loc[summary_mask, "unique_in_pure_complete_linkages"] = len(
-            unique_in_pure_complete
-        )
+        summary.loc[summary_mask, "unique_in_pure_complete_linkages"] = len(unique_in_pure_complete)
         summary.loc[summary_mask, "unique_in_partial_linkages"] = len(unique_in_partial)
         summary.loc[summary_mask, "unique_in_partial_contaminant_linkages"] = len(
             unique_in_partial_contaminant
         )
-        summary.loc[summary_mask, "unique_in_pure_and_partial_linkages"] = len(
-            unique_in_pure_and_partial
-        )
-        summary.loc[summary_mask, "unique_in_pure_linkages_only"] = len(
-            unique_in_pure_only
-        )
-        summary.loc[summary_mask, "unique_in_partial_linkages_only"] = len(
-            unique_in_partial_only
-        )
+        summary.loc[summary_mask, "unique_in_pure_and_partial_linkages"] = len(unique_in_pure_and_partial)
+        summary.loc[summary_mask, "unique_in_pure_linkages_only"] = len(unique_in_pure_only)
+        summary.loc[summary_mask, "unique_in_partial_linkages_only"] = len(unique_in_partial_only)
         summary.loc[summary_mask, "unique_in_mixed_linkages"] = len(unique_in_mixed)
 
     # Update total number of truths found, findable, missed, etc..

@@ -54,9 +54,7 @@ def _checkColumnTypes(df: pd.DataFrame, cols: list, column_mapping: dict[str, st
     return
 
 
-def _checkColumnTypesEqual(
-    df1: pd.DataFrame, df2: pd.DataFrame, cols: list, column_mapping: dict[str, str]
-):
+def _checkColumnTypesEqual(df1: pd.DataFrame, df2: pd.DataFrame, cols: list, column_mapping: dict[str, str]):
     """
     Checks that each column listed in cols have the same Pandas dtype in df1 and df2.
 
@@ -146,9 +144,7 @@ def _classHandler(
         else:
             for c in dataframe[~dataframe[classes].isna()][classes].unique():
                 class_list.append(c)
-                class_truths = dataframe[dataframe[classes].isin([c])][
-                    column_mapping["truth"]
-                ].unique()
+                class_truths = dataframe[dataframe[classes].isin([c])][column_mapping["truth"]].unique()
                 unique_truths.append(class_truths)
                 truths_list.append(class_truths)
 
@@ -194,9 +190,9 @@ def _classHandler(
             "Unclassified truths have been added as 'Unclassified'."
         )
 
-        unclassified = dataframe[
-            ~dataframe[column_mapping["truth"]].isin(unique_truths)
-        ][column_mapping["truth"]].unique()
+        unclassified = dataframe[~dataframe[column_mapping["truth"]].isin(unique_truths)][
+            column_mapping["truth"]
+        ].unique()
         class_list.append("Unclassified")
         truths_list.append(unclassified)
         truths_list[0] = np.concatenate([truths_list[0], unclassified])
@@ -314,9 +310,7 @@ def _firstFindableNightNightlyLinkages(
     else:
         # return the night corresponding to last night in the first valid window
         return linkage_nights[
-            np.arange(len(window_sizes))[window_sizes <= detection_window][0]
-            + min_linkage_nights
-            - 1
+            np.arange(len(window_sizes))[window_sizes <= detection_window][0] + min_linkage_nights - 1
         ]
 
 
