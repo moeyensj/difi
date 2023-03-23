@@ -80,9 +80,7 @@ def test__checkColumnTypesEqual():
         df2 = pd.DataFrame(np.vstack([obs_ids, linkage_ids, truths]).T, columns=cols)
 
         with pytest.raises(TypeError):
-            _checkColumnTypesEqual(
-                df1, df2, ["truth", "obs_id", "linkage_id"], columnMapping
-            )
+            _checkColumnTypesEqual(df1, df2, ["truth", "obs_id", "linkage_id"], columnMapping)
 
     # Convert to correct dtype and insure no errors are raised
     df1[columnMapping["obs_id"]] = df1[columnMapping["obs_id"]].astype(str)
@@ -111,7 +109,7 @@ def test__percentHandler():
 
 
 def test__classHandler():
-    ### Test _classHandler for three different class arguments: None, dictionary and column
+    # --- Test _classHandler for three different class arguments: None, dictionary and column
     # name in observations dataframe
 
     column_mapping = {"truth": "obj_id"}
@@ -166,7 +164,7 @@ def test__classHandler():
 
 
 def test__classHandler_errors():
-    ### Test _classHandler for error raises
+    # --- Test _classHandler for error raises
 
     column_mapping = {"truth": "obj_id"}
 
@@ -205,9 +203,7 @@ def test__classHandler_errors():
         classes_dict_ = copy.deepcopy(classes_dict)
         classes_dict_["green"].append(classes_dict_["green"][-1])
 
-        class_list, truths_list = _classHandler(
-            classes_dict_, observations, column_mapping
-        )
+        class_list, truths_list = _classHandler(classes_dict_, observations, column_mapping)
 
     # Test for ValueError when an incorrect column name is given
     with pytest.raises(ValueError):
@@ -216,15 +212,13 @@ def test__classHandler_errors():
     # Test for ValueError when a truth appears in more than two classes
     classes_dict["blue"].append(classes_dict["green"][-1])
     with pytest.raises(ValueError):
-        class_list, truths_list = _classHandler(
-            classes_dict, observations, column_mapping
-        )
+        class_list, truths_list = _classHandler(classes_dict, observations, column_mapping)
 
     return
 
 
 def test__classHandler_warnings():
-    ### Test _classHandler for warnings
+    # --- Test _classHandler for warnings
 
     column_mapping = {"truth": "obj_id"}
 
@@ -261,9 +255,7 @@ def test__classHandler_warnings():
 
     # Test for UserWarning when not all truths have an assigned class
     with pytest.warns(UserWarning):
-        class_list, truths_list = _classHandler(
-            classes_dict_, observations, column_mapping
-        )
+        class_list, truths_list = _classHandler(classes_dict_, observations, column_mapping)
 
         assert "Unclassified" in class_list
         assert np.all(truths_list[-1] == classes_dict["orange"])

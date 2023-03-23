@@ -140,9 +140,7 @@ def analyzeObservations(
     # if we are using a detection window then work out what nights are in the observations
     if detection_window is not None:
         if "night" not in column_mapping:
-            raise ValueError(
-                "`night` must be included in `column_mapping` if `detection_window` is not None"
-            )
+            raise ValueError("`night` must be included in `column_mapping` if `detection_window` is not None")
         night_range = observations[column_mapping["night"]].sort_values().unique()
 
     metric_func_mapper = {
@@ -155,7 +153,7 @@ def analyzeObservations(
         isinstance(metric, str) and metric not in metric_func_mapper
     ):
         err = (
-            "\nmetric should be either 'min_obs', 'nightly_linkages', or a user-defined function that returns\n"
+            "Metric should be either 'min_obs', 'nightly_linkages', or a user-defined function that returns\n"
             "a `~pandas.DataFrame` with the truth IDs that are findable as an index, and a column named\n"
             "'obs_ids' containing `~numpy.ndarray`s of the observations that made each truth findable"
         )
@@ -180,9 +178,7 @@ def analyzeObservations(
 
             # if ignoring previous detections then mask them out as well
             if ignore_after_detected and len(detected_truths) > 0:
-                win_obs = win_obs[
-                    ~win_obs[column_mapping["truth"]].isin(detected_truths)
-                ]
+                win_obs = win_obs[~win_obs[column_mapping["truth"]].isin(detected_truths)]
 
             # work out which observations are findable in this window
             window_findable_observations = metric_func(
@@ -191,12 +187,8 @@ def analyzeObservations(
 
             # if user only wants the first detection window then update the detected truths
             if ignore_after_detected:
-                window_detected_truths = window_findable_observations[
-                    column_mapping["truth"]
-                ].values
-                detected_truths = np.concatenate(
-                    [detected_truths, window_detected_truths]
-                )
+                window_detected_truths = window_findable_observations[column_mapping["truth"]].values
+                detected_truths = np.concatenate([detected_truths, window_detected_truths])
 
             # add a column recording in which window this object was detected
             window_findable_observations["window_start_night"] = night
@@ -207,28 +199,20 @@ def analyzeObservations(
 
     # otherwise just continue without a detection_window
     else:
-        findable_observations = metric_func(
-            observations, column_mapping=column_mapping, **metric_kwargs
-        )
+        findable_observations = metric_func(observations, column_mapping=column_mapping, **metric_kwargs)
 
     all_truths.loc[:, "findable"] = 0
-    all_truths.loc[
-        all_truths[truth_col].isin(findable_observations[truth_col].values), "findable"
-    ] = 1
+    all_truths.loc[all_truths[truth_col].isin(findable_observations[truth_col].values), "findable"] = 1
 
     all_truths["findable"] = all_truths["findable"].astype(int)
-    all_truths.sort_values(
-        by=["num_obs", truth_col], ascending=[False, True], inplace=True
-    )
+    all_truths.sort_values(by=["num_obs", truth_col], ascending=[False, True], inplace=True)
     all_truths.reset_index(inplace=True, drop=True)
 
     class_list, truths_list = _classHandler(classes, observations, column_mapping)
 
     for c, v in zip(class_list, truths_list):
         num_obs = len(observations[observations[truth_col].isin(v)])
-        unique_truths = observations[observations[truth_col].isin(v)][
-            truth_col
-        ].unique()
+        unique_truths = observations[observations[truth_col].isin(v)][truth_col].unique()
         num_unique_truths = len(unique_truths)
         findable = int(all_truths[all_truths[truth_col].isin(v)]["findable"].sum())
 

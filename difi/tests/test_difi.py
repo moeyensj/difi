@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
 
@@ -12,7 +11,7 @@ MIN_LINKAGE_LENGTHS = [3, 5, 7]
 
 
 def test_analyzeLinkages_noClasses():
-    ### Test analyzeLinkages when no classes are given
+    # --- Test analyzeLinkages when no classes are given
 
     for max_contamination_percentage in MAX_CONTAMINATION_PERCENTAGE:
         for min_obs in MIN_OBS:
@@ -30,9 +29,7 @@ def test_analyzeLinkages_noClasses():
                     linkage_members_test,
                     all_linkages_test,
                     summary_test,
-                ) = createTestDataSet(
-                    min_obs, min_linkage_length, max_contamination_percentage
-                )
+                ) = createTestDataSet(min_obs, min_linkage_length, max_contamination_percentage)
 
                 # Analyze linkages
                 all_linkages, all_truths, summary = analyzeLinkages(
@@ -45,7 +42,7 @@ def test_analyzeLinkages_noClasses():
                 )
 
                 # Compare to test data set
-                assert all_truths["findable"].isna().all() == True
+                assert np.all(np.isnan(all_truths["findable"].values))
 
                 # We did not pass an all_truths data frame
                 # so findability is not known to analyzeLinkages
@@ -60,9 +57,7 @@ def test_analyzeLinkages_noClasses():
                 summary_test_ = summary_test.copy()
                 summary_test_.loc[:, nan_cols] = np.NaN
 
-                assert_frame_equal(
-                    all_linkages.fillna(-999), all_linkages_test.fillna(-999)
-                )
+                assert_frame_equal(all_linkages.fillna(-999), all_linkages_test.fillna(-999))
                 assert_frame_equal(
                     all_truths.loc[:, all_truths.columns != "findable"],
                     all_truths_test.loc[:, all_truths_test.columns != "findable"],
@@ -82,9 +77,7 @@ def test_analyzeLinkages_noClasses():
                     classes=None,
                 )
 
-                assert_frame_equal(
-                    all_linkages.fillna(-999), all_linkages_test.fillna(-999)
-                )
+                assert_frame_equal(all_linkages.fillna(-999), all_linkages_test.fillna(-999))
                 assert_frame_equal(all_truths, all_truths_test)
                 assert_frame_equal(
                     summary.fillna(-999),
@@ -95,7 +88,7 @@ def test_analyzeLinkages_noClasses():
 
 
 def test_analyzeLinkages_withClassesColumn():
-    ### Test analyzeLinkages when a class column is given
+    # --- Test analyzeLinkages when a class column is given
 
     for max_contamination_percentage in MAX_CONTAMINATION_PERCENTAGE:
         for min_obs in MIN_OBS:
@@ -113,9 +106,7 @@ def test_analyzeLinkages_withClassesColumn():
                     linkage_members_test,
                     all_linkages_test,
                     summary_test,
-                ) = createTestDataSet(
-                    min_obs, min_linkage_length, max_contamination_percentage
-                )
+                ) = createTestDataSet(min_obs, min_linkage_length, max_contamination_percentage)
 
                 # Analyze linkages
                 all_linkages, all_truths, summary = analyzeLinkages(
@@ -128,7 +119,7 @@ def test_analyzeLinkages_withClassesColumn():
                 )
 
                 # Compare to test data set
-                assert all_truths["findable"].isna().all() == True
+                assert np.all(np.isnan(all_truths["findable"].values))
 
                 # We did not pass an all_truths data frame
                 # so findability is not known to analyzeLinkages
@@ -143,9 +134,7 @@ def test_analyzeLinkages_withClassesColumn():
                 summary_test_ = summary_test.copy()
                 summary_test_.loc[:, nan_cols] = np.NaN
 
-                assert_frame_equal(
-                    all_linkages.fillna(-999), all_linkages_test.fillna(-999)
-                )
+                assert_frame_equal(all_linkages.fillna(-999), all_linkages_test.fillna(-999))
                 assert_frame_equal(
                     all_truths.loc[:, all_truths.columns != "findable"],
                     all_truths_test.loc[:, all_truths_test.columns != "findable"],
@@ -162,9 +151,7 @@ def test_analyzeLinkages_withClassesColumn():
                     classes="class",
                 )
 
-                assert_frame_equal(
-                    all_linkages.fillna(-999), all_linkages_test.fillna(-999)
-                )
+                assert_frame_equal(all_linkages.fillna(-999), all_linkages_test.fillna(-999))
                 assert_frame_equal(all_truths, all_truths_test)
                 assert_frame_equal(summary.fillna(-999), summary_test.fillna(-999))
 
@@ -172,7 +159,7 @@ def test_analyzeLinkages_withClassesColumn():
 
 
 def test_analyzeLinkages_withClassesDictionary():
-    ### Test analyzeLinkages when a class dictionary is given
+    # --- Test analyzeLinkages when a class dictionary is given
 
     for max_contamination_percentage in MAX_CONTAMINATION_PERCENTAGE:
         for min_obs in MIN_OBS:
@@ -190,15 +177,13 @@ def test_analyzeLinkages_withClassesDictionary():
                     linkage_members_test,
                     all_linkages_test,
                     summary_test,
-                ) = createTestDataSet(
-                    min_obs, min_linkage_length, max_contamination_percentage
-                )
+                ) = createTestDataSet(min_obs, min_linkage_length, max_contamination_percentage)
 
                 classes = {}
                 for c in ["blue", "red", "green"]:
-                    classes[c] = observations_test[
-                        observations_test["truth"].str.contains(c)
-                    ]["truth"].unique()
+                    classes[c] = observations_test[observations_test["truth"].str.contains(c)][
+                        "truth"
+                    ].unique()
 
                 # Analyze linkages
                 all_linkages, all_truths, summary = analyzeLinkages(
@@ -211,7 +196,7 @@ def test_analyzeLinkages_withClassesDictionary():
                 )
 
                 # Compare to test data set
-                assert all_truths["findable"].isna().all() == True
+                assert np.all(np.isnan(all_truths["findable"].values))
 
                 # We did not pass an all_truths data frame
                 # so findability is not known to analyzeLinkages
@@ -226,9 +211,7 @@ def test_analyzeLinkages_withClassesDictionary():
                 summary_test_ = summary_test.copy()
                 summary_test_.loc[:, nan_cols] = np.NaN
 
-                assert_frame_equal(
-                    all_linkages.fillna(-999), all_linkages_test.fillna(-999)
-                )
+                assert_frame_equal(all_linkages.fillna(-999), all_linkages_test.fillna(-999))
                 assert_frame_equal(
                     all_truths.loc[:, all_truths.columns != "findable"],
                     all_truths_test.loc[:, all_truths_test.columns != "findable"],
@@ -245,9 +228,7 @@ def test_analyzeLinkages_withClassesDictionary():
                     classes=classes,
                 )
 
-                assert_frame_equal(
-                    all_linkages.fillna(-999), all_linkages_test.fillna(-999)
-                )
+                assert_frame_equal(all_linkages.fillna(-999), all_linkages_test.fillna(-999))
                 assert_frame_equal(all_truths, all_truths_test)
                 assert_frame_equal(summary.fillna(-999), summary_test.fillna(-999))
 
@@ -255,7 +236,7 @@ def test_analyzeLinkages_withClassesDictionary():
 
 
 def test_analyzeLinkages_emptyLinkageMembers():
-    ### Test analyzeLinkages when a class dictionary is given
+    # --- Test analyzeLinkages when a class dictionary is given
     min_obs = 5
     min_linkage_length = 5
     max_contamination_percentage = 30.0
@@ -333,9 +314,7 @@ def test_analyzeLinkages_emptyLinkageMembers():
 
     classes = {}
     for c in ["blue", "red", "green"]:
-        classes[c] = observations_test[observations_test["truth"].str.contains(c)][
-            "truth"
-        ].unique()
+        classes[c] = observations_test[observations_test["truth"].str.contains(c)]["truth"].unique()
 
     # Analyze linkages
     all_linkages, all_truths, summary = analyzeLinkages(
@@ -348,7 +327,7 @@ def test_analyzeLinkages_emptyLinkageMembers():
     )
 
     # Compare to test data set
-    assert all_truths["findable"].isna().all() == True
+    assert np.all(np.isnan(all_truths["findable"].values))
 
     # We did not pass an all_truths data frame
     # so findability is not known to analyzeLinkages
@@ -384,11 +363,11 @@ def test_analyzeLinkages_emptyLinkageMembers():
     assert_frame_equal(all_truths, all_truths_test)
     assert_frame_equal(summary.fillna(-999), summary_test.fillna(-999))
 
-    return summary
+    return
 
 
 def test_analyzeLinkages_errors():
-    ### Test analyzeLinkages when incorrect data products are given
+    # --- Test analyzeLinkages when incorrect data products are given
     min_obs = 5
     min_linkage_length = 5
     max_contamination_percentage = 30.0

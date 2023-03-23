@@ -25,14 +25,15 @@ def analyzeLinkages(
     """
     Did I Find It?
 
-    Given a data frame of observations and a data frame defining possible linkages made from those observations
-    this function identifies each linkage as one of three possible types:
+    Given a data frame of observations and a data frame defining possible linkages made from those
+    observations this function identifies each linkage as one of three possible types:
     - pure: a linkage where all constituent observations belong to a single truth
     - partial: a linkage that contains observations belonging to multiple truths but
-        equal to or more than min_obs observations of one truth and no more than the contamination threshold
-        of observations of other truths. For example, a linkage with ten observations, eight of which belong to
-        a single unique truth and two of which belong to other truths has contamination percentage 20%. If the threshold
-        is set to 20% or greater, and min_obs is less than or equal to eight then the truth with the eight observations
+        equal to or more than min_obs observations of one truth and no more than the contamination
+        threshold of observations of other truths. For example, a linkage with ten observations,
+        eight of which belong to a single unique truth and two of which belong to other truths
+        has contamination percentage 20%. If the threshold is set to 20% or greater, and min_obs
+        is less than or equal to eight then the truth with the eight observations
         is considered found and the linkage is considered a partial linkage.
     - mixed: all linkages that are neither pure nor partial.
 
@@ -60,8 +61,8 @@ def analyzeLinkages(
     contamination_percentage : float, optional
         Number of detections expressed as a percentage [0-100] belonging to other objects in a linkage
         for that linkage to considered partial. For example, if contamination_percentage is
-        20% then a linkage with 10 members, where 8 belong to one object and 2 belong to other objects, will
-        be considered a partial linkage.
+        20% then a linkage with 10 members, where 8 belong to one object and 2 belong to other objects,
+        will be considered a partial linkage.
         [Default = 20]
     classes : {dict, str, None}
         Analyze observations for truths grouped in different classes.
@@ -227,8 +228,8 @@ def analyzeLinkages(
     ------
     TypeError : If the truth column in observations does not have type "Object",
         or if the obs_id columns in observations and linkage_members do not have the same type,
-        or if the linkage_id columns in all_linkages (if passed) and linkage_members do not have the same type,
-        or if the truth columns in all_truths (if passed) and observations do not have the same type.
+        or if the linkage_id columns in all_linkages (if passed) and linkage_members do not have the same
+        type, or if the truth columns in all_truths (if passed) and observations do not have the same type.
     """
     # Get column names
     linkage_id_col = column_mapping["linkage_id"]
@@ -259,9 +260,7 @@ def analyzeLinkages(
             all_truths[truth_col].isin(num_obs_per_truth.index.values), "num_obs"
         ] = num_obs_per_truth.values
 
-        all_truths.sort_values(
-            by=["num_obs", truth_col], ascending=[False, True], inplace=True
-        )
+        all_truths.sort_values(by=["num_obs", truth_col], ascending=[False, True], inplace=True)
         all_truths.reset_index(inplace=True, drop=True)
 
         findable_present = False
@@ -271,8 +270,7 @@ def analyzeLinkages(
         all_truths = all_truths.copy()
         if "findable" not in all_truths.columns:
             warn = (
-                "No findable column found in all_truths. Completeness\n"
-                "statistics can not be calculated."
+                "No findable column found in all_truths. Completeness\n" "statistics can not be calculated."
             )
             warnings.warn(warn, UserWarning)
             all_truths.loc[:, "findable"] = np.NaN
@@ -326,23 +324,17 @@ def analyzeLinkages(
         all_linkages = observations[[obs_id_col, truth_col]].copy()
 
         # Merge truth from observations with linkage_members on observation IDs
-        all_linkages = all_linkages.merge(
-            linkage_members[[linkage_id_col, obs_id_col]], on=obs_id_col
-        )
+        all_linkages = all_linkages.merge(linkage_members[[linkage_id_col, obs_id_col]], on=obs_id_col)
 
         # Group the data frame of truths, linkage_ids and
         # observation IDs by truth and linkage ID
         # then count the number of occurences
-        all_linkages = (
-            all_linkages.groupby(by=[truth_col, linkage_id_col]).count().reset_index()
-        )
+        all_linkages = all_linkages.groupby(by=[truth_col, linkage_id_col]).count().reset_index()
         all_linkages.rename(columns={obs_id_col: "num_obs"}, inplace=True)
 
         # Calculate the total number of observations in each linkage
         num_obs_in_linkage = (
-            all_linkages.groupby(by=[linkage_id_col])["num_obs"]
-            .sum()
-            .to_frame(name="num_obs_in_linkage")
+            all_linkages.groupby(by=[linkage_id_col])["num_obs"].sum().to_frame(name="num_obs_in_linkage")
         )
         num_obs_in_linkage.reset_index(drop=False, inplace=True)
 
@@ -357,9 +349,7 @@ def analyzeLinkages(
 
         # Calculate the number of unique truths in each linkage
         num_truth_in_linkage = (
-            all_linkages.groupby(by=[linkage_id_col])[truth_col]
-            .nunique()
-            .to_frame(name="num_members")
+            all_linkages.groupby(by=[linkage_id_col])[truth_col].nunique().to_frame(name="num_members")
         )
         num_obs_in_linkage.reset_index(drop=False, inplace=True)
 
@@ -388,9 +378,7 @@ def analyzeLinkages(
         all_linkages["percentage_in_linkage"] = (
             100.0 * all_linkages["num_obs"] / all_linkages["num_obs_in_linkage"]
         )
-        all_linkages["contamination_percentage_in_linkages"] = (
-            100 - all_linkages["percentage_in_linkage"]
-        )
+        all_linkages["contamination_percentage_in_linkages"] = 100 - all_linkages["percentage_in_linkage"]
 
         # Sort by linkage_id and the percentage then reset the index
         all_linkages.sort_values(
@@ -411,9 +399,7 @@ def analyzeLinkages(
         all_linkages.loc[:, "mixed"] = 0
 
         # Pure linkages: any linkage where each observation belongs to the same truth
-        all_linkages.loc[
-            (all_linkages["num_obs"] == all_linkages["num_obs_in_linkage"]), "pure"
-        ] = 1
+        all_linkages.loc[(all_linkages["num_obs"] == all_linkages["num_obs_in_linkage"]), "pure"] = 1
 
         # Complete pure linkages: any linkage where all observations of a truth are linked
         all_linkages.loc[
@@ -422,49 +408,37 @@ def analyzeLinkages(
             "pure_complete",
         ] = 1
 
-        # Partial linkages: any linkage where up to a contamination percentage of observations belong to other truths
+        # Partial linkages: any linkage where up to a contamination percentage of observations belong
+        # to other truths
         all_linkages.loc[
             (all_linkages["pure"] == 0)
-            & (
-                all_linkages["contamination_percentage_in_linkages"]
-                <= contamination_percentage
-            ),
+            & (all_linkages["contamination_percentage_in_linkages"] <= contamination_percentage),
             "partial",
         ] = 1
-        partial_linkages = all_linkages[all_linkages["partial"] == 1][
-            linkage_id_col
-        ].unique()
+        partial_linkages = all_linkages[all_linkages["partial"] == 1][linkage_id_col].unique()
         all_linkages.loc[
             (
                 all_linkages[linkage_id_col].isin(partial_linkages)
-                & (
-                    all_linkages["contamination_percentage_in_linkages"]
-                    > contamination_percentage
-                )
+                & (all_linkages["contamination_percentage_in_linkages"] > contamination_percentage)
             ),
             "partial_contaminant",
         ] = 1
 
-        # If the contamination percentage is high it may set linkages with no clear majority of detections belonging to one object
-        # as partials.. these are actually mixed so make sure they are correctly indentified.
+        # If the contamination percentage is high it may set linkages with no clear majority of detections
+        # belonging to one object as partials.. these are actually mixed so make sure
+        # they are correctly indentified.
         contamination_counts = (
             all_linkages[all_linkages[linkage_id_col].isin(partial_linkages)]
             .groupby(linkage_id_col)["contamination_percentage_in_linkages"]
             .nunique()
         )
-        no_majority_partials = contamination_counts[
-            contamination_counts.values == 1
-        ].index.values
-        all_linkages.loc[
-            all_linkages[linkage_id_col].isin(no_majority_partials), "partial"
-        ] = 0
+        no_majority_partials = contamination_counts[contamination_counts.values == 1].index.values
+        all_linkages.loc[all_linkages[linkage_id_col].isin(no_majority_partials), "partial"] = 0
         all_linkages.loc[
             all_linkages[linkage_id_col].isin(no_majority_partials),
             "partial_contaminant",
         ] = 0
-        all_linkages.loc[
-            all_linkages[linkage_id_col].isin(no_majority_partials), "mixed"
-        ] = 1
+        all_linkages.loc[all_linkages[linkage_id_col].isin(no_majority_partials), "mixed"] = 1
 
         # Mixed linkages: any linkage that is not pure or partial
         all_linkages.loc[
@@ -645,10 +619,7 @@ def analyzeLinkages(
 
             # Number of findable truths found
             findable_found = len(
-                all_truths_class[
-                    (all_truths_class["findable"] == 1)
-                    & (all_truths_class["found"] >= 1)
-                ]
+                all_truths_class[(all_truths_class["findable"] == 1) & (all_truths_class["found"] >= 1)]
             )
             summary["findable_found"].append(findable_found)
 
@@ -661,28 +632,19 @@ def analyzeLinkages(
 
             # Number of findable truths missed
             findable_missed = len(
-                all_truths_class[
-                    (all_truths_class["findable"] == 1)
-                    & (all_truths_class["found"] == 0)
-                ]
+                all_truths_class[(all_truths_class["findable"] == 1) & (all_truths_class["found"] == 0)]
             )
             summary["findable_missed"].append(findable_missed)
 
             # Number of not findable truths found
             not_findable_found = len(
-                all_truths_class[
-                    (all_truths_class["findable"] == 0)
-                    & (all_truths_class["found"] >= 1)
-                ]
+                all_truths_class[(all_truths_class["findable"] == 0) & (all_truths_class["found"] >= 1)]
             )
             summary["not_findable_found"].append(not_findable_found)
 
             # Number of not findable truths missed
             not_findable_missed = len(
-                all_truths_class[
-                    (all_truths_class["findable"] == 0)
-                    & (all_truths_class["found"] == 0)
-                ]
+                all_truths_class[(all_truths_class["findable"] == 0) & (all_truths_class["found"] == 0)]
             )
             summary["not_findable_missed"].append(not_findable_missed)
 
@@ -705,9 +667,7 @@ def analyzeLinkages(
             "mixed",
         ]:
             summary["{}_linkages".format(linkage_type)].append(
-                all_linkages_class[all_linkages_class[linkage_type] == 1][
-                    linkage_id_col
-                ].nunique()
+                all_linkages_class[all_linkages_class[linkage_type] == 1][linkage_id_col].nunique()
             )
         summary["linkages"].append(all_linkages_class[linkage_id_col].nunique())
 
@@ -720,9 +680,7 @@ def analyzeLinkages(
             "mixed",
         ]:
             summary["unique_in_{}_linkages".format(linkage_type)].append(
-                all_linkages_class[all_linkages_class[linkage_type] == 1][
-                    truth_col
-                ].nunique()
+                all_linkages_class[all_linkages_class[linkage_type] == 1][truth_col].nunique()
             )
 
         # Calculate number of observations in different linkages for each class
@@ -738,27 +696,25 @@ def analyzeLinkages(
             )
 
         summary["unique_in_pure_and_partial_linkages"].append(
-            all_truths_class[
-                (all_truths_class["pure"] >= 1) & (all_truths_class["partial"] >= 1)
-            ][truth_col].nunique()
+            all_truths_class[(all_truths_class["pure"] >= 1) & (all_truths_class["partial"] >= 1)][
+                truth_col
+            ].nunique()
         )
 
         summary["unique_in_partial_linkages_only"].append(
-            all_truths_class[
-                (all_truths_class["pure"] == 0) & (all_truths_class["partial"] >= 1)
-            ][truth_col].nunique()
+            all_truths_class[(all_truths_class["pure"] == 0) & (all_truths_class["partial"] >= 1)][
+                truth_col
+            ].nunique()
         )
 
         summary["unique_in_pure_linkages_only"].append(
-            all_truths_class[
-                (all_truths_class["pure"] >= 1) & (all_truths_class["partial"] == 0)
-            ][truth_col].nunique()
+            all_truths_class[(all_truths_class["pure"] >= 1) & (all_truths_class["partial"] == 0)][
+                truth_col
+            ].nunique()
         )
 
     all_linkages.loc[all_linkages["mixed"] == 1, truth_col] = np.NaN
-    all_linkages.loc[
-        all_linkages["mixed"] == 1, "contamination_percentage_in_linkages"
-    ] = np.NaN
+    all_linkages.loc[all_linkages["mixed"] == 1, "contamination_percentage_in_linkages"] = np.NaN
     all_linkages[truth_col] = all_linkages[truth_col].astype(str)
 
     # Drop all duplicate linkage_id entries which has the effect of

@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
 
@@ -10,7 +9,7 @@ MIN_OBS = range(5, 10)
 
 
 def test_analyzeObservations_noClasses():
-    ### Test analyzeObservations when no truth classes are given
+    # --- Test analyzeObservations when no truth classes are given
 
     # Create test data
     for min_obs in MIN_OBS:
@@ -32,21 +31,17 @@ def test_analyzeObservations_noClasses():
         )
 
         # Assert equality among the returned columns
-        assert_frame_equal(
-            all_truths, all_truths_test[["truth", "num_obs", "findable"]]
-        )
+        assert_frame_equal(all_truths, all_truths_test[["truth", "num_obs", "findable"]])
         assert_frame_equal(
             summary,
-            summary_test[summary_test["class"] == "All"][
-                ["class", "num_members", "num_obs", "findable"]
-            ],
+            summary_test[summary_test["class"] == "All"][["class", "num_members", "num_obs", "findable"]],
         )
 
     return
 
 
 def test_analyzeObservations_withClassesColumn():
-    ### Test analyzeObservations when a class column is given
+    # --- Test analyzeObservations when a class column is given
 
     # Create test data
     for min_obs in MIN_OBS:
@@ -68,18 +63,14 @@ def test_analyzeObservations_withClassesColumn():
         )
 
         # Assert equality among the returned columns
-        assert_frame_equal(
-            all_truths, all_truths_test[["truth", "num_obs", "findable"]]
-        )
-        assert_frame_equal(
-            summary, summary_test[["class", "num_members", "num_obs", "findable"]]
-        )
+        assert_frame_equal(all_truths, all_truths_test[["truth", "num_obs", "findable"]])
+        assert_frame_equal(summary, summary_test[["class", "num_members", "num_obs", "findable"]])
 
     return
 
 
 def test_analyzeObservations_withClassesDictionary():
-    ### Test analyzeObservations when a class dictionary is given
+    # --- Test analyzeObservations when a class dictionary is given
 
     # Create test data
     for min_obs in MIN_OBS:
@@ -94,9 +85,7 @@ def test_analyzeObservations_withClassesDictionary():
 
         classes = {}
         for c in ["blue", "red", "green"]:
-            classes[c] = observations_test[observations_test["truth"].str.contains(c)][
-                "truth"
-            ].unique()
+            classes[c] = observations_test[observations_test["truth"].str.contains(c)]["truth"].unique()
 
         # Build the all_truths and summary data frames
         all_truths, findable_observations, summary = analyzeObservations(
@@ -107,18 +96,14 @@ def test_analyzeObservations_withClassesDictionary():
         )
 
         # Assert equality among the returned columns
-        assert_frame_equal(
-            all_truths, all_truths_test[["truth", "num_obs", "findable"]]
-        )
-        assert_frame_equal(
-            summary, summary_test[["class", "num_members", "num_obs", "findable"]]
-        )
+        assert_frame_equal(all_truths, all_truths_test[["truth", "num_obs", "findable"]])
+        assert_frame_equal(summary, summary_test[["class", "num_members", "num_obs", "findable"]])
 
     return
 
 
 def test_analyzeObservations_noObservations():
-    ### Test analyzeObservations when the observations data frame is empty
+    # --- Test analyzeObservations when the observations data frame is empty
 
     (
         observations_test,
@@ -141,7 +126,7 @@ def test_analyzeObservations_noObservations():
 
 
 def test_analyzeObservations_errors():
-    ### Test analyzeObservations the metric is incorrectly defined
+    # --- Test analyzeObservations the metric is incorrectly defined
 
     (
         observations_test,
@@ -164,8 +149,8 @@ def test_analyzeObservations_errors():
 
 
 def test_analyzeObservations_metrics():
-    ### Test analyzeObservations with built in metrics (this only tests that no errors are raised when calling them)
-    ### actual metric tests are in test_metrics.py
+    # --- Test analyzeObservations with built in metrics (this only tests that no errors
+    # are raised when calling them) actual metric tests are in test_metrics.py
 
     column_mapping = {
         "obs_id": "obs_id",
@@ -208,22 +193,16 @@ def test_analyzeObservations_metrics():
 
 
 def test_analyzeObservations_customMetric():
-    ### Test analyzeObservations when a custom metric is given
+    # --- Test analyzeObservations when a custom metric is given
 
     def _customMetric(observations, min_observations=5, column_mapping={}):
         # Same as minObs metric, just testing if a custom made function can be sent to analyzeObservations
-        object_num_obs = (
-            observations[column_mapping["truth"]].value_counts().to_frame("num_obs")
-        )
+        object_num_obs = observations[column_mapping["truth"]].value_counts().to_frame("num_obs")
         object_num_obs = object_num_obs[object_num_obs["num_obs"] >= min_obs]
         findable_objects = object_num_obs.index.values
-        findable_observations = observations[
-            observations[column_mapping["truth"]].isin(findable_objects)
-        ]
+        findable_observations = observations[observations[column_mapping["truth"]].isin(findable_objects)]
         findable = (
-            findable_observations.groupby(by=[column_mapping["truth"]])[
-                column_mapping["obs_id"]
-            ]
+            findable_observations.groupby(by=[column_mapping["truth"]])[column_mapping["obs_id"]]
             .apply(np.array)
             .to_frame("obs_ids")
         )
@@ -251,14 +230,10 @@ def test_analyzeObservations_customMetric():
         )
 
         # Assert equality among the returned columns
-        assert_frame_equal(
-            all_truths, all_truths_test[["truth", "num_obs", "findable"]]
-        )
+        assert_frame_equal(all_truths, all_truths_test[["truth", "num_obs", "findable"]])
         assert_frame_equal(
             summary,
-            summary_test[summary_test["class"] == "All"][
-                ["class", "num_members", "num_obs", "findable"]
-            ],
+            summary_test[summary_test["class"] == "All"][["class", "num_members", "num_obs", "findable"]],
         )
 
     return

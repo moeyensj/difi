@@ -22,8 +22,8 @@ def _findNightlyLinkages(
     Parameters
     ----------
     object_observations : `~pandas.DataFrame` or `~pandas.core.groupby.generic.DataFrameGroupBy`
-        Pandas DataFrame with at least two columns for a single unique truth: observation IDs and the observation times
-        in units of decimal days.
+        Pandas DataFrame with at least two columns for a single unique truth: observation IDs
+        and the observation times in units of decimal days.
     linkage_min_obs : int, optional
         Minimum number of observations needed to make a intra-night
         linkage.
@@ -61,18 +61,14 @@ def _findNightlyLinkages(
         # Combine times and select all observations match the linkage times
         linkage_times = np.unique(np.concatenate([start_times, end_times]))
         linkage_obs = obs_ids[np.isin(times, linkage_times)]
-        linkage_nights, night_counts = np.unique(
-            nights[np.isin(obs_ids, linkage_obs)], return_counts=True
-        )
+        linkage_nights, night_counts = np.unique(nights[np.isin(obs_ids, linkage_obs)], return_counts=True)
 
         # Make sure that the number of observations is still linkage_min_obs * min_linkage_nights
         enough_obs = len(linkage_obs) >= (linkage_min_obs * min_linkage_nights)
 
         # Make sure that the number of unique nights on which a linkage is made
         # is still equal to or greater than the minimum number of nights.
-        enough_nights = (
-            len(night_counts[night_counts >= linkage_min_obs]) >= min_linkage_nights
-        )
+        enough_nights = len(night_counts[night_counts >= linkage_min_obs]) >= min_linkage_nights
 
         if not enough_obs or not enough_nights:
             return np.array([])
@@ -132,10 +128,9 @@ def calcFindableNightlyLinkages(
     )
     object_obs_per_night.reset_index(inplace=True)
 
-    # Only keep objects that have equal to or more than the number of observations to make a linkage each night
-    object_obs_per_night = object_obs_per_night[
-        object_obs_per_night["num_obs"] >= linkage_min_obs
-    ]
+    # Only keep objects that have equal to or more than the number of observations to make
+    # a linkage each night
+    object_obs_per_night = object_obs_per_night[object_obs_per_night["num_obs"] >= linkage_min_obs]
 
     # Now, group by individual object and count the number of nights during which a linkage can be made
     object_linkage_nights = (
@@ -151,10 +146,9 @@ def calcFindableNightlyLinkages(
     ]
     possible_objects = object_linkage_nights[column_mapping["truth"]].unique()
 
-    # Now, find which of the possible objects actually have observations in a linkage that meet the maximum time criterion
-    track_observations = observations[
-        observations[column_mapping["truth"]].isin(possible_objects)
-    ]
+    # Now, find which of the possible objects actually have observations in a linkage
+    # that meet the maximum time criterion
+    track_observations = observations[observations[column_mapping["truth"]].isin(possible_objects)]
 
     # If nothing is findable, return an empty dataframe
     if len(track_observations) > 0:
@@ -172,16 +166,10 @@ def calcFindableNightlyLinkages(
 
         # Some observations may have been to far apart and been removed by the previous function, remove
         # the objects that are no longer findable
-        findable_objects = (
-            findable_observations["obs_ids"].apply(len).to_frame("num_obs")
-        )
-        findable_objects = findable_objects[
-            findable_objects["num_obs"] != 0
-        ].index.values
+        findable_objects = findable_observations["obs_ids"].apply(len).to_frame("num_obs")
+        findable_objects = findable_objects[findable_objects["num_obs"] != 0].index.values
 
-        findable = findable_observations[
-            findable_observations.index.isin(findable_objects)
-        ]
+        findable = findable_observations[findable_observations.index.isin(findable_objects)]
         findable.reset_index(inplace=True, drop=False)
 
     else:
@@ -217,18 +205,12 @@ def calcFindableMinObs(
         A `~pandas.DataFrame` with one column of the truth IDs that are findable, and a column named
         'obs_ids' containing `~numpy.ndarray`s of the observations that made each truth findable.
     """
-    object_num_obs = (
-        observations[column_mapping["truth"]].value_counts().to_frame("num_obs")
-    )
+    object_num_obs = observations[column_mapping["truth"]].value_counts().to_frame("num_obs")
     object_num_obs = object_num_obs[object_num_obs["num_obs"] >= min_obs]
     findable_objects = object_num_obs.index.values
-    findable_observations = observations[
-        observations[column_mapping["truth"]].isin(findable_objects)
-    ]
+    findable_observations = observations[observations[column_mapping["truth"]].isin(findable_objects)]
     findable = (
-        findable_observations.groupby(by=[column_mapping["truth"]])[
-            column_mapping["obs_id"]
-        ]
+        findable_observations.groupby(by=[column_mapping["truth"]])[column_mapping["obs_id"]]
         .apply(np.array)
         .to_frame("obs_ids")
     )

@@ -16,7 +16,7 @@ def readLinkagesByLineFile(
     Example:
     137541512 137543165 137615070 137620728 138216303 138216866 138221227
     137541512 137543165 137615070 137620728 138216303 138216866 138221227 144513728 144533645
-    137541512 137543165 137615070 137620728 138216303 138216866 138221227 144513728 144533645 146991832 147084549
+    137541512 137543165 137615070 137620728 138216303 138216866 138221227 144513728 144533645 146991832
     137541512 137543165 137615070 137620728 138216303 138216866 138221227 144514371 144534274
     137541512 137543165 137615070 137620728 142747928 142763154
     137541512 137543165 137615070 137620728 142748009 142763229
@@ -44,14 +44,10 @@ def readLinkagesByLineFile(
         per observation ID.
     """
     # Read initial file
-    linkages = pd.read_table(
-        linkages_file, header=None, names=[column_mapping["obs_id"]]
-    )
+    linkages = pd.read_table(linkages_file, header=None, names=[column_mapping["obs_id"]])
 
     # Make array of linkage IDs
-    linkage_ids = np.arange(
-        linkage_id_start, linkage_id_start + len(linkages), dtype=int
-    )
+    linkage_ids = np.arange(linkage_id_start, linkage_id_start + len(linkages), dtype=int)
 
     # Split each linkage into its different observation IDs
     linkage_list = linkages[column_mapping["obs_id"]].str.split(" ").tolist()
@@ -69,19 +65,13 @@ def readLinkagesByLineFile(
     linkage_members[column_mapping["linkage_id"]] = linkage_members.index
 
     # Re-arrange column order
-    linkage_members = linkage_members[
-        [column_mapping["linkage_id"], column_mapping["obs_id"]]
-    ]
+    linkage_members = linkage_members[[column_mapping["linkage_id"], column_mapping["obs_id"]]]
 
     # Not all linkages have the same number of detections, empty detections needs to be dropped
     linkage_members[column_mapping["obs_id"]].replace("", np.nan, inplace=True)
     linkage_members.dropna(inplace=True)
     linkage_members.reset_index(drop=True, inplace=True)
-    linkage_members[column_mapping["linkage_id"]] = linkage_members[
-        column_mapping["linkage_id"]
-    ].astype(str)
-    linkage_members[column_mapping["obs_id"]] = linkage_members[
-        column_mapping["obs_id"]
-    ].astype(str)
+    linkage_members[column_mapping["linkage_id"]] = linkage_members[column_mapping["linkage_id"]].astype(str)
+    linkage_members[column_mapping["obs_id"]] = linkage_members[column_mapping["obs_id"]].astype(str)
 
     return linkage_members
