@@ -54,6 +54,7 @@ repository = "https://github.com/moeyensj/difi"
 tests = [
     "pytest",
     "pytest-cov",
+    "pre-commit",
 ]
 
 [tool.setuptools]
