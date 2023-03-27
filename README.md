@@ -11,24 +11,20 @@ Did I Find It?
 
 ## Installation
 
-The following installation paths are available:  
-[Anaconda](#Anaconda)  
-[PyPi](#PyPi)  
-[Docker](#Docker)  
-[Source](#Source)  
+### Released Versions
 
-### Anaconda
+#### Anaconda
 `difi` can be downloaded directly from anaconda:  
 ```conda install -c moeyensj difi```
 
 Or, if preferred, installed into its own environment via:  
-```conda create -n difi_py38 -c moeyensj difi python=3.8```
+```conda create -n difi_py310 -c moeyensj difi python=3.10```
 
-### PyPi
+#### Pip
 `difi` is also available from the Python package index:  
 ```pip install difi```
 
-### Docker
+#### Docker
 
 A Docker container with the latest version of the code can be pulled using:  
 ```docker pull moeyensj/difi:latest```
@@ -38,26 +34,44 @@ To run the container:
 
 The difi code is installed the /projects directory, and is by default also installed in the container's Python installation.
 
-### Source
+### Latest From Source
+
+#### Anaconda
 Clone this repository using either `ssh` or `https`. Once cloned and downloaded, `cd` into the repository.
 
-To install difi in its own `conda` enviroment please do the following:  
-```conda create -n difi_py38 -c defaults -c conda-forge --file requirements.txt python=3.8```  
+To install difi in its own `conda` environment please do the following:  
+```conda create -n difi_py310 -c defaults -c conda-forge --file requirements.txt python=3.10```  
 
-Or, to install difi in a pre-existing `conda` environment called `difi_py38`:  
-```conda activate difi_py38```  
+Or, to install difi in a pre-existing `conda` environment called `difi_py310`:  
+```conda activate difi_py310```  
 ```conda install -c defaults -c conda-forge --file requirements.txt```  
 
-Or, to install pre-requisite software using `pip`:  
-```pip install -r requirements.txt```
+#### Pip
 
-Once pre-requisites have been installed using either one of the three options above, then:  
-```python setup.py install```
+Or, to install `difi` software using `pip`:  
+```pip install .```
 
 Or, if you would like to make an editable install then:  
-```python setup.py develop```
+```pip install -e .[tests]```
 
 You should now be able to start Python and import difi.
+
+#### Docker Compose
+
+After cloning this repository, you can build a docker image that will allow you to develop the source code:
+
+```docker compose build difi```
+
+To run the docker container interatively with a terminal:
+
+```docker compose run -it difi```
+
+### Developing
+
+If you would like to contribute to `difi`, please make sure to initialize `pre-commit`. Pre-commit will automatically lint and format
+the source code after any changes have been staged for a commit. To load the appropriate hooks please run:
+
+```pre-commit install```
 
 ## Example
 

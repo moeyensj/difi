@@ -58,8 +58,10 @@ tests = [
 ]
 
 [tool.setuptools]
-py-modules = ["difi"]
 include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ['difi*']
 
 [tool.setuptools.package-data]
 difi = ["tests/*.txt"]

@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  difi:
+    container_name: difi
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ".:/code"

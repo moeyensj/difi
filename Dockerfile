@@ -1,19 +1,19 @@
-FROM continuumio/miniconda3
+FROM ubuntu:latest
 
-# Set shell to bash
-SHELL ["/bin/bash", "-c"]
-
-# Update apps
+# Update system dependencies
 RUN apt-get update \
 	&& apt-get upgrade -y
 
-# Update conda
-RUN conda update -n base -c defaults conda
+# Install system dependencies
+RUN apt-get install -y git python3 python3-pip python3-dev
 
-# Download difi, create a Python 3.8 conda environment, install requirements, then install difi
-RUN mkdir projects \
-	&& cd projects \
-	&& git clone https://github.com/moeyensj/difi.git --depth=1 \
-	&& cd difi \
-	&& conda install -c defaults -c conda-forge --file requirements.txt python=3.8 --y \
-	&& python setup.py install
+# Upgrade pip to latest version
+RUN pip install --upgrade pip
+
+RUN mkdir /code/
+ADD . /code/
+WORKDIR /code/
+RUN pip install -e .[tests]
+
+# Install pre-commit hooks
+RUN pre-commit install

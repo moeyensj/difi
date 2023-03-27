@@ -2,4 +2,5 @@ include difi/*.py
 include *.md
 include *.toml
 exclude Dockerfile
-exclude recipe
+exclude docker-compose.yml
+exclude recipe/meta.yaml
