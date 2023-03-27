@@ -1,4 +1,4 @@
-name: Python Package with pip
+name: pip - Build, Lint, and Test
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
+  build-lint-test:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Checkout git repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Get git tags
         run:  git fetch --prune --unshallow --tags
       - name: Set up miniconda
@@ -28,12 +28,9 @@ jobs:
           activate-environment: "difi"
           auto-update-conda: true
           python-version: ${{ matrix.python-version }}
-      - name: Install dependencies using pip
-        run: |
-          pip install -r requirements.txt
-      - name: Install difi
-        run: |
-          pip install . --no-deps
-      - name: Test with pytest
-        run: |
-          pytest . --cov=.
+      - name: Build and install
+        run: pip install .[tests]
+      - name: Lint
+        run: pre-commit run --all-files
+      - name: Test
+        run: pytest . --cov=.
