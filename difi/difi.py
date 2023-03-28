@@ -16,11 +16,6 @@ def analyzeLinkages(
     min_obs: int = 5,
     contamination_percentage: float = 20.0,
     classes: Optional[dict] = None,
-    column_mapping: dict[str, str] = {
-        "linkage_id": "linkage_id",
-        "obs_id": "obs_id",
-        "truth": "truth",
-    },
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Did I Find It?
@@ -71,9 +66,6 @@ def analyzeLinkages(
         dict : A dictionary with class names as keys and a list of unique
             truths belonging to each class as values.
         None : If there are no classes of truths.
-    column_mapping : dict, optional
-        The mapping of columns in observations and linkage_members to internally used names.
-        Needs the following: "linkage_id" : ..., "truth": ... and "obs_id" : ... .
 
     Returns
     -------
@@ -231,11 +223,6 @@ def analyzeLinkages(
         or if the linkage_id columns in all_linkages (if passed) and linkage_members do not have the same
         type, or if the truth columns in all_truths (if passed) and observations do not have the same type.
     """
-    # Get column names
-    linkage_id_col = column_mapping["linkage_id"]
-    truth_col = column_mapping["truth"]
-    obs_id_col = column_mapping["obs_id"]
-
     # Raise error if there are no observations
     if len(observations) == 0:
         raise ValueError("There are no observations in the observations DataFrame!")
@@ -243,24 +230,24 @@ def analyzeLinkages(
     findable_present = True
     # If all_truths DataFrame does not exist, create it
     if all_truths is None:
-        truths = observations[truth_col].value_counts()
+        truths = observations["truth"].value_counts()
 
         all_truths = pd.DataFrame(
             {
-                truth_col: truths.index.values,
+                "truth": truths.index.values,
                 # "class" : ["None" for i in range(len(truths))],
                 "num_obs": np.zeros(len(truths), dtype=int),
                 "findable": [np.NaN for i in range(len(truths))],
             }
         )
-        all_truths[truth_col] = all_truths[truth_col].astype(str)
+        all_truths["truth"] = all_truths["truth"].astype(str)
 
-        num_obs_per_truth = observations[truth_col].value_counts()
+        num_obs_per_truth = observations["truth"].value_counts()
         all_truths.loc[
-            all_truths[truth_col].isin(num_obs_per_truth.index.values), "num_obs"
+            all_truths["truth"].isin(num_obs_per_truth.index.values), "num_obs"
         ] = num_obs_per_truth.values
 
-        all_truths.sort_values(by=["num_obs", truth_col], ascending=[False, True], inplace=True)
+        all_truths.sort_values(by=["num_obs", "truth"], ascending=[False, True], inplace=True)
         all_truths.reset_index(inplace=True, drop=True)
 
         findable_present = False
@@ -275,13 +262,13 @@ def analyzeLinkages(
             warnings.warn(warn, UserWarning)
             all_truths.loc[:, "findable"] = np.NaN
             findable_present = False
-        _checkColumnTypesEqual(all_truths, observations, ["truth"], column_mapping)
+        _checkColumnTypesEqual(all_truths, observations, ["truth"])
 
     # Check column types
-    _checkColumnTypes(observations, ["truth"], column_mapping)
-    _checkColumnTypes(observations, ["obs_id"], column_mapping)
-    _checkColumnTypes(linkage_members, ["obs_id"], column_mapping)
-    _checkColumnTypesEqual(observations, linkage_members, ["obs_id"], column_mapping)
+    _checkColumnTypes(observations, ["truth"])
+    _checkColumnTypes(observations, ["obs_id"])
+    _checkColumnTypes(linkage_members, ["obs_id"])
+    _checkColumnTypesEqual(observations, linkage_members, ["obs_id"])
 
     # Create a summary dictionary
     summary_cols = [
@@ -321,20 +308,20 @@ def analyzeLinkages(
 
     if len(linkage_members) > 0:
         # Grab only observation IDs and truth from observations
-        all_linkages = observations[[obs_id_col, truth_col]].copy()
+        all_linkages = observations[["obs_id", "truth"]].copy()
 
         # Merge truth from observations with linkage_members on observation IDs
-        all_linkages = all_linkages.merge(linkage_members[[linkage_id_col, obs_id_col]], on=obs_id_col)
+        all_linkages = all_linkages.merge(linkage_members[["linkage_id", "obs_id"]], on="obs_id")
 
         # Group the data frame of truths, linkage_ids and
         # observation IDs by truth and linkage ID
         # then count the number of occurences
-        all_linkages = all_linkages.groupby(by=[truth_col, linkage_id_col]).count().reset_index()
-        all_linkages.rename(columns={obs_id_col: "num_obs"}, inplace=True)
+        all_linkages = all_linkages.groupby(by=["truth", "linkage_id"]).count().reset_index()
+        all_linkages.rename(columns={"obs_id": "num_obs"}, inplace=True)
 
         # Calculate the total number of observations in each linkage
         num_obs_in_linkage = (
-            all_linkages.groupby(by=[linkage_id_col])["num_obs"].sum().to_frame(name="num_obs_in_linkage")
+            all_linkages.groupby(by=["linkage_id"])["num_obs"].sum().to_frame(name="num_obs_in_linkage")
         )
         num_obs_in_linkage.reset_index(drop=False, inplace=True)
 
@@ -342,14 +329,14 @@ def analyzeLinkages(
         # number of observations in each linkage
         all_linkages = all_linkages.merge(
             num_obs_in_linkage,
-            left_on=linkage_id_col,
-            right_on=linkage_id_col,
+            left_on="linkage_id",
+            right_on="linkage_id",
             suffixes=("", "_"),
         )
 
         # Calculate the number of unique truths in each linkage
         num_truth_in_linkage = (
-            all_linkages.groupby(by=[linkage_id_col])[truth_col].nunique().to_frame(name="num_members")
+            all_linkages.groupby(by=["linkage_id"])["truth"].nunique().to_frame(name="num_members")
         )
         num_obs_in_linkage.reset_index(drop=False, inplace=True)
 
@@ -357,19 +344,19 @@ def analyzeLinkages(
         # number of truths in each linkage
         all_linkages = all_linkages.merge(
             num_truth_in_linkage,
-            left_on=linkage_id_col,
-            right_on=linkage_id_col,
+            left_on="linkage_id",
+            right_on="linkage_id",
             suffixes=("", "_"),
         )
 
         # Merge with all_truths to get the total number of
         # observations in the observations data frame
         all_linkages = all_linkages.merge(
-            all_truths[[truth_col, "num_obs"]].rename(
+            all_truths[["truth", "num_obs"]].rename(
                 columns={"num_obs": "num_obs_in_observations"},
             ),
-            left_on=truth_col,
-            right_on=truth_col,
+            left_on="truth",
+            right_on="truth",
             suffixes=("", "_"),
         )
 
@@ -382,7 +369,7 @@ def analyzeLinkages(
 
         # Sort by linkage_id and the percentage then reset the index
         all_linkages.sort_values(
-            by=[linkage_id_col, "percentage_in_linkage"],
+            by=["linkage_id", "percentage_in_linkage"],
             ascending=[True, False],
             inplace=True,
         )
@@ -415,10 +402,10 @@ def analyzeLinkages(
             & (all_linkages["contamination_percentage_in_linkages"] <= contamination_percentage),
             "partial",
         ] = 1
-        partial_linkages = all_linkages[all_linkages["partial"] == 1][linkage_id_col].unique()
+        partial_linkages = all_linkages[all_linkages["partial"] == 1]["linkage_id"].unique()
         all_linkages.loc[
             (
-                all_linkages[linkage_id_col].isin(partial_linkages)
+                all_linkages["linkage_id"].isin(partial_linkages)
                 & (all_linkages["contamination_percentage_in_linkages"] > contamination_percentage)
             ),
             "partial_contaminant",
@@ -428,17 +415,17 @@ def analyzeLinkages(
         # belonging to one object as partials.. these are actually mixed so make sure
         # they are correctly indentified.
         contamination_counts = (
-            all_linkages[all_linkages[linkage_id_col].isin(partial_linkages)]
-            .groupby(linkage_id_col)["contamination_percentage_in_linkages"]
+            all_linkages[all_linkages["linkage_id"].isin(partial_linkages)]
+            .groupby("linkage_id")["contamination_percentage_in_linkages"]
             .nunique()
         )
         no_majority_partials = contamination_counts[contamination_counts.values == 1].index.values
-        all_linkages.loc[all_linkages[linkage_id_col].isin(no_majority_partials), "partial"] = 0
+        all_linkages.loc[all_linkages["linkage_id"].isin(no_majority_partials), "partial"] = 0
         all_linkages.loc[
-            all_linkages[linkage_id_col].isin(no_majority_partials),
+            all_linkages["linkage_id"].isin(no_majority_partials),
             "partial_contaminant",
         ] = 0
-        all_linkages.loc[all_linkages[linkage_id_col].isin(no_majority_partials), "mixed"] = 1
+        all_linkages.loc[all_linkages["linkage_id"].isin(no_majority_partials), "mixed"] = 1
 
         # Mixed linkages: any linkage that is not pure or partial
         all_linkages.loc[
@@ -465,7 +452,7 @@ def analyzeLinkages(
         # Calculate number of observations in pure linkages for each truth
         pure_obs = (
             all_linkages[all_linkages["pure"] == 1]
-            .groupby(by=truth_col)["num_obs"]
+            .groupby(by="truth")["num_obs"]
             .sum()
             .to_frame(name="obs_in_pure")
         )
@@ -474,7 +461,7 @@ def analyzeLinkages(
         # Calculate number of observations in pure complete linkages for each truth
         pure_complete_obs = (
             all_linkages[all_linkages["pure_complete"] == 1]
-            .groupby(by=truth_col)["num_obs"]
+            .groupby(by="truth")["num_obs"]
             .sum()
             .to_frame(name="obs_in_pure_complete")
         )
@@ -483,7 +470,7 @@ def analyzeLinkages(
         # Calculate number of observations in partial linkages for each truth
         partial_obs = (
             all_linkages[all_linkages["partial"] == 1]
-            .groupby(by=truth_col)["num_obs"]
+            .groupby(by="truth")["num_obs"]
             .sum()
             .to_frame(name="obs_in_partial")
         )
@@ -492,7 +479,7 @@ def analyzeLinkages(
         # Calculate number of observations in partial linkages for each truth
         partial_contaminant_obs = (
             all_linkages[(all_linkages["partial_contaminant"] == 1)]
-            .groupby(by=truth_col)["num_obs"]
+            .groupby(by="truth")["num_obs"]
             .sum()
             .to_frame(name="obs_in_partial_contaminant")
         )
@@ -501,13 +488,13 @@ def analyzeLinkages(
         # Calculate number of observations in mixed linkages for each truth
         mixed_obs = (
             all_linkages[all_linkages["mixed"] == 1]
-            .groupby(by=truth_col)["num_obs"]
+            .groupby(by="truth")["num_obs"]
             .sum()
             .to_frame(name="obs_in_mixed")
         )
         mixed_obs.reset_index(inplace=True)
 
-        linkage_types = all_linkages.groupby(by=[truth_col])[
+        linkage_types = all_linkages.groupby(by=["truth"])[
             [
                 "pure",
                 "pure_complete",
@@ -528,13 +515,13 @@ def analyzeLinkages(
             partial_contaminant_obs,
             mixed_obs,
         ]:
-            linkage_types = linkage_types.merge(df, on=truth_col, how="outer")
+            linkage_types = linkage_types.merge(df, on="truth", how="outer")
 
     else:
         # Create empty linkage_types dataframe when linkage_members is empty
         dtypes = np.dtype(
             [
-                (truth_col, str),
+                ("truth", str),
                 ("pure", int),
                 ("pure_complete", int),
                 ("partial", int),
@@ -555,7 +542,7 @@ def analyzeLinkages(
         # Create empty all_linkages dataframe when linkage_members is empty
         dtypes = np.dtype(
             [
-                (linkage_id_col, str),
+                ("linkage_id", str),
                 ("num_obs", int),
                 ("num_obs_in_linkage", int),
                 ("num_members", int),
@@ -570,12 +557,12 @@ def analyzeLinkages(
                 ("found_pure", int),
                 ("found_partial", int),
                 ("found", int),
-                (truth_col, str),
+                ("truth", str),
             ]
         )
         all_linkages = pd.DataFrame(np.empty(0, dtype=dtypes))
 
-    all_truths = all_truths.merge(linkage_types, on=truth_col, how="outer")
+    all_truths = all_truths.merge(linkage_types, on="truth", how="outer")
     all_truths_int_cols = [
         "pure",
         "pure_complete",
@@ -594,14 +581,14 @@ def analyzeLinkages(
     all_truths[all_truths_int_cols] = all_truths[all_truths_int_cols].fillna(0)
     all_truths[all_truths_int_cols] = all_truths[all_truths_int_cols].astype(int)
 
-    class_list, truths_list = _classHandler(classes, observations, column_mapping)
+    class_list, truths_list = _classHandler(classes, observations)
 
     # Loop through the classes and summarize the results
     for c, v in zip(class_list, truths_list):
         # Create masks for the class of truths
-        all_truths_class = all_truths[all_truths[truth_col].isin(v)]
-        all_linkages_class = all_linkages[all_linkages[truth_col].isin(v)]
-        observations_class = observations[observations[truth_col].isin(v)]
+        all_truths_class = all_truths[all_truths["truth"].isin(v)]
+        all_linkages_class = all_linkages[all_linkages["truth"].isin(v)]
+        observations_class = observations[observations["truth"].isin(v)]
 
         # Add class and the number of members to the summary
         summary["class"].append(c)
@@ -667,9 +654,9 @@ def analyzeLinkages(
             "mixed",
         ]:
             summary["{}_linkages".format(linkage_type)].append(
-                all_linkages_class[all_linkages_class[linkage_type] == 1][linkage_id_col].nunique()
+                all_linkages_class[all_linkages_class[linkage_type] == 1]["linkage_id"].nunique()
             )
-        summary["linkages"].append(all_linkages_class[linkage_id_col].nunique())
+        summary["linkages"].append(all_linkages_class["linkage_id"].nunique())
 
         # Calculate number of linkage types that contain observations of this class
         for linkage_type in [
@@ -680,7 +667,7 @@ def analyzeLinkages(
             "mixed",
         ]:
             summary["unique_in_{}_linkages".format(linkage_type)].append(
-                all_linkages_class[all_linkages_class[linkage_type] == 1][truth_col].nunique()
+                all_linkages_class[all_linkages_class[linkage_type] == 1]["truth"].nunique()
             )
 
         # Calculate number of observations in different linkages for each class
@@ -697,31 +684,31 @@ def analyzeLinkages(
 
         summary["unique_in_pure_and_partial_linkages"].append(
             all_truths_class[(all_truths_class["pure"] >= 1) & (all_truths_class["partial"] >= 1)][
-                truth_col
+                "truth"
             ].nunique()
         )
 
         summary["unique_in_partial_linkages_only"].append(
             all_truths_class[(all_truths_class["pure"] == 0) & (all_truths_class["partial"] >= 1)][
-                truth_col
+                "truth"
             ].nunique()
         )
 
         summary["unique_in_pure_linkages_only"].append(
             all_truths_class[(all_truths_class["pure"] >= 1) & (all_truths_class["partial"] == 0)][
-                truth_col
+                "truth"
             ].nunique()
         )
 
-    all_linkages.loc[all_linkages["mixed"] == 1, truth_col] = np.NaN
+    all_linkages.loc[all_linkages["mixed"] == 1, "truth"] = np.NaN
     all_linkages.loc[all_linkages["mixed"] == 1, "contamination_percentage_in_linkages"] = np.NaN
-    all_linkages[truth_col] = all_linkages[truth_col].astype(str)
+    all_linkages["truth"] = all_linkages["truth"].astype(str)
 
     # Drop all duplicate linkage_id entries which has the effect of
     # dropping all but one of the entries for mixed linkages and dropping
     # the contaminant entries for partial linkages. Pure linkages are already
     # unique at this stage
-    all_linkages.drop_duplicates(subset=[linkage_id_col], keep="first", inplace=True)
+    all_linkages.drop_duplicates(subset=["linkage_id"], keep="first", inplace=True)
 
     # Reset index after dataframe size change
     all_linkages.reset_index(drop=True, inplace=True)
@@ -729,7 +716,7 @@ def analyzeLinkages(
     # Organize columns and rename a few
     all_linkages = all_linkages[
         [
-            linkage_id_col,
+            "linkage_id",
             # "num_obs", # UNCOMMENT FOR DEBUG
             "num_obs_in_linkage",
             "num_members",
@@ -744,12 +731,12 @@ def analyzeLinkages(
             "found_pure",
             "found_partial",
             "found",
-            truth_col,
+            "truth",
         ]
     ]
     all_linkages.rename(
         columns={
-            truth_col: "linked_truth",
+            "truth": "linked_truth",
             "num_obs_in_linkage": "num_obs",
             "contamination_percentage_in_linkages": "contamination_percentage",
         },
@@ -758,7 +745,7 @@ def analyzeLinkages(
 
     all_truths = all_truths[
         [
-            truth_col,
+            "truth",
             # "class",
             "num_obs",
             "findable",

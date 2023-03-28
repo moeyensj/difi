@@ -152,13 +152,6 @@ def test_analyzeObservations_metrics():
     # --- Test analyzeObservations with built in metrics (this only tests that no errors
     # are raised when calling them) actual metric tests are in test_metrics.py
 
-    column_mapping = {
-        "obs_id": "obs_id",
-        "truth": "truth",
-        "time": "time",
-        "night": "night",
-    }
-
     # Create test data
     (
         observations_test,
@@ -176,7 +169,6 @@ def test_analyzeObservations_metrics():
         metric="min_obs",
         min_obs=5,
         classes=None,
-        column_mapping=column_mapping,
     )
 
     # Build the all_truths and summary data frames and make sure no metric errors are returned
@@ -187,7 +179,6 @@ def test_analyzeObservations_metrics():
         max_obs_separation=10,
         min_linkage_nights=1,
         classes=None,
-        column_mapping=column_mapping,
     )
     return
 
@@ -195,17 +186,13 @@ def test_analyzeObservations_metrics():
 def test_analyzeObservations_customMetric():
     # --- Test analyzeObservations when a custom metric is given
 
-    def _customMetric(observations, min_observations=5, column_mapping={}):
+    def _customMetric(observations, min_observations=5):
         # Same as minObs metric, just testing if a custom made function can be sent to analyzeObservations
-        object_num_obs = observations[column_mapping["truth"]].value_counts().to_frame("num_obs")
+        object_num_obs = observations["truth"].value_counts().to_frame("num_obs")
         object_num_obs = object_num_obs[object_num_obs["num_obs"] >= min_obs]
         findable_objects = object_num_obs.index.values
-        findable_observations = observations[observations[column_mapping["truth"]].isin(findable_objects)]
-        findable = (
-            findable_observations.groupby(by=[column_mapping["truth"]])[column_mapping["obs_id"]]
-            .apply(np.array)
-            .to_frame("obs_ids")
-        )
+        findable_observations = observations[observations["truth"].isin(findable_objects)]
+        findable = findable_observations.groupby(by=["truth"])["obs_id"].apply(np.array).to_frame("obs_ids")
         findable.reset_index(inplace=True, drop=False)
         return findable
 

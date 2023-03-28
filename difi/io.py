@@ -7,7 +7,6 @@ __all__ = ["readLinkagesByLineFile"]
 def readLinkagesByLineFile(
     linkages_file: str,
     linkage_id_start: int = 1,
-    column_mapping: dict[str, str] = {"obs_id": "obs_id", "linkage_id": "linkage_id"},
 ) -> pd.DataFrame:
     """
     Reads a file that contains linkages where each linkage is written in terms of its
@@ -32,11 +31,7 @@ def readLinkagesByLineFile(
     linkage_id_start = 1
         Number at which to start the linkage ID count.
         [Default = 1]
-    column_mapping : dict, optional
-        The mapping of columns in linkages_file to internally used names.
-        Needs the following: "linkage_id" : ..., "obs_id" : ... .
-        [Default = {'obs_id' : 'obs_id',
-                    'linkage_id' : 'linkage_id'}]
+
     Returns
     -------
     linkage_members : `~pandas.DataFrame`
@@ -44,34 +39,34 @@ def readLinkagesByLineFile(
         per observation ID.
     """
     # Read initial file
-    linkages = pd.read_table(linkages_file, header=None, names=[column_mapping["obs_id"]])
+    linkages = pd.read_table(linkages_file, header=None, names=["obs_id"])
 
     # Make array of linkage IDs
     linkage_ids = np.arange(linkage_id_start, linkage_id_start + len(linkages), dtype=int)
 
     # Split each linkage into its different observation IDs
-    linkage_list = linkages[column_mapping["obs_id"]].str.split(" ").tolist()
+    linkage_list = linkages["obs_id"].str.split(" ").tolist()
 
     # Build initial DataFrame
     linkage_members = pd.DataFrame(
         pd.DataFrame(linkage_list, index=linkage_ids).stack(),
-        columns=[column_mapping["obs_id"]],
+        columns=["obs_id"],
     )
 
     # Reset index
     linkage_members.reset_index(1, drop=True, inplace=True)
 
     # Make linkage_id its own column
-    linkage_members[column_mapping["linkage_id"]] = linkage_members.index
+    linkage_members["linkage_id"] = linkage_members.index
 
     # Re-arrange column order
-    linkage_members = linkage_members[[column_mapping["linkage_id"], column_mapping["obs_id"]]]
+    linkage_members = linkage_members[["linkage_id", "obs_id"]]
 
     # Not all linkages have the same number of detections, empty detections needs to be dropped
-    linkage_members[column_mapping["obs_id"]].replace("", np.nan, inplace=True)
+    linkage_members["obs_id"].replace("", np.nan, inplace=True)
     linkage_members.dropna(inplace=True)
     linkage_members.reset_index(drop=True, inplace=True)
-    linkage_members[column_mapping["linkage_id"]] = linkage_members[column_mapping["linkage_id"]].astype(str)
-    linkage_members[column_mapping["obs_id"]] = linkage_members[column_mapping["obs_id"]].astype(str)
+    linkage_members["linkage_id"] = linkage_members["linkage_id"].astype(str)
+    linkage_members["obs_id"] = linkage_members["obs_id"].astype(str)
 
     return linkage_members
