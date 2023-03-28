@@ -185,8 +185,7 @@ def analyzeObservations(
     all_truths.loc[all_truths["truth"].isin(findable_observations["truth"].values), "findable"] = 1
 
     all_truths["findable"] = all_truths["findable"].astype(int)
-    all_truths.sort_values(by=["num_obs", "truth"], ascending=[False, True], inplace=True)
-    all_truths.reset_index(inplace=True, drop=True)
+    all_truths.sort_values(by=["num_obs", "truth"], ascending=[False, True], inplace=True, ignore_index=True)
 
     class_list, truths_list = _classHandler(classes, observations)
 
@@ -209,7 +208,6 @@ def analyzeObservations(
             "findable": num_findable_list,
         }
     )
-    summary.sort_values(by=["num_obs", "class"], ascending=False, inplace=True)
-    summary.reset_index(inplace=True, drop=True)
+    summary.sort_values(by=["num_obs", "class"], ascending=False, inplace=True, ignore_index=True)
 
     return all_truths, findable_observations, summary

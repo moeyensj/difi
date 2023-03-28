@@ -247,8 +247,9 @@ def analyzeLinkages(
             all_truths["truth"].isin(num_obs_per_truth.index.values), "num_obs"
         ] = num_obs_per_truth.values
 
-        all_truths.sort_values(by=["num_obs", "truth"], ascending=[False, True], inplace=True)
-        all_truths.reset_index(inplace=True, drop=True)
+        all_truths.sort_values(
+            by=["num_obs", "truth"], ascending=[False, True], inplace=True, ignore_index=True
+        )
 
         findable_present = False
 
@@ -372,8 +373,8 @@ def analyzeLinkages(
             by=["linkage_id", "percentage_in_linkage"],
             ascending=[True, False],
             inplace=True,
+            ignore_index=True,
         )
-        all_linkages.reset_index(drop=True, inplace=True)
 
         # Initialize the linkage purity columns
         all_linkages.loc[:, "found_pure"] = 0
@@ -766,7 +767,6 @@ def analyzeLinkages(
     ]
 
     summary_df = pd.DataFrame(summary)
-    summary_df.sort_values(by=["num_obs", "class"], ascending=False, inplace=True)
-    summary_df.reset_index(inplace=True, drop=True)
+    summary_df.sort_values(by=["num_obs", "class"], ascending=False, inplace=True, ignore_index=True)
 
     return all_linkages, all_truths, summary_df
