@@ -1,6 +1,5 @@
 # difi
 Did I Find It?  
-[![Build Status](https://dev.azure.com/moeyensj/difi/_apis/build/status/moeyensj.difi?branchName=main)](https://dev.azure.com/moeyensj/difi/_build/latest?definitionId=1&branchName=main)
 [![Coverage Status](https://coveralls.io/repos/github/moeyensj/difi/badge.svg?branch=main)](https://coveralls.io/github/moeyensj/difi?branch=main)
 [![Docker Pulls](https://img.shields.io/docker/pulls/moeyensj/difi)](https://hub.docker.com/r/moeyensj/difi)  
 [![Python 3.7+](https://img.shields.io/badge/Python-3.7%2B-blue)](https://img.shields.io/badge/Python-3.7%2B-blue)
@@ -8,28 +7,24 @@ Did I Find It?
 [![DOI](https://zenodo.org/badge/152989392.svg)](https://zenodo.org/badge/latestdoi/152989392)
 
 ## About
-`difi` is a simple package that takes pre-formatted linkage information from software such as [MOPS](https://github.com/lsst/mops_daymops), [pytrax](https://github.com/pytrax/pytrax), or [THOR](https://github.com/moeyensj/thor) and analyzes which objects have been found given a set of known labels (or truths). A key performance criteria is that `difi` needs to be fast by avoiding Python for loops and instead uses clever `pandas.DataFrame` manipulation. 
+`difi` is a simple package that takes pre-formatted linkage information from software such as [MOPS](https://github.com/lsst/mops_daymops), [pytrax](https://github.com/pytrax/pytrax), or [THOR](https://github.com/moeyensj/thor) and analyzes which objects have been found given a set of known labels (or truths). A key performance criteria is that `difi` needs to be fast by avoiding Python for loops and instead uses clever `pandas.DataFrame` manipulation.
 
 ## Installation
 
-The following installation paths are available:  
-[Anaconda](#Anaconda)  
-[PyPi](#PyPi)  
-[Docker](#Docker)  
-[Source](#Source)  
+### Released Versions
 
-### Anaconda
+#### Anaconda
 `difi` can be downloaded directly from anaconda:  
 ```conda install -c moeyensj difi```
 
 Or, if preferred, installed into its own environment via:  
-```conda create -n difi_py38 -c moeyensj difi python=3.8```
+```conda create -n difi_py310 -c moeyensj difi python=3.10```
 
-### PyPi
+#### Pip
 `difi` is also available from the Python package index:  
 ```pip install difi```
 
-### Docker
+#### Docker
 
 A Docker container with the latest version of the code can be pulled using:  
 ```docker pull moeyensj/difi:latest```
@@ -37,28 +32,46 @@ A Docker container with the latest version of the code can be pulled using:
 To run the container:  
 ```docker run -it moeyensj/difi:latest```
 
-The difi code is installed the /projects directory, and is by default also installed in the container's Python installation. 
+The difi code is installed the /projects directory, and is by default also installed in the container's Python installation.
 
-### Source
-Clone this repository using either `ssh` or `https`. Once cloned and downloaded, `cd` into the repository. 
+### Latest From Source
 
-To install difi in its own `conda` enviroment please do the following:  
-```conda create -n difi_py38 -c defaults -c conda-forge --file requirements.txt python=3.8```  
+#### Anaconda
+Clone this repository using either `ssh` or `https`. Once cloned and downloaded, `cd` into the repository.
 
-Or, to install difi in a pre-existing `conda` environment called `difi_py38`:  
-```conda activate difi_py38```  
+To install difi in its own `conda` environment please do the following:  
+```conda create -n difi_py310 -c defaults -c conda-forge --file requirements.txt python=3.10```  
+
+Or, to install difi in a pre-existing `conda` environment called `difi_py310`:  
+```conda activate difi_py310```  
 ```conda install -c defaults -c conda-forge --file requirements.txt```  
 
-Or, to install pre-requisite software using `pip`:  
-```pip install -r requirements.txt```
+#### Pip
 
-Once pre-requisites have been installed using either one of the three options above, then:  
-```python setup.py install```
+Or, to install `difi` software using `pip`:  
+```pip install .```
 
 Or, if you would like to make an editable install then:  
-```python setup.py develop```
+```pip install -e .[tests]```
 
-You should now be able to start Python and import difi. 
+You should now be able to start Python and import difi.
+
+#### Docker Compose
+
+After cloning this repository, you can build a docker image that will allow you to develop the source code:
+
+```docker compose build difi```
+
+To run the docker container interatively with a terminal:
+
+```docker compose run -it difi```
+
+### Developing
+
+If you would like to contribute to `difi`, please make sure to initialize `pre-commit`. Pre-commit will automatically lint and format
+the source code after any changes have been staged for a commit. To load the appropriate hooks please run:
+
+```pre-commit install```
 
 ## Example
 
@@ -74,8 +87,8 @@ The example below can be found in greater detail in this [Jupyter Notebook](http
 
 ![linkage_members](docs/images/linkage_members.png "linkage_members")
 
-### What Can I Find? 
-In most cases the user can determine what known truths in their observations dataframe can be found by their respective linking algorithm. `difi` has two simple findability metrics: 
+### What Can I Find?
+In most cases the user can determine what known truths in their observations dataframe can be found by their respective linking algorithm. `difi` has two simple findability metrics:
 
 The 'min_obs' metric: any object with this many or more observations is considered findable.  
 ![analyzeObservations](docs/images/cifi_min_obs.png "min_obs")
@@ -92,15 +105,15 @@ What observations made each object findable?
 A summary of what kinds of objects are findable might be useful.  
 ![summary](docs/images/cifi_summary_min_obs.png "summary")
 
-### Did I Find It? 
-Now lets see what the external linking software did find. 
+### Did I Find It?
+Now lets see what the external linking software did find.
 
 ![analyzeLinkages](docs/images/difi.png "analyzeLinkages.png")
 
 `difi` assumes there to be three different types of linkages:
 - 'pure': all observations in a linkage belong to a unique truth
 - 'partial': up to a certain percentage of non-unique thruths are allowed so long as one truth has at least the minimum required number of unique observations
-- 'mixed': a linkage containing different observations belonging to different truths, we avoid using the word 'false' for these linkages as they may contain unknown truths depending on the use case. We leave interpretation up to the user. 
+- 'mixed': a linkage containing different observations belonging to different truths, we avoid using the word 'false' for these linkages as they may contain unknown truths depending on the use case. We leave interpretation up to the user.
 
 Thanks to the power of `pandas` it can be super easy to isolate the different linkage types and analyze them separately.
 Selecting 'pure' linkages:
@@ -116,7 +129,7 @@ Selecting 'mixed' linkages:
 ![all_linkages_mixed](docs/images/mixed_linkages.png "all_linkages_mixed")
 
 
-Understanding the specifics behind each linkage is one thing, but how did the linking algorithm perform on an object by object basis. 
+Understanding the specifics behind each linkage is one thing, but how did the linking algorithm perform on an object by object basis.
 ![allTruths](docs/images/difi_all_truths.png "all_truths")
 
 ### Tutorial

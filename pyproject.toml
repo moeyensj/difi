@@ -5,3 +5,69 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools_scm]
 write_to = "difi/version.py"
 write_to_template = "__version__ = '{version}'"
+
+[project]
+name = "difi"
+authors = [
+    {name = "Joachim Moeyens", email = "moeyensj@uw.edu"},
+]
+maintainers = [
+    {name = "Joachim Moeyens", email = "moeyensj@uw.edu"},
+]
+description = "Did I Find It?"
+readme = "README.md"
+license = {file = "LICENSE.md"}
+keywords = [
+    "astronomy",
+    "astrophysics",
+    "space",
+    "science",
+    "asteroids",
+    "comets",
+    "solar system"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+requires-python = ">=3.7"
+dependencies = [
+    "numpy",
+    "pandas",
+]
+dynamic = ["version"]
+
+[project.urls]
+homepage = "https://github.com/moeyensj/difi"
+repository = "https://github.com/moeyensj/difi"
+
+[project.optional-dependencies]
+tests = [
+    "pytest",
+    "pytest-cov",
+    "pre-commit",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ['difi*']
+
+[tool.setuptools.package-data]
+difi = ["tests/*.txt"]
+
+[tool.black]
+line-length = 110
+
+[tool.isort]
+profile = "black"

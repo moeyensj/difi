@@ -2,6 +2,7 @@ numpy
 pandas
 pytest
 pytest-cov
+pre-commit
 coveralls
 setuptools>=45
 wheel
