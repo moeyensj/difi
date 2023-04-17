@@ -16,7 +16,7 @@ __all__ = [
 ]
 
 
-def _checkColumnTypes(df: pd.DataFrame, cols: list, column_mapping: dict[str, str]):
+def _checkColumnTypes(df: pd.DataFrame, cols: list):
     """
     Checks that each dataframe column listed in cols has Pandas dtype "Object".
 
@@ -26,8 +26,6 @@ def _checkColumnTypes(df: pd.DataFrame, cols: list, column_mapping: dict[str, st
         Pandas dataframe
     cols : list
         Columns to check for appropriate data type.
-    column_mapping : dict
-        Column name mapping to internally used column names (truth, linkage_id, obs_id).
 
     Raises
     ------
@@ -39,14 +37,13 @@ def _checkColumnTypes(df: pd.DataFrame, cols: list, column_mapping: dict[str, st
     """
     error_text = ""
     for col in cols:
-        value = column_mapping[col]
-        if not is_object_dtype(df[value].dtype):
+        if not is_object_dtype(df[col].dtype):
             error = (
-                "\n{1} column ('{0}') should have type string. "
+                "\n{0} column should have type string. "
                 "Please convert column using: \n"
                 "dataframe['{0}'] = dataframe['{0}'].astype(str)`\n"
             )
-            error = error.format(value, col)
+            error = error.format(col)
             error_text += error
 
     if len(error_text) > 0:
@@ -54,7 +51,7 @@ def _checkColumnTypes(df: pd.DataFrame, cols: list, column_mapping: dict[str, st
     return
 
 
-def _checkColumnTypesEqual(df1: pd.DataFrame, df2: pd.DataFrame, cols: list, column_mapping: dict[str, str]):
+def _checkColumnTypesEqual(df1: pd.DataFrame, df2: pd.DataFrame, cols: list):
     """
     Checks that each column listed in cols have the same Pandas dtype in df1 and df2.
 
@@ -66,8 +63,6 @@ def _checkColumnTypesEqual(df1: pd.DataFrame, df2: pd.DataFrame, cols: list, col
         Pandas dataframe
     cols : list
         Columns to check for data type equality.
-    column_mapping : dict
-        Column name mapping to internally used column names (truth, linkage_id, obs_id).
 
     Raises
     ------
@@ -79,14 +74,13 @@ def _checkColumnTypesEqual(df1: pd.DataFrame, df2: pd.DataFrame, cols: list, col
     """
     error_text = ""
     for col in cols:
-        value = column_mapping[col]
-        if not (df1[value].dtype == df2[value].dtype):
+        if not (df1[col].dtype == df2[col].dtype):
             error = (
-                "\n{1} column ('{0}') in the first data frame has type: {2}\n"
-                "{1} column ('{0}') in the second data frame has type: {3}\n"
+                "\nColumn ('{0}') in the first data frame has type: {1}\n"
+                "Column ('{0}') in the second data frame has type: {2}\n"
                 "Please insure both columns have the same type!"
             )
-            error = error.format(value, col, df1[value].dtype, df2[value].dtype)
+            error = error.format(col, df1[col].dtype, df2[col].dtype)
             error_text += error
 
     if len(error_text) > 0:
@@ -94,11 +88,7 @@ def _checkColumnTypesEqual(df1: pd.DataFrame, df2: pd.DataFrame, cols: list, col
     return
 
 
-def _classHandler(
-    classes: Union[str, dict, None],
-    dataframe: pd.DataFrame,
-    column_mapping: dict[str, str],
-):
+def _classHandler(classes: Union[str, dict, None], dataframe: pd.DataFrame):
     """
     Tests that the `classes` keyword argument is defined correctly.
     `classes` should one of the following:
@@ -115,8 +105,6 @@ def _classHandler(
     dataframe : `~pandas.DataFrame`
         A pandas data frame containing a column of truths and optionally
         a column that specifies the class (if classes is a str).
-    column_mapping : dict
-        Column name mapping to internally used column names (truth, class).
 
     Returns
     -------
@@ -134,7 +122,7 @@ def _classHandler(
     unique_truths = []
 
     if classes is None:
-        truths_list = [dataframe[column_mapping["truth"]].unique()]
+        truths_list = [dataframe["truth"].unique()]
         unique_truths = [truths_list[0]]
 
     elif type(classes) == str:
@@ -144,11 +132,11 @@ def _classHandler(
         else:
             for c in dataframe[~dataframe[classes].isna()][classes].unique():
                 class_list.append(c)
-                class_truths = dataframe[dataframe[classes].isin([c])][column_mapping["truth"]].unique()
+                class_truths = dataframe[dataframe[classes].isin([c])]["truth"].unique()
                 unique_truths.append(class_truths)
                 truths_list.append(class_truths)
 
-        truths_list[0] = dataframe[column_mapping["truth"]].unique()
+        truths_list[0] = dataframe["truth"].unique()
 
     elif type(classes) == dict:
         for c, t in classes.items():
@@ -184,15 +172,13 @@ def _classHandler(
         err = "Some truths are duplicated in multiple classes."
         raise ValueError(err)
 
-    if not dataframe[column_mapping["truth"]].isin(unique_truths).all():
+    if not dataframe["truth"].isin(unique_truths).all():
         warning = (
             "Some truths do not have an assigned class.\n"
             "Unclassified truths have been added as 'Unclassified'."
         )
 
-        unclassified = dataframe[~dataframe[column_mapping["truth"]].isin(unique_truths)][
-            column_mapping["truth"]
-        ].unique()
+        unclassified = dataframe[~dataframe["truth"].isin(unique_truths)]["truth"].unique()
         class_list.append("Unclassified")
         truths_list.append(unclassified)
         truths_list[0] = np.concatenate([truths_list[0], unclassified])
@@ -228,7 +214,6 @@ def _percentHandler(number: float, number_total: float) -> float:
 def _firstFindableNightMinObs(
     obs_ids: list[str],
     observations: pd.DataFrame,
-    column_mapping: dict[str, str] = {"obs_id": "obs_id", "night_id": "night_id"},
     min_obs: int = 6,
 ) -> int:
     """For a particular findable object, find the first night on which it
@@ -240,10 +225,6 @@ def _firstFindableNightMinObs(
         List of observation IDs for this findable object
     observations : `DataFrame`
         Observations table
-    column_mapping : dict, optional
-        The mapping of columns in observations to internally used names.
-        Needs at least the following: "truth": ... and "obs_id" : ... . Other
-        columns may be needed for different findability metrics.
     min_obs : int, optional
         The minimum number of observations required for a truth to be
         considered findable.
@@ -253,13 +234,12 @@ def _firstFindableNightMinObs(
     first_findable_night : `int`
         First night on which this object becomes findable
     """
-    return observations.loc[obs_ids[min_obs - 1]][column_mapping["night_id"]]
+    return observations.loc[obs_ids[min_obs - 1]]["night_id"]
 
 
 def _firstFindableNightNightlyLinkages(
     obs_ids: list[str],
     observations: pd.DataFrame,
-    column_mapping: dict[str, str] = {"obs_id": "obs_id", "night_id": "night_id"},
     min_linkage_nights: int = 3,
     detection_window: int = 15,
 ) -> int:
@@ -273,10 +253,6 @@ def _firstFindableNightNightlyLinkages(
         List of observation IDs for this findable object
     observations : `DataFrame`
         Observations table
-    column_mapping : dict, optional
-        The mapping of columns in observations to internally used names.
-        Needs at least the following: "truth": ... and "obs_id" : ... . Other
-        columns may be needed for different findability metrics.
     min_linkage_nights : int, optional
         Minimum number of nights on which a linkage should appear.
     detection_window : int, optional
@@ -289,11 +265,7 @@ def _firstFindableNightNightlyLinkages(
         First night on which this object becomes findable
     """
     # get the linkage nights from the observations table
-    linkage_nights = np.unique(
-        observations[np.isin(observations[column_mapping["obs_id"]], obs_ids)][
-            column_mapping["night_id"]
-        ].values
-    )
+    linkage_nights = np.unique(observations[np.isin(observations["obs_id"], obs_ids)]["night_id"].values)
     diff_nights = np.diff(linkage_nights)
 
     # compute the potential window sizes
@@ -315,11 +287,7 @@ def _firstFindableNightNightlyLinkages(
 
 
 def calcFirstFindableNight(
-    findable_obs: pd.DataFrame,
-    observations: pd.DataFrame,
-    metric: str = "min_obs",
-    column_mapping: dict[str, str] = {"obs_id": "obs_id", "night_id": "night_id"},
-    **metric_kwargs
+    findable_obs: pd.DataFrame, observations: pd.DataFrame, metric: str = "min_obs", **metric_kwargs
 ) -> pd.Series:
     """
     Calculate the first night on which a truth becomes findable based
@@ -341,13 +309,8 @@ def calcFirstFindableNight(
             linkage_min_obs or more. Observations are considered to be in a possible intra-night
             linkage if their observation time does not exceed max_obs_separation.
             See `~difi.calcFindableNightlyLinkages` for more details.
-    column_mapping : dict, optional
-        The mapping of columns in observations to internally used names.
-        Needs at least the following: "truth": ... and "obs_id" : ... . Other
-        columns may be needed for different findability metrics.
     **metric_kwargs
         Any additional keyword arguments are passed to the desired findability metric.
-        Note that column_mapping is also passed to the findability metric.
 
     Returns
     -------
@@ -361,16 +324,10 @@ def calcFirstFindableNight(
     """
     if metric == "min_obs":
         first_findable_night = findable_obs["obs_ids"].apply(
-            _firstFindableNightMinObs,
-            observations=observations,
-            column_mapping=column_mapping,
-            **metric_kwargs
+            _firstFindableNightMinObs, observations=observations, **metric_kwargs
         )
     elif metric == "nightly_linkages":
         first_findable_night = findable_obs["obs_ids"].apply(
-            _firstFindableNightNightlyLinkages,
-            observations=observations,
-            column_mapping=column_mapping,
-            **metric_kwargs
+            _firstFindableNightNightlyLinkages, observations=observations, **metric_kwargs
         )
     return first_findable_night
