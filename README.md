@@ -81,64 +81,6 @@ the source code after any changes have been staged for a commit. To load the app
 
 ```pre-commit install```
 
-## Example
+## Example and Tutorial
 
 The example below can be found in greater detail in this [Jupyter Notebook](https://github.com/moeyensj/difi/tree/main/examples/tutorial.ipynb).
-
-### Assumed Inputs
-`difi` is designed to analyze a set of linkages made by external software where some of the underlying true linkages are known. It needs just two DataFrames of data:
-- 1) a DataFrame containing observations, with a column for observation ID and a column for the underlying truth (don't worry! -- `difi` can handle false positives and unknown truths as well)  
-
-![observations](docs/images/observations_noclasses.png "Observations")
-
-- 2) a DataFrame describing the linkages that were found in the observations by the external software. This DataFrame needs just two columns, one with the linkage ID and the other with the observation IDs that form that linkage  
-
-![linkage_members](docs/images/linkage_members.png "linkage_members")
-
-### What Can I Find?
-In most cases the user can determine what known truths in their observations dataframe can be found by their respective linking algorithm. `difi` has two simple findability metrics:
-
-The 'min_obs' metric: any object with this many or more observations is considered findable.  
-![analyzeObservations](docs/images/cifi_min_obs.png "min_obs")
-
-The 'nightly_linkages' metric: any object with this many or more observations is considered findable.  
-![analyzeObservations](docs/images/cifi_nightly_linkages.png "nightly_linkages")
-
-Which objects are findable?  
-![all_truths](docs/images/cifi_all_truths.png "all_truths")
-
-What observations made each object findable?  
-![findable_observations](docs/images/cifi_findable_observations.png "findable_observations")
-
-A summary of what kinds of objects are findable might be useful.  
-![summary](docs/images/cifi_summary_min_obs.png "summary")
-
-### Did I Find It?
-Now lets see what the external linking software did find.
-
-![analyzeLinkages](docs/images/difi.png "analyzeLinkages.png")
-
-`difi` assumes there to be three different types of linkages:
-- 'pure': all observations in a linkage belong to a unique truth
-- 'partial': up to a certain percentage of non-unique thruths are allowed so long as one truth has at least the minimum required number of unique observations
-- 'mixed': a linkage containing different observations belonging to different truths, we avoid using the word 'false' for these linkages as they may contain unknown truths depending on the use case. We leave interpretation up to the user.
-
-Thanks to the power of `pandas` it can be super easy to isolate the different linkage types and analyze them separately.
-Selecting 'pure' linkages:
-
-![all_linkages_pure](docs/images/pure_linkages.png "pure_linkages")
-
-Selecting 'partial' linkages:
-
-![all_linkages_partial](docs/images/partial_linkages.png "all_linkages_partial")
-
-Selecting 'mixed' linkages:
-
-![all_linkages_mixed](docs/images/mixed_linkages.png "all_linkages_mixed")
-
-
-Understanding the specifics behind each linkage is one thing, but how did the linking algorithm perform on an object by object basis.
-![allTruths](docs/images/difi_all_truths.png "all_truths")
-
-### Tutorial
-A detailed tutorial on `difi` functionality can be found [here](https://github.com/moeyensj/difi/tree/main/examples).
