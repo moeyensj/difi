@@ -481,9 +481,10 @@ def createTestDataSet(min_obs, min_linkage_length, max_contamination_percentage)
         }
     )
 
-    summary = summary.append(summary_all)
-    summary.sort_values(by=["num_obs", "num_members"], ascending=[False, True], inplace=True)
-    summary.reset_index(inplace=True, drop=True)
+    summary = pd.concat([summary, summary_all], ignore_index=True)
+    summary.sort_values(
+        by=["num_obs", "num_members"], ascending=[False, True], inplace=True, ignore_index=True
+    )
 
     all_truths.loc[:, "findable"] = 0
     all_truths.loc[all_truths["num_obs"] >= min_obs, "findable"] = 1
