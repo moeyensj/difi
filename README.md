@@ -1,18 +1,18 @@
 # difi
 Did I Find It?  
 
-[![docker - Build, Lint, and Test](https://github.com/moeyensj/difi/actions/workflows/docker-build-lint-test.yml/badge.svg)](https://github.com/moeyensj/difi/actions/workflows/docker-build-lint-test.yml)
-[![pip - Build, Lint, and Test](https://github.com/moeyensj/difi/actions/workflows/pip-build-lint-test.yml/badge.svg)](https://github.com/moeyensj/difi/actions/workflows/pip-build-lint-test.yml)
-[![conda - Build, Lint, and Test](https://github.com/moeyensj/difi/actions/workflows/conda-build-lint-test.yml/badge.svg)](https://github.com/moeyensj/difi/actions/workflows/conda-build-lint-test.yml)  
 [![Python 3.7+](https://img.shields.io/badge/Python-3.7%2B-blue)](https://img.shields.io/badge/Python-3.7%2B-blue)
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
-[![Coverage Status](https://coveralls.io/repos/github/moeyensj/difi/badge.svg?branch=main)](https://coveralls.io/github/moeyensj/difi?branch=main)
 [![DOI](https://zenodo.org/badge/152989392.svg)](https://zenodo.org/badge/latestdoi/152989392)  
+[![docker - Build, Lint, and Test](https://github.com/moeyensj/difi/actions/workflows/docker-build-lint-test.yml/badge.svg)](https://github.com/moeyensj/difi/actions/workflows/docker-build-lint-test.yml)
+[![conda - Build, Lint, and Test](https://github.com/moeyensj/difi/actions/workflows/conda-build-lint-test.yml/badge.svg)](https://github.com/moeyensj/difi/actions/workflows/conda-build-lint-test.yml)
+[![pip - Build, Lint, Test, and Coverage](https://github.com/moeyensj/difi/actions/workflows/pip-build-lint-test-coverage.yml/badge.svg)](https://github.com/moeyensj/difi/actions/workflows/pip-build-lint-test-coverage.yml)  
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
+[![Coverage Status](https://coveralls.io/repos/github/moeyensj/difi/badge.svg?branch=main)](https://coveralls.io/github/moeyensj/difi?branch=main)
+[![Docker Pulls](https://img.shields.io/docker/pulls/moeyensj/difi)](https://hub.docker.com/r/moeyensj/difi)  
 [![Anaconda-Server Badge](https://anaconda.org/moeyensj/difi/badges/version.svg)](https://anaconda.org/moeyensj/difi)
 [![Anaconda-Server Badge](https://anaconda.org/moeyensj/difi/badges/platforms.svg)](https://anaconda.org/moeyensj/difi)
 [![Anaconda-Server Badge](https://anaconda.org/moeyensj/difi/badges/downloads.svg)](https://anaconda.org/moeyensj/difi)
-[![Docker Pulls](https://img.shields.io/docker/pulls/moeyensj/difi)](https://hub.docker.com/r/moeyensj/difi)
-
 
 ## About
 `difi` is a simple package that takes pre-formatted linkage information from software such as [MOPS](https://github.com/lsst/mops_daymops), [pytrax](https://github.com/pytrax/pytrax), or [THOR](https://github.com/moeyensj/thor) and analyzes which objects have been found given a set of known labels (or truths). A key performance criteria is that `difi` needs to be fast by avoiding Python for loops and instead uses clever `pandas.DataFrame` manipulation.
