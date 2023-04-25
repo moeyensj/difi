@@ -55,12 +55,16 @@ def _findNightlyLinkages(
         linkage_obs = obs_ids[np.isin(times, linkage_times)]
         linkage_nights, night_counts = np.unique(nights[np.isin(obs_ids, linkage_obs)], return_counts=True)
 
+        # Make sure that there are enough observations on each night to make a linkage
+        valid_nights = linkage_nights[night_counts >= linkage_min_obs]
+        linkage_obs = obs_ids[np.isin(nights, valid_nights)]
+
         # Make sure that the number of observations is still linkage_min_obs * min_linkage_nights
         enough_obs = len(linkage_obs) >= (linkage_min_obs * min_linkage_nights)
 
         # Make sure that the number of unique nights on which a linkage is made
         # is still equal to or greater than the minimum number of nights.
-        enough_nights = len(night_counts[night_counts >= linkage_min_obs]) >= min_linkage_nights
+        enough_nights = len(valid_nights) >= min_linkage_nights
 
         if not enough_obs or not enough_nights:
             return np.array([])
