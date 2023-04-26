@@ -61,18 +61,35 @@ def test_observations():
 
 
 @pytest.fixture
-def test_linkage_members(test_observations):
+def test_linkages(test_observations):
     """
     Create a test data set of linkages.
 
     Returns
     -------
     linkage_members : `~pandas.DataFrame`
-        A table of linkage members with the following columns:
+        DataFrame containing the observation IDs and linkage IDs for
+        each linkage in (linkage_id, obs_id) pairs.
+    all_linkages_expected: `~pandas.DataFrame`
+        A per-linkage summary.
     """
     linkage_members = {
         "linkage_id": [],
         "obs_id": [],
+    }
+    all_linkages_expected = {
+        "linkage_id": [],
+        "num_members": [],
+        "num_obs": [],
+        "pure": [],
+        "pure_complete": [],
+        "partial": [],
+        "mixed": [],
+        "contamination_percentage": [],
+        "found_pure": [],
+        "found_partial": [],
+        "found": [],
+        "linked_truth": [],
     }
 
     rng = np.random.default_rng(20230425)
@@ -80,16 +97,44 @@ def test_linkage_members(test_observations):
     # Create pure complete linkages for each object
     for object_id in ["23636", "58177", "82134"]:
         obs_ids = test_observations[test_observations["truth"] == object_id]["obs_id"].values
+        linkage_id = f"pure_complete_{object_id}"
         for obs_id in obs_ids:
-            linkage_members["linkage_id"].append(f"pure_complete_{object_id}")
+            linkage_members["linkage_id"].append(linkage_id)
             linkage_members["obs_id"].append(obs_id)
+
+        all_linkages_expected["linkage_id"].append(linkage_id)
+        all_linkages_expected["num_members"].append(1)
+        all_linkages_expected["num_obs"].append(len(obs_ids))
+        all_linkages_expected["pure"].append(True)
+        all_linkages_expected["pure_complete"].append(True)
+        all_linkages_expected["partial"].append(False)
+        all_linkages_expected["mixed"].append(False)
+        all_linkages_expected["contamination_percentage"].append(0.0)
+        all_linkages_expected["found_pure"].append(True)
+        all_linkages_expected["found_partial"].append(False)
+        all_linkages_expected["found"].append(True)
+        all_linkages_expected["linked_truth"].append(object_id)
 
     # Create pure linkages but not complete for each object
     for object_id in ["23636", "58177", "82134"]:
         obs_ids = test_observations[test_observations["truth"] == object_id]["obs_id"].values[2:]
+        linkage_id = f"pure_{object_id}"
         for obs_id in obs_ids:
-            linkage_members["linkage_id"].append(f"pure_{object_id}")
+            linkage_members["linkage_id"].append(linkage_id)
             linkage_members["obs_id"].append(obs_id)
+
+        all_linkages_expected["linkage_id"].append(linkage_id)
+        all_linkages_expected["num_members"].append(1)
+        all_linkages_expected["num_obs"].append(len(obs_ids))
+        all_linkages_expected["pure"].append(True)
+        all_linkages_expected["pure_complete"].append(False)
+        all_linkages_expected["partial"].append(False)
+        all_linkages_expected["mixed"].append(False)
+        all_linkages_expected["contamination_percentage"].append(0.0)
+        all_linkages_expected["found_pure"].append(True)
+        all_linkages_expected["found_partial"].append(False)
+        all_linkages_expected["found"].append(True)
+        all_linkages_expected["linked_truth"].append(object_id)
 
     # Create partial linkages for each object (7 observations each)
     for object_id in ["23636", "58177", "82134"]:
@@ -99,9 +144,27 @@ def test_linkage_members(test_observations):
         obs_ids_linkage = rng.choice(other_obs_ids, size=2, replace=False)
         obs_ids = np.concatenate([obs_ids, obs_ids_linkage])
         obs_ids.sort()
+
+        num_members = test_observations[test_observations["obs_id"].isin(obs_ids)]["truth"].nunique()
+        contamination_percentage = 100.0 * len(obs_ids_linkage) / len(obs_ids)
+
+        linkage_id = f"partial_{object_id}"
         for obs_id in obs_ids:
-            linkage_members["linkage_id"].append(f"partial_{object_id}")
+            linkage_members["linkage_id"].append(linkage_id)
             linkage_members["obs_id"].append(obs_id)
+
+        all_linkages_expected["linkage_id"].append(linkage_id)
+        all_linkages_expected["num_members"].append(num_members)
+        all_linkages_expected["num_obs"].append(len(obs_ids))
+        all_linkages_expected["pure"].append(False)
+        all_linkages_expected["pure_complete"].append(False)
+        all_linkages_expected["partial"].append(True)
+        all_linkages_expected["mixed"].append(False)
+        all_linkages_expected["contamination_percentage"].append(contamination_percentage)
+        all_linkages_expected["found_pure"].append(False)
+        all_linkages_expected["found_partial"].append(True)
+        all_linkages_expected["found"].append(True)
+        all_linkages_expected["linked_truth"].append(object_id)
 
     # Create mixed linkages (7 observations each)
     for i, object_id in enumerate(["23636", "58177", "82134"]):
@@ -111,10 +174,28 @@ def test_linkage_members(test_observations):
         obs_ids_linkage = rng.choice(other_obs_ids, size=5, replace=False)
         obs_ids = np.concatenate([obs_ids, obs_ids_linkage])
         obs_ids.sort()
+
+        num_members = test_observations[test_observations["obs_id"].isin(obs_ids)]["truth"].nunique()
+
+        linkage_id = f"mixed_{i}"
         for obs_id in obs_ids:
-            linkage_members["linkage_id"].append(f"mixed_{i}")
+            linkage_members["linkage_id"].append(linkage_id)
             linkage_members["obs_id"].append(obs_id)
 
-    linkage_members = pd.DataFrame(linkage_members)
+        all_linkages_expected["linkage_id"].append(linkage_id)
+        all_linkages_expected["num_members"].append(num_members)
+        all_linkages_expected["num_obs"].append(len(obs_ids))
+        all_linkages_expected["pure"].append(False)
+        all_linkages_expected["pure_complete"].append(False)
+        all_linkages_expected["partial"].append(False)
+        all_linkages_expected["mixed"].append(True)
+        all_linkages_expected["contamination_percentage"].append(np.NaN)
+        all_linkages_expected["found_pure"].append(False)
+        all_linkages_expected["found_partial"].append(False)
+        all_linkages_expected["found"].append(False)
+        all_linkages_expected["linked_truth"].append("nan")
 
-    return linkage_members
+    linkage_members = pd.DataFrame(linkage_members)
+    all_linkages_expected = pd.DataFrame(all_linkages_expected)
+
+    return linkage_members, all_linkages_expected
