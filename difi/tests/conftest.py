@@ -65,6 +65,104 @@ def test_linkages(test_observations):
     """
     Create a test data set of linkages.
 
+    linkage_id,obs_id,truth
+    pure_complete_23636,obs_000000,23636
+    pure_complete_23636,obs_000001,23636
+    pure_complete_23636,obs_000002,23636
+    pure_complete_23636,obs_000003,23636
+    pure_complete_23636,obs_000004,23636
+    pure_complete_23636,obs_000005,23636
+    pure_complete_58177,obs_000006,58177
+    pure_complete_58177,obs_000007,58177
+    pure_complete_58177,obs_000008,58177
+    pure_complete_58177,obs_000009,58177
+    pure_complete_58177,obs_000010,58177
+    pure_complete_58177,obs_000011,58177
+    pure_complete_58177,obs_000012,58177
+    pure_complete_58177,obs_000013,58177
+    pure_complete_58177,obs_000014,58177
+    pure_complete_58177,obs_000015,58177
+    pure_complete_82134,obs_000016,82134
+    pure_complete_82134,obs_000017,82134
+    pure_complete_82134,obs_000018,82134
+    pure_complete_82134,obs_000019,82134
+    pure_complete_82134,obs_000020,82134
+    pure_complete_82134,obs_000021,82134
+    pure_complete_82134,obs_000022,82134
+    pure_complete_82134,obs_000023,82134
+    pure_complete_82134,obs_000024,82134
+    pure_complete_82134,obs_000025,82134
+    pure_complete_82134,obs_000026,82134
+    pure_complete_82134,obs_000027,82134
+    pure_complete_82134,obs_000028,82134
+    pure_complete_82134,obs_000029,82134
+    pure_23636,obs_000002,23636
+    pure_23636,obs_000003,23636
+    pure_23636,obs_000004,23636
+    pure_23636,obs_000005,23636
+    pure_58177,obs_000008,58177
+    pure_58177,obs_000009,58177
+    pure_58177,obs_000010,58177
+    pure_58177,obs_000011,58177
+    pure_58177,obs_000012,58177
+    pure_58177,obs_000013,58177
+    pure_58177,obs_000014,58177
+    pure_58177,obs_000015,58177
+    pure_82134,obs_000018,82134
+    pure_82134,obs_000019,82134
+    pure_82134,obs_000020,82134
+    pure_82134,obs_000021,82134
+    pure_82134,obs_000022,82134
+    pure_82134,obs_000023,82134
+    pure_82134,obs_000024,82134
+    pure_82134,obs_000025,82134
+    pure_82134,obs_000026,82134
+    pure_82134,obs_000027,82134
+    pure_82134,obs_000028,82134
+    pure_82134,obs_000029,82134
+    partial_23636,obs_000000,23636
+    partial_23636,obs_000002,23636
+    partial_23636,obs_000003,23636
+    partial_23636,obs_000004,23636
+    partial_23636,obs_000005,23636
+    partial_23636,obs_000008,58177
+    partial_23636,obs_000026,82134
+    partial_58177,obs_000006,58177
+    partial_58177,obs_000010,58177
+    partial_58177,obs_000011,58177
+    partial_58177,obs_000012,58177
+    partial_58177,obs_000015,58177
+    partial_58177,obs_000027,82134
+    partial_58177,obs_000028,82134
+    partial_82134,obs_000004,23636
+    partial_82134,obs_000012,58177
+    partial_82134,obs_000017,82134
+    partial_82134,obs_000020,82134
+    partial_82134,obs_000022,82134
+    partial_82134,obs_000025,82134
+    partial_82134,obs_000026,82134
+    mixed_0,obs_000000,23636
+    mixed_0,obs_000005,23636
+    mixed_0,obs_000009,58177
+    mixed_0,obs_000015,58177
+    mixed_0,obs_000021,82134
+    mixed_0,obs_000024,82134
+    mixed_0,obs_000027,82134
+    mixed_1,obs_000003,23636
+    mixed_1,obs_000006,58177
+    mixed_1,obs_000008,58177
+    mixed_1,obs_000020,82134
+    mixed_1,obs_000023,82134
+    mixed_1,obs_000027,82134
+    mixed_1,obs_000028,82134
+    mixed_2,obs_000002,23636
+    mixed_2,obs_000005,23636
+    mixed_2,obs_000012,58177
+    mixed_2,obs_000013,58177
+    mixed_2,obs_000015,58177
+    mixed_2,obs_000016,82134
+    mixed_2,obs_000025,82134
+
     Returns
     -------
     linkage_members : `~pandas.DataFrame`
@@ -92,7 +190,7 @@ def test_linkages(test_observations):
         "linked_truth": [],
     }
 
-    rng = np.random.default_rng(20230425)
+    rng = np.random.default_rng(20230428)
 
     # Create pure complete linkages for each object
     for object_id in ["23636", "58177", "82134"]:
