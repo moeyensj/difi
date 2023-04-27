@@ -1,10 +1,17 @@
 import numpy as np
+import pandas as pd
 import pytest
 
 from ..difi import analyzeLinkages
 
 
-def assert_valid_pure_linkage(linkage_id, all_linkages, linkage_members, observations, pure_complete=False):
+def assert_valid_pure_linkage(
+    linkage_id: str,
+    all_linkages: pd.DataFrame,
+    linkage_members: pd.DataFrame,
+    observations: pd.DataFrame,
+    pure_complete: bool = False,
+) -> None:
     """
     Checks that the given linkage is correctly identified as a pure linkage.
     """
@@ -36,8 +43,11 @@ def assert_valid_pure_linkage(linkage_id, all_linkages, linkage_members, observa
 
 
 def assert_valid_partial_linkage(
-    linkage_id, all_linkages, linkage_members, observations, pure_complete=False
-):
+    linkage_id: str,
+    all_linkages: pd.DataFrame,
+    linkage_members: pd.DataFrame,
+    observations: pd.DataFrame,
+) -> None:
     """
     Checks that the given linkage is correctly identified as a pure linkage.
     """
@@ -63,7 +73,12 @@ def assert_valid_partial_linkage(
     assert linkage["contamination_percentage"].values[0] == contamination_percentage
 
 
-def assert_valid_mixed_linkage(linkage_id, all_linkages, linkage_members, observations, pure_complete=False):
+def assert_valid_mixed_linkage(
+    linkage_id: str,
+    all_linkages: pd.DataFrame,
+    linkage_members: pd.DataFrame,
+    observations: pd.DataFrame,
+) -> None:
     """
     Checks that the given linkage is correctly identified as a pure linkage.
     """
@@ -85,17 +100,20 @@ def assert_valid_mixed_linkage(linkage_id, all_linkages, linkage_members, observ
     assert np.isnan(linkage["contamination_percentage"].values[0])
 
 
-def test_analyzeLinkages_no_classes_0pct_contamination(test_observations, test_linkages):
+def test_analyzeLinkages_no_classes_no_all_truths_0pct_contamination(
+    test_observations, test_linkages, test_all_truths
+):
     test_linkage_members, expected_all_linkages = test_linkages
 
-    # Test analyzeLinkages when no classes are given
+    # Test analyzeLinkages when no classes are given and no all_truths are given
     all_linkages, all_truths, summary = analyzeLinkages(
         test_observations,
         test_linkage_members,
-        min_obs=5,
+        min_obs=4,
         contamination_percentage=0.0,
         classes=None,
     )
+    all_truths.sort_values(by=["truth"], inplace=True, ignore_index=True)
 
     # --- Test the summary dataframe ---
     # No all_truths dataframe was passed so completeness should be NaN
@@ -153,20 +171,142 @@ def test_analyzeLinkages_no_classes_0pct_contamination(test_observations, test_l
     for linkage_id in partial_linkages + mixed_linkages:
         assert_valid_mixed_linkage(linkage_id, all_linkages, test_linkage_members, test_observations)
 
+    # --- Test the all_truths dataframe ---
+    pd.testing.assert_frame_equal(all_truths[["truth", "num_obs"]], test_all_truths[["truth", "num_obs"]])
+    for col in ["findable"]:
+        assert np.isnan(all_truths[col].values[0])
+
+    assert all_truths["found_pure"].sum() == 6
+    assert all_truths["found_partial"].sum() == 0
+    assert all_truths["found"].sum() == 6
+    assert all_truths["pure"].sum() == 6
+    assert all_truths["pure_complete"].sum() == 3
+    assert all_truths["partial"].sum() == 0
+    assert all_truths["partial_contaminant"].sum() == 0
+    assert all_truths["mixed"].sum() == 17
+    assert all_truths["obs_in_pure"].sum() == 54
+    assert all_truths["obs_in_pure_complete"].sum() == 30
+    assert all_truths["obs_in_partial"].sum() == 0
+    assert all_truths["obs_in_partial_contaminant"].sum() == 0
+    assert all_truths["obs_in_mixed"].sum() == 42
+
     return
 
 
-def test_analyzeLinkages_no_classes_30pct_contamination(test_observations, test_linkages):
+def test_analyzeLinkage_no_classes_with_all_truths_0pc_contamination(
+    test_observations, test_linkages, test_all_truths
+):
+    test_linkage_members, expected_all_linkages = test_linkages
+
+    # Test analyzeLinkages when no classes are given and all_truths are given
+    # Set findable column in test all truths
+    test_all_truths.loc[:, "findable"] = 1
+    all_linkages, all_truths, summary = analyzeLinkages(
+        test_observations,
+        test_linkage_members,
+        min_obs=4,
+        contamination_percentage=0.0,
+        classes=None,
+        all_truths=test_all_truths[["truth", "num_obs", "findable"]],
+    )
+    all_truths.sort_values(by=["truth"], inplace=True, ignore_index=True)
+
+    # --- Test the summary dataframe ---
+    # All_truths dataframe was passed so these columns should now not be NaN
+    all_mask = summary["class"] == "All"
+    for col in [
+        "completeness",
+        "findable",
+        "findable_found",
+        "findable_missed",
+        "not_findable_found",
+        "not_findable_missed",
+    ]:
+        assert not np.isnan(summary[all_mask][col].values[0])
+    assert summary[all_mask]["completeness"].values[0] == 100.0
+    assert summary[all_mask]["findable"].values[0] == 3
+    assert summary[all_mask]["findable_found"].values[0] == 3
+    assert summary[all_mask]["findable_missed"].values[0] == 0
+    assert summary[all_mask]["not_findable_found"].values[0] == 0
+    assert summary[all_mask]["not_findable_missed"].values[0] == 0
+
+    assert summary[all_mask]["num_members"].values[0] == 3
+    assert summary[all_mask]["num_obs"].values[0] == 30
+    assert summary[all_mask]["linkages"].values[0] == test_linkage_members["linkage_id"].nunique()
+    assert summary[all_mask]["pure_complete_linkages"].values[0] == 3
+    assert summary[all_mask]["pure_linkages"].values[0] == 6
+    # With 0% contamination there should be no partial linkages
+    assert summary[all_mask]["partial_linkages"].values[0] == 0
+    assert summary[all_mask]["mixed_linkages"].values[0] == 6
+
+    assert summary[all_mask]["unique_in_pure_linkages"].values[0] == 3
+    assert summary[all_mask]["unique_in_pure_complete_linkages"].values[0] == 3
+    assert summary[all_mask]["unique_in_pure_and_partial_linkages"].values[0] == 0
+    # With 0% contamination there should be no partial linkages
+    assert summary[all_mask]["unique_in_partial_linkages"].values[0] == 0
+    assert summary[all_mask]["unique_in_partial_contaminant_linkages"].values[0] == 0
+    assert summary[all_mask]["unique_in_mixed_linkages"].values[0] == 3
+    # Pure complete + pure linkages
+    assert summary[all_mask]["obs_in_pure_linkages"].values[0] == 30 + 30 - 2 * 3
+    assert summary[all_mask]["obs_in_pure_complete_linkages"].values[0] == 30
+    assert summary[all_mask]["obs_in_partial_linkages"].values[0] == 0
+    assert summary[all_mask]["obs_in_partial_contaminant_linkages"].values[0] == 0
+    # With 0% contamination there should be no partial linkages so they should count
+    # as mixed
+    assert summary[all_mask]["obs_in_mixed_linkages"].values[0] == 42
+
+    # --- Test the all_linkages dataframe ---
+    pure_linkages = ["pure_23636", "pure_58177", "pure_82134"]
+    pure_complete_linkages = ["pure_complete_23636", "pure_complete_58177", "pure_complete_82134"]
+    partial_linkages = ["partial_23636", "partial_58177", "partial_82134"]
+    mixed_linkages = ["mixed_0", "mixed_1", "mixed_2"]
+
+    for linkage_id in pure_linkages:
+        assert_valid_pure_linkage(linkage_id, all_linkages, test_linkage_members, test_observations)
+
+    for linkage_id in pure_complete_linkages:
+        assert_valid_pure_linkage(
+            linkage_id, all_linkages, test_linkage_members, test_observations, pure_complete=True
+        )
+
+    # There should be no partial linkages with 0% contamination
+    for linkage_id in partial_linkages + mixed_linkages:
+        assert_valid_mixed_linkage(linkage_id, all_linkages, test_linkage_members, test_observations)
+
+    # --- Test the all_truths dataframe ---
+    pd.testing.assert_frame_equal(all_truths[["truth", "num_obs"]], test_all_truths[["truth", "num_obs"]])
+    assert all_truths["findable"].sum() == 3
+    assert all_truths["found_pure"].sum() == 6
+    assert all_truths["found_partial"].sum() == 0
+    assert all_truths["found"].sum() == 6
+    assert all_truths["pure"].sum() == 6
+    assert all_truths["pure_complete"].sum() == 3
+    assert all_truths["partial"].sum() == 0
+    assert all_truths["partial_contaminant"].sum() == 0
+    assert all_truths["mixed"].sum() == 17
+    assert all_truths["obs_in_pure"].sum() == 54
+    assert all_truths["obs_in_pure_complete"].sum() == 30
+    assert all_truths["obs_in_partial"].sum() == 0
+    assert all_truths["obs_in_partial_contaminant"].sum() == 0
+    assert all_truths["obs_in_mixed"].sum() == 42
+
+    return
+
+
+def test_analyzeLinkages_no_classes_no_all_truths_30pct_contamination(
+    test_observations, test_linkages, test_all_truths
+):
     test_linkage_members, expected_all_linkages = test_linkages
 
     # Test analyzeLinkages when no classes are given
     all_linkages, all_truths, summary = analyzeLinkages(
         test_observations,
         test_linkage_members,
-        min_obs=5,
+        min_obs=4,
         contamination_percentage=30.0,
         classes=None,
     )
+    all_truths.sort_values(by=["truth"], inplace=True, ignore_index=True)
 
     # --- Test the summary dataframe ---
     # No all_truths dataframe was passed so completeness should be NaN
@@ -227,10 +367,29 @@ def test_analyzeLinkages_no_classes_30pct_contamination(test_observations, test_
     for linkage_id in mixed_linkages:
         assert_valid_mixed_linkage(linkage_id, all_linkages, test_linkage_members, test_observations)
 
+    # --- Test the all_truths dataframe ---
+    pd.testing.assert_frame_equal(all_truths[["truth", "num_obs"]], test_all_truths[["truth", "num_obs"]])
+    for col in ["findable"]:
+        assert np.isnan(all_truths[col].values[0])
+
+    assert all_truths["found_pure"].sum() == 6
+    assert all_truths["found_partial"].sum() == 3
+    assert all_truths["found"].sum() == 9
+    assert all_truths["pure"].sum() == 6
+    assert all_truths["pure_complete"].sum() == 3
+    assert all_truths["partial"].sum() == 3
+    assert all_truths["partial_contaminant"].sum() == 5
+    assert all_truths["mixed"].sum() == 9
+    assert all_truths["obs_in_pure"].sum() == 54
+    assert all_truths["obs_in_pure_complete"].sum() == 30
+    assert all_truths["obs_in_partial"].sum() == 15
+    assert all_truths["obs_in_partial_contaminant"].sum() == 6
+    assert all_truths["obs_in_mixed"].sum() == 21
+
     return
 
 
-def test_analyzeLinkages_classes_column_0pct_contamination(test_observations, test_linkages):
+def test_analyzeLinkages_classes_column_0pct_contamination(test_observations, test_linkages, test_all_truths):
     test_linkage_members, expected_all_linkages = test_linkages
 
     # Test analyzeLinkages when a class column is given
@@ -246,6 +405,7 @@ def test_analyzeLinkages_classes_column_0pct_contamination(test_observations, te
         contamination_percentage=0.0,
         classes="class",
     )
+    all_truths.sort_values(by=["truth"], inplace=True, ignore_index=True)
 
     # --- Test the summary dataframe ---
     # No all_truths dataframe was passed so completeness should be NaN
@@ -309,6 +469,9 @@ def test_analyzeLinkages_classes_column_0pct_contamination(test_observations, te
     # There should be no partial linkages with 0% contamination
     for linkage_id in partial_linkages + mixed_linkages:
         assert_valid_mixed_linkage(linkage_id, all_linkages, test_linkage_members, test_observations)
+
+    # --- Test the all_truths dataframe ---
+    pd.testing.assert_frame_equal(all_truths[["truth", "num_obs"]], test_all_truths[["truth", "num_obs"]])
 
     return
 

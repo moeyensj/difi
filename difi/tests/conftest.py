@@ -297,3 +297,21 @@ def test_linkages(test_observations):
     all_linkages_expected = pd.DataFrame(all_linkages_expected)
 
     return linkage_members, all_linkages_expected
+
+
+@pytest.fixture
+def test_all_truths(test_observations):
+    """
+    Creates a dataframe with the truth for each observation.
+    """
+    all_truths_dict = {
+        "truth": [],
+        "num_obs": [],
+    }
+    for truth in test_observations["truth"].unique():
+        all_truths_dict["truth"].append(truth)
+        all_truths_dict["num_obs"].append(len(test_observations[test_observations["truth"] == truth]))
+
+    all_truths = pd.DataFrame(all_truths_dict)
+    all_truths.sort_values(by="truth", inplace=True, ignore_index=True)
+    return all_truths
