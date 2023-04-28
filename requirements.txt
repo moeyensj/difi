@@ -2,6 +2,7 @@ numpy
 pandas
 pytest
 pytest-cov
+pytest-benchmark
 pre-commit
 coveralls
 setuptools>=45
