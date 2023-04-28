@@ -1,30 +1,43 @@
 import os
 
-import numpy as np
+import pandas as pd
 from pandas.testing import assert_frame_equal
 
 from ..io import readLinkagesByLineFile
-from .create_test_data import createTestDataSet
 
 
 def test_readLinkagesByLineFile():
-    # --- Test readLinkagesByLineFile using test data set
-    (
-        observations_test,
-        all_truths_test,
-        linkage_members_test,
-        all_linkages_test,
-        summary_test,
-    ) = createTestDataSet(5, 5, 30)
+    # Test readLinkagesByLineFile using test data set
 
-    linkages_by_line = linkage_members_test.groupby("linkage_id")["obs_id"].apply(np.array).to_frame()
     linkages_by_line_file = os.path.join(os.path.dirname(__file__), "linkagesByLine.txt")
-    with open(linkages_by_line_file, "w") as f:
-        for linkage in linkages_by_line["obs_id"].values:
-            f.write(" ".join(linkage) + "\n")
-
     linkage_members = readLinkagesByLineFile(linkages_by_line_file)
 
-    assert_frame_equal(linkage_members[["obs_id"]], linkage_members_test[["obs_id"]])
+    # Create expected linkage_members DataFrame
+    expected_linkage_members = {
+        "linkage_id": [],
+        "obs_id": [],
+    }
+    linkages = {
+        "1": [
+            "obs00002",
+            "obs00017",
+            "obs00068",
+            "obs00099",
+            "obs00102",
+        ],
+        "2": ["obs00000", "obs00008", "obs00013", "obs00024", "obs00049", "obs00051"],
+        "3": [
+            "obs00007",
+            "obs00039",
+            "obs00046",
+            "obs00056",
+        ],
+    }
+    for linkage_id, obs_ids in linkages.items():
+        for obs_id in obs_ids:
+            expected_linkage_members["linkage_id"].append(linkage_id)
+            expected_linkage_members["obs_id"].append(obs_id)
+    expected_linkage_members = pd.DataFrame(expected_linkage_members)
 
+    assert_frame_equal(linkage_members, expected_linkage_members)
     return

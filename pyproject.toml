@@ -54,8 +54,12 @@ repository = "https://github.com/moeyensj/difi"
 tests = [
     "pytest",
     "pytest-cov",
+    "pytest-benchmark",
     "pre-commit",
 ]
+
+[tool.pytest.ini_options]
+addopts = ["--benchmark-skip"]
 
 [tool.setuptools]
 include-package-data = true
