@@ -1,6 +1,6 @@
 import pytest
 
-from ..metrics import calcFindableMinObs, calcFindableNightlyLinkages
+from ..metrics import MinObsMetric, NightlyLinkagesMetric
 
 
 @pytest.mark.parametrize(
@@ -14,7 +14,8 @@ from ..metrics import calcFindableMinObs, calcFindableNightlyLinkages
 @pytest.mark.benchmark(group="metrics_min_obs")
 def test_benchmark_calcFindableMinObs(benchmark, test_observations, min_obs):
 
-    benchmark(calcFindableMinObs, test_observations, min_obs=min_obs)
+    metric = MinObsMetric(min_obs=min_obs)
+    benchmark(metric.run, test_observations)
 
     return
 
@@ -35,11 +36,13 @@ def test_benchmark_calcFindableNightlyLinkages(
     benchmark, test_observations, linkage_min_obs, max_obs_separation, min_linkage_nights
 ):
 
-    benchmark(
-        calcFindableNightlyLinkages,
-        test_observations,
+    metric = NightlyLinkagesMetric(
         linkage_min_obs=linkage_min_obs,
         max_obs_separation=max_obs_separation,
         min_linkage_nights=min_linkage_nights,
+    )
+    benchmark(
+        metric.run,
+        test_observations,
     )
     return

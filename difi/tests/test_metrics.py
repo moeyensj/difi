@@ -1,12 +1,27 @@
 import numpy as np
+import pandas as pd
 
-from ..metrics import calcFindableMinObs, calcFindableNightlyLinkages
+from ..metrics import FindabilityMetric, MinObsMetric, NightlyLinkagesMetric
+
+
+def test_FindabilityMetric__compute_windows():
+    # Test that the function returns the correct windows when detection_window is None
+    test_observations = pd.DataFrame(
+        {"night": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]},
+    )
+    windows = FindabilityMetric._compute_windows(test_observations, detection_window=None)
+    assert windows == [(1, 10)]
+
+    # Test that the function returns the correct windows when detection_window is 2
+    windows = FindabilityMetric._compute_windows(test_observations, detection_window=2)
+    assert windows == [(1, 3), (2, 4), (3, 5), (4, 6), (5, 7), (6, 8), (7, 9), (8, 10), (9, 10)]
 
 
 def test_calcFindableMinObs(test_observations):
 
     # All three objects should be findable
-    findable_observations = calcFindableMinObs(test_observations, min_obs=1)
+    metric = MinObsMetric(min_obs=5)
+    findable_observations, window_summary = metric.run(test_observations)
     assert len(findable_observations) == 3
 
     findable_ids = {k for k in findable_observations["truth"].values}
@@ -18,7 +33,8 @@ def test_calcFindableMinObs(test_observations):
         )
 
     # Only two objects should be findable
-    findable_observations = calcFindableMinObs(test_observations, min_obs=10)
+    metric = MinObsMetric(min_obs=10)
+    findable_observations, window_summary = metric.run(test_observations)
 
     assert len(findable_observations) == 2
     for object_id in ["58177", "82134"]:
@@ -29,7 +45,8 @@ def test_calcFindableMinObs(test_observations):
         )
 
     # No objects should be findable
-    findable_observations = calcFindableMinObs(test_observations, min_obs=16)
+    metric = MinObsMetric(min_obs=16)
+    findable_observations, window_summary = metric.run(test_observations)
     assert len(findable_observations) == 0
 
     return
@@ -39,9 +56,8 @@ def test_calcFindableNightlyLinkages(test_observations):
 
     # All three objects should be findable (each object has at least two tracklets
     # with consecutive observations no more than 2 hours apart)
-    findable_observations = calcFindableNightlyLinkages(
-        test_observations, linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=2
-    )
+    metric = NightlyLinkagesMetric(linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=2)
+    findable_observations, window_summary = metric.run(test_observations)
     assert len(findable_observations) == 3
 
     findable_ids = {k for k in findable_observations["truth"].values}
@@ -91,9 +107,8 @@ def test_calcFindableNightlyLinkages(test_observations):
 
     # Only two objects should be findable (each object has at least three tracklets
     # with consecutive observations no more than 2 hours apart)
-    findable_observations = calcFindableNightlyLinkages(
-        test_observations, linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=3
-    )
+    metric = NightlyLinkagesMetric(linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=3)
+    findable_observations, window_summary = metric.run(test_observations)
     assert len(findable_observations) == 2
 
     findable_ids = {k for k in findable_observations["truth"].values}
@@ -130,9 +145,8 @@ def test_calcFindableNightlyLinkages(test_observations):
 
     # Only one object should be findable (this object has at least two tracklets
     # with at least 3 consecutive observations no more than 2 hours apart)
-    findable_observations = calcFindableNightlyLinkages(
-        test_observations, linkage_min_obs=3, max_obs_separation=2 / 24, min_linkage_nights=2
-    )
+    metric = NightlyLinkagesMetric(linkage_min_obs=3, max_obs_separation=2 / 24, min_linkage_nights=2)
+    findable_observations, window_summary = metric.run(test_observations)
     assert len(findable_observations) == 1
 
     findable_ids = {k for k in findable_observations["truth"].values}
@@ -161,9 +175,8 @@ def test_calcFindableNightlyLinkages(test_observations):
 def test_calcFindableNightlyLinkages_edge_cases(test_observations):
 
     # All objects should be findable if we set linkage_min_obs=1
-    findable_observations = calcFindableNightlyLinkages(
-        test_observations, linkage_min_obs=1, max_obs_separation=2 / 24, min_linkage_nights=1
-    )
+    metric = NightlyLinkagesMetric(linkage_min_obs=1, max_obs_separation=2 / 24, min_linkage_nights=1)
+    findable_observations, window_summary = metric.run(test_observations)
     assert len(findable_observations) == 3
 
     findable_ids = {k for k in findable_observations["truth"].values}
@@ -176,9 +189,8 @@ def test_calcFindableNightlyLinkages_edge_cases(test_observations):
 
     # Only two objects should be findable if we require at least 1 observation on each night of
     # 5 nights
-    findable_observations = calcFindableNightlyLinkages(
-        test_observations, linkage_min_obs=1, max_obs_separation=2 / 24, min_linkage_nights=5
-    )
+    metric = NightlyLinkagesMetric(linkage_min_obs=1, max_obs_separation=2 / 24, min_linkage_nights=5)
+    findable_observations, window_summary = metric.run(test_observations)
     assert len(findable_observations) == 2
 
     findable_ids = {k for k in findable_observations["truth"].values}

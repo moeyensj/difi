@@ -1,21 +1,23 @@
-from typing import Callable, Optional, Tuple, Union
+from typing import Optional, Tuple, TypeVar, Union
 
 import numpy as np
 import pandas as pd
 
-from .metrics import calcFindableMinObs, calcFindableNightlyLinkages
+from .metrics import FindabilityMetric, MinObsMetric, NightlyLinkagesMetric
 from .utils import _classHandler
 
 __all__ = ["analyzeObservations"]
+
+Metrics = TypeVar("Metrics", bound=FindabilityMetric)
 
 
 def analyzeObservations(
     observations: pd.DataFrame,
     classes: Optional[dict] = None,
-    metric: Union[str, Callable] = "min_obs",
-    detection_window: int = 15,
+    metric: Union[str, Metrics] = "min_obs",
+    detection_window: Optional[int] = None,
     ignore_after_detected: bool = True,
-    **metric_kwargs
+    **metric_kwargs,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Can I Find It?
@@ -121,65 +123,21 @@ def analyzeObservations(
     all_truths["truth"] = num_obs_descending
     all_truths["num_obs"] = num_obs_per_object
 
-    night_range = None
-    # if we are using a detection window then work out what nights are in the observations
-    if detection_window is not None:
-        if "night" not in observations.columns:
-            raise ValueError("`night` must be included in `observations` if `detection_window` is not None")
-        night_range = observations["night"].sort_values().unique()
-
     metric_func_mapper = {
-        "min_obs": calcFindableMinObs,
-        "nightly_linkages": calcFindableNightlyLinkages,
+        "min_obs": MinObsMetric,
+        "nightly_linkages": NightlyLinkagesMetric,
     }
-
-    # require that the metric is inputted correctly
-    if not (isinstance(metric, str) or callable(metric)) or (
-        isinstance(metric, str) and metric not in metric_func_mapper
-    ):
-        err = (
-            "Metric should be either 'min_obs', 'nightly_linkages', or a user-defined function that returns\n"
-            "a `~pandas.DataFrame` with the truth IDs that are findable as an index, and a column named\n"
-            "'obs_ids' containing `~numpy.ndarray`s of the observations that made each truth findable"
-        )
-        raise ValueError(err)
-    # get the metric function
-    metric_func: Callable = metric if callable(metric) else metric_func_mapper[metric]  # type: ignore
-
-    # if user wants to use a detection window
-    detected_truths = np.array([])
-    if detection_window is not None:
-        all_findable_observations = []
-
-        # loop over potential detection windows
-        for night in night_range:
-            # mask observations to just this window
-            win_obs = observations[
-                ((observations["night"] >= night) & (observations["night"] < night + detection_window))
-            ]
-
-            # if ignoring previous detections then mask them out as well
-            if ignore_after_detected and len(detected_truths) > 0:
-                win_obs = win_obs[~win_obs["truth"].isin(detected_truths)]
-
-            # work out which observations are findable in this window
-            window_findable_observations = metric_func(win_obs, **metric_kwargs)
-
-            # if user only wants the first detection window then update the detected truths
-            if ignore_after_detected:
-                window_detected_truths = window_findable_observations["truth"].values
-                detected_truths = np.concatenate([detected_truths, window_detected_truths])
-
-            # add a column recording in which window this object was detected
-            window_findable_observations["window_start_night"] = night
-            all_findable_observations.append(window_findable_observations)
-
-        # combine the findable observations tables
-        findable_observations = pd.concat(all_findable_observations).reset_index()
-
-    # otherwise just continue without a detection_window
+    if isinstance(metric, str):
+        if metric not in metric_func_mapper:
+            raise ValueError(f"Unknown metric {metric}")
+        metric_func = metric_func_mapper[metric]
+        metric_ = metric_func(**metric_kwargs)
+    elif isinstance(metric, FindabilityMetric):
+        metric_ = metric
     else:
-        findable_observations = metric_func(observations, **metric_kwargs)
+        raise ValueError("metric must be a string or a FindabilityMetric")
+
+    findable_observations, window_summary = metric_.run(observations, detection_window=detection_window)
 
     all_truths.loc[:, "findable"] = 0
     all_truths.loc[all_truths["truth"].isin(findable_observations["truth"].values), "findable"] = 1
