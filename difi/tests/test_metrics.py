@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pytest
 
 from ..metrics import FindabilityMetric, MinObsMetric, NightlyLinkagesMetric
 
@@ -200,3 +201,19 @@ def test_calcFindableNightlyLinkages_edge_cases(test_observations):
             findable_observations[findable_observations["truth"] == object_id]["obs_ids"].values[0],
             test_observations[test_observations["truth"] == object_id]["obs_id"].values,
         )
+
+
+def test_calcFindableNightlyLinkages_assertion(test_observations):
+    # Check that an assertion is raised if more than one object's observations
+    # are passed to the metric's determine_object_findable method
+    with pytest.raises(AssertionError):
+        metric = NightlyLinkagesMetric()
+        metric.determine_object_findable(test_observations)
+
+
+def test_calcFindableMinObs_assertion(test_observations):
+    # Check that an assertion is raised if more than one object's observations
+    # are passed to the metric's determine_object_findable method
+    with pytest.raises(AssertionError):
+        metric = MinObsMetric()
+        metric.determine_object_findable(test_observations)
