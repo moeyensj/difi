@@ -1,4 +1,6 @@
+import multiprocessing as mp
 from abc import ABC, abstractmethod
+from itertools import repeat
 from typing import Any, Dict, List, Optional, Tuple, TypeVar
 
 import numpy as np
@@ -144,7 +146,9 @@ class FindabilityMetric(ABC):
 
         return pd.concat(findable_dfs, ignore_index=True)
 
-    def run_by_object(self, observations: pd.DataFrame, windows: List[Tuple[int, int]]) -> List[pd.DataFrame]:
+    def run_by_object(
+        self, observations: pd.DataFrame, windows: List[Tuple[int, int]], num_jobs: Optional[int] = 1
+    ) -> List[pd.DataFrame]:
         """
         Run the findability metric on the observations split by objects. For windows where there are many
         observations, this may be faster than running the metric on each window individually
@@ -157,6 +161,9 @@ class FindabilityMetric(ABC):
             `obs_id`, `time`, `night`, `truth`.
         windows : List[tuples]
             List of tuples containing the start and end night of each window.
+        num_jobs : int, optional
+            The number of jobs to run in parallel. If 1, then run in serial. If None, then use the number of
+            CPUs on the machine.
 
         Returns
         -------
@@ -167,9 +174,16 @@ class FindabilityMetric(ABC):
         grouped_observations = observations.groupby(by=["truth"])
         truth_observations = [grouped_observations.get_group(x) for x in grouped_observations.groups]
 
-        findable_dfs = []
-        for truth_obs in truth_observations:
-            findable_dfs.append(self._run_object_worker(truth_obs, windows))
+        if num_jobs is None or num_jobs > 1:
+            pool = mp.Pool(num_jobs)
+            findable_dfs = pool.starmap(self._run_object_worker, zip(truth_observations, repeat(windows)))
+            pool.close()
+            pool.join()
+
+        else:
+            findable_dfs = []
+            for truth_obs in truth_observations:
+                findable_dfs.append(self._run_object_worker(truth_obs, windows))
 
         return findable_dfs
 
@@ -205,7 +219,9 @@ class FindabilityMetric(ABC):
 
         return findable
 
-    def run_by_window(self, observations: pd.DataFrame, windows: List[Tuple[int, int]]) -> List[pd.DataFrame]:
+    def run_by_window(
+        self, observations: pd.DataFrame, windows: List[Tuple[int, int]], num_jobs: Optional[int] = 1
+    ) -> List[pd.DataFrame]:
         """
         Run the findability metric on the observations split by windows where each window will
         contain all of the observations within a span of detection_window nights.
@@ -217,6 +233,9 @@ class FindabilityMetric(ABC):
             `obs_id`, `time`, `night`, `truth`.
         windows : List[tuples]
             List of tuples containing the start and end night of each window.
+        num_jobs : int, optional
+            The number of jobs to run in parallel. If 1, then run in serial. If None, then use the number of
+            CPUs on the machine.
 
         Returns
         -------
@@ -232,16 +251,27 @@ class FindabilityMetric(ABC):
             ]
             window_observations.append(window_obs)
 
-        findable_dfs = []
-        for window_obs in window_observations:
-            findable_i = self._run_window_worker(window_obs)
-            findable_i.insert(0, "window_id", i)
-            findable_dfs.append(findable_i)
+        if num_jobs is None or num_jobs > 1:
+            pool = mp.Pool(num_jobs)
+            findable_dfs = pool.map(self._run_window_worker, window_observations)
+            pool.close()
+            pool.join()
+
+        else:
+            findable_dfs = []
+            for window_obs in window_observations:
+                findable_i = self._run_window_worker(window_obs)
+                findable_i.insert(0, "window_id", i)
+                findable_dfs.append(findable_i)
 
         return findable_dfs
 
     def run(
-        self, observations: pd.DataFrame, detection_window: Optional[int] = None, by_object: bool = False
+        self,
+        observations: pd.DataFrame,
+        detection_window: Optional[int] = None,
+        by_object: bool = False,
+        num_jobs: Optional[int] = 1,
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Run the findability metric on the observations.
@@ -261,6 +291,9 @@ class FindabilityMetric(ABC):
             If True, run the metric on the observations split by objects. For windows where there are many
             observations, this may be faster than running the metric on each window individually
             (with all objects' observations).
+        num_jobs : int, optional
+            The number of jobs to run in parallel. If 1, then run in serial. If None, then use the number of
+            CPUs on the machine.
 
         Returns
         -------
@@ -275,9 +308,9 @@ class FindabilityMetric(ABC):
 
         windows = self._compute_windows(observations_sorted, detection_window)
         if by_object:
-            findable_dfs = self.run_by_object(observations_sorted, windows)
+            findable_dfs = self.run_by_object(observations_sorted, windows, num_jobs=num_jobs)
         else:
-            findable_dfs = self.run_by_window(observations_sorted, windows)
+            findable_dfs = self.run_by_window(observations_sorted, windows, num_jobs=num_jobs)
 
         window_summary = self._create_window_summary(observations_sorted, windows, findable_dfs)
 
