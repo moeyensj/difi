@@ -18,11 +18,18 @@ def test_FindabilityMetric__compute_windows():
     assert windows == [(1, 3), (2, 4), (3, 5), (4, 6), (5, 7), (6, 8), (7, 9), (8, 10), (9, 10)]
 
 
-def test_calcFindableMinObs(test_observations):
+@pytest.mark.parametrize(
+    "by_object",
+    [
+        True,
+        False,
+    ],
+)
+def test_calcFindableMinObs(test_observations, by_object):
 
     # All three objects should be findable
     metric = MinObsMetric(min_obs=5)
-    findable_observations, window_summary = metric.run(test_observations)
+    findable_observations, window_summary = metric.run(test_observations, by_object=by_object)
     assert len(findable_observations) == 3
 
     findable_ids = {k for k in findable_observations["truth"].values}
@@ -35,7 +42,7 @@ def test_calcFindableMinObs(test_observations):
 
     # Only two objects should be findable
     metric = MinObsMetric(min_obs=10)
-    findable_observations, window_summary = metric.run(test_observations)
+    findable_observations, window_summary = metric.run(test_observations, by_object=by_object)
 
     assert len(findable_observations) == 2
     for object_id in ["58177", "82134"]:
@@ -47,18 +54,25 @@ def test_calcFindableMinObs(test_observations):
 
     # No objects should be findable
     metric = MinObsMetric(min_obs=16)
-    findable_observations, window_summary = metric.run(test_observations)
+    findable_observations, window_summary = metric.run(test_observations, by_object=by_object)
     assert len(findable_observations) == 0
 
     return
 
 
-def test_calcFindableNightlyLinkages(test_observations):
+@pytest.mark.parametrize(
+    "by_object",
+    [
+        True,
+        False,
+    ],
+)
+def test_calcFindableNightlyLinkages(test_observations, by_object):
 
     # All three objects should be findable (each object has at least two tracklets
     # with consecutive observations no more than 2 hours apart)
     metric = NightlyLinkagesMetric(linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=2)
-    findable_observations, window_summary = metric.run(test_observations)
+    findable_observations, window_summary = metric.run(test_observations, by_object=by_object)
     assert len(findable_observations) == 3
 
     findable_ids = {k for k in findable_observations["truth"].values}
@@ -109,7 +123,7 @@ def test_calcFindableNightlyLinkages(test_observations):
     # Only two objects should be findable (each object has at least three tracklets
     # with consecutive observations no more than 2 hours apart)
     metric = NightlyLinkagesMetric(linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=3)
-    findable_observations, window_summary = metric.run(test_observations)
+    findable_observations, window_summary = metric.run(test_observations, by_object=by_object)
     assert len(findable_observations) == 2
 
     findable_ids = {k for k in findable_observations["truth"].values}
@@ -147,7 +161,7 @@ def test_calcFindableNightlyLinkages(test_observations):
     # Only one object should be findable (this object has at least two tracklets
     # with at least 3 consecutive observations no more than 2 hours apart)
     metric = NightlyLinkagesMetric(linkage_min_obs=3, max_obs_separation=2 / 24, min_linkage_nights=2)
-    findable_observations, window_summary = metric.run(test_observations)
+    findable_observations, window_summary = metric.run(test_observations, by_object=by_object)
     assert len(findable_observations) == 1
 
     findable_ids = {k for k in findable_observations["truth"].values}

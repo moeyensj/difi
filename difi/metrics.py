@@ -25,7 +25,8 @@ class FindabilityMetric(ABC):
             Observations dataframe containing at least the following columns:
             `obs_id`, `time`, `night`, `truth`.
         detection_window : int, optional
-            The number of nights of observations within a single window.
+            The number of nights of observations within a single window. If None, then
+            the entire range of nights is used.
 
         Returns
         -------
@@ -97,6 +98,35 @@ class FindabilityMetric(ABC):
 
         return pd.DataFrame(windows_dict)
 
+    def run_by_object(self, observations: pd.DataFrame, windows: List[Tuple[int, int]]) -> List[pd.DataFrame]:
+        """
+        Run the findability metric on the observations split by objects. For windows where there are many
+        observations, this may be faster than running the metric on each window individually
+        (with all objects' observations).
+
+        Parameters
+        ----------
+        observations : `~pandas.DataFrame`
+            Observations dataframe containing at least the following columns:
+            `obs_id`, `time`, `night`, `truth`.
+        windows : List[tuples]
+            List of tuples containing the start and end night of each window.
+
+        Returns
+        -------
+        findable_dfs : List[`~pandas.DataFrame`]
+            List of dataframes containing the findable truths and the observations
+            that made them findable for each window.
+        """
+        grouped_observations = observations.groupby(by=["truth"])
+        object_observations = [grouped_observations.get_group(x) for x in grouped_observations.groups]
+
+        findable_dfs = []
+        for object_obs in object_observations:
+            findable_dfs.append(pd.concat(self.run_by_window(object_obs, windows), ignore_index=True))
+
+        return findable_dfs
+
     def run_by_window(self, observations: pd.DataFrame, windows: List[Tuple[int, int]]) -> List[pd.DataFrame]:
         """
         Run the findability metric on the observations split by windows where each window will
@@ -139,7 +169,9 @@ class FindabilityMetric(ABC):
 
         return findable_dfs
 
-    def run(self, observations: pd.DataFrame, detection_window: Optional[int] = None):
+    def run(
+        self, observations: pd.DataFrame, detection_window: Optional[int] = None, by_object: bool = False
+    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Run the findability metric on the observations.
 
@@ -153,6 +185,11 @@ class FindabilityMetric(ABC):
             determining if a truth is findable. If the number of consecutive days
             of observations exceeds the detection_window, then a rolling window
             of size detection_window is used to determine if the truth is findable.
+            If None, then the detection_window is the entire range observations.
+        by_object : bool, optional
+            If True, run the metric on the observations split by objects. For windows where there are many
+            observations, this may be faster than running the metric on each window individually
+            (with all objects' observations).
 
         Returns
         -------
@@ -166,7 +203,11 @@ class FindabilityMetric(ABC):
         observations_sorted = observations.sort_values(by=["time"])
 
         windows = self._compute_windows(observations_sorted, detection_window)
-        findable_dfs = self.run_by_window(observations_sorted, windows)
+        if by_object:
+            findable_dfs = self.run_by_object(observations_sorted, windows)
+        else:
+            findable_dfs = self.run_by_window(observations_sorted, windows)
+
         window_summary = self._create_window_summary(observations_sorted, windows, findable_dfs)
 
         findable = pd.concat(findable_dfs, ignore_index=True)
