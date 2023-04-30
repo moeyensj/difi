@@ -1,10 +1,12 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TypeVar
 
 import numpy as np
 import pandas as pd
 
 __all__ = ["FindabilityMetric", "NightlyLinkagesMetric", "MinObsMetric"]
+
+Metrics = TypeVar("Metrics", bound="FindabilityMetric")
 
 
 class FindabilityMetric(ABC):
@@ -98,6 +100,50 @@ class FindabilityMetric(ABC):
 
         return pd.DataFrame(windows_dict)
 
+    def _run_object_worker(self, observations: pd.DataFrame, windows: List[Tuple[int, int]]) -> pd.DataFrame:
+        """
+        Run the metric on a single object.
+
+        Parameters
+        ----------
+        observations : `~pandas.DataFrame`
+            Observations dataframe containing at least the following columns:
+            `obs_id`, `time`, `night`, `truth`.
+        windows : list of tuples
+            A list of tuples containing the start and end nights of each window.
+        metric : `~difi.metrics.FindabilityMetric`
+            The desired findability metric that calculates which truths are actually findable.
+
+        Returns
+        -------
+        findable : `~pandas.DataFrame`
+            A dataframe containing the truth IDs that are findable as an index, and a column named
+            'obs_ids' containing `~numpy.ndarray`s of the observations that made each truth findable.
+        """
+        findable_dfs = []
+        for i, window in enumerate(windows):
+            night_min, night_max = window
+            window_obs = observations[
+                (observations["night"] >= night_min) & (observations["night"] <= night_max)
+            ]
+
+            is_findable, obs_ids = self.determine_object_findable(window_obs)
+            if is_findable:
+                findable = pd.DataFrame(
+                    {
+                        "window_id": [i],
+                        "truth": [window_obs["truth"].values[0]],
+                        "findable": [is_findable],
+                        "obs_ids": [obs_ids],
+                    }
+                )
+            else:
+                findable = pd.DataFrame({"window_id": [], "truth": [], "findable": [], "obs_ids": []})
+
+            findable_dfs.append(findable)
+
+        return pd.concat(findable_dfs, ignore_index=True)
+
     def run_by_object(self, observations: pd.DataFrame, windows: List[Tuple[int, int]]) -> List[pd.DataFrame]:
         """
         Run the findability metric on the observations split by objects. For windows where there are many
@@ -123,25 +169,41 @@ class FindabilityMetric(ABC):
 
         findable_dfs = []
         for truth_obs in truth_observations:
-            for i, window in enumerate(windows):
-                night_min, night_max = window
-                window_obs = truth_obs[(truth_obs["night"] >= night_min) & (truth_obs["night"] <= night_max)]
-
-                is_findable, obs_ids = self.determine_object_findable(window_obs)
-                if is_findable:
-                    findable = pd.DataFrame(
-                        {
-                            "window_id": [i],
-                            "truth": [window_obs["truth"].values[0]],
-                            "findable": [is_findable],
-                            "obs_ids": [obs_ids],
-                        }
-                    )
-                else:
-                    findable = pd.DataFrame({"window_id": [], "truth": [], "findable": [], "obs_ids": []})
-                findable_dfs.append(findable)
+            findable_dfs.append(self._run_object_worker(truth_obs, windows))
 
         return findable_dfs
+
+    def _run_window_worker(self, observations: pd.DataFrame) -> pd.DataFrame:
+        """
+        Run the metric on a single window of observations.
+
+        Parameters
+        ----------
+        observations : `~pandas.DataFrame`
+            Observations dataframe containing at least the following columns:
+            `obs_id`, `time`, `night`, `truth`.
+
+        Returns
+        -------
+        findable : `~pandas.DataFrame`
+            A dataframe containing the truth IDs that are findable as an index, and a column named
+            'obs_ids' containing `~numpy.ndarray`s of the observations that made each truth findable.
+        """
+        if len(observations) == 0:
+            return pd.DataFrame({"truth": [], "findable": [], "obs_ids": []})
+
+        findable = (
+            observations.groupby(by=["truth"]).apply(self.determine_object_findable).to_frame("findable")
+        )
+        findable.reset_index(inplace=True, drop=False)
+        expanded = pd.DataFrame(
+            findable["findable"].values.tolist(), index=findable.index, columns=["findable", "obs_ids"]
+        )
+        findable = findable[["truth"]].merge(expanded, left_index=True, right_index=True)
+        findable = findable[findable["findable"] == True]  # noqa: E712
+        findable.reset_index(inplace=True, drop=True)
+
+        return findable
 
     def run_by_window(self, observations: pd.DataFrame, windows: List[Tuple[int, int]]) -> List[pd.DataFrame]:
         """
@@ -162,26 +224,19 @@ class FindabilityMetric(ABC):
             List of dataframes containing the findable truths and the observations
             that made them findable for each window.
         """
-        findable_dfs = []
+        window_observations = []
         for i, window in enumerate(windows):
             night_min, night_max = window
             window_obs = observations[
                 (observations["night"] >= night_min) & (observations["night"] <= night_max)
             ]
-            window_obs.sort_values(by=["truth", "time"])
+            window_observations.append(window_obs)
 
-            findable = (
-                window_obs.groupby(by=["truth"]).apply(self.determine_object_findable).to_frame("findable")
-            )
-            findable.reset_index(inplace=True, drop=False)
-            expanded = pd.DataFrame(
-                findable["findable"].values.tolist(), index=findable.index, columns=["findable", "obs_ids"]
-            )
-            findable = findable[["truth"]].merge(expanded, left_index=True, right_index=True)
-            findable.insert(0, "window_id", i)
-            findable = findable[findable["findable"] == True]  # noqa: E712
-            findable.reset_index(inplace=True, drop=True)
-            findable_dfs.append(findable)
+        findable_dfs = []
+        for window_obs in window_observations:
+            findable_i = self._run_window_worker(window_obs)
+            findable_i.insert(0, "window_id", i)
+            findable_dfs.append(findable_i)
 
         return findable_dfs
 
@@ -290,7 +345,7 @@ class NightlyLinkagesMetric(FindabilityMetric):
         total_required_obs = self.linkage_min_obs * self.min_linkage_nights
         if len(observations) < total_required_obs:
             return False, []
-        
+
         # Grab times and observation IDs from grouped observations
         times = observations["time"].values
         obs_ids = observations["obs_id"].values
