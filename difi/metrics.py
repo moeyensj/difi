@@ -119,11 +119,27 @@ class FindabilityMetric(ABC):
             that made them findable for each window.
         """
         grouped_observations = observations.groupby(by=["truth"])
-        object_observations = [grouped_observations.get_group(x) for x in grouped_observations.groups]
+        truth_observations = [grouped_observations.get_group(x) for x in grouped_observations.groups]
 
         findable_dfs = []
-        for object_obs in object_observations:
-            findable_dfs.append(pd.concat(self.run_by_window(object_obs, windows), ignore_index=True))
+        for truth_obs in truth_observations:
+            for i, window in enumerate(windows):
+                night_min, night_max = window
+                window_obs = truth_obs[(truth_obs["night"] >= night_min) & (truth_obs["night"] <= night_max)]
+
+                is_findable, obs_ids = self.determine_object_findable(window_obs)
+                if is_findable:
+                    findable = pd.DataFrame(
+                        {
+                            "window_id": [i],
+                            "truth": [window_obs["truth"].values[0]],
+                            "findable": [is_findable],
+                            "obs_ids": [obs_ids],
+                        }
+                    )
+                else:
+                    findable = pd.DataFrame({"window_id": [], "truth": [], "findable": [], "obs_ids": []})
+                findable_dfs.append(findable)
 
         return findable_dfs
 
