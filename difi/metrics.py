@@ -52,6 +52,93 @@ class FindabilityMetric(ABC):
 
         return windows
 
+    @staticmethod
+    def _create_window_summary(
+        observations: pd.DataFrame, windows: List[Tuple[int, int]], findable: List[pd.DataFrame]
+    ):
+        """
+        Create a summary dataframe of the windows, their start and end nights, the number of observations
+        and findable truths in each window.
+
+        Parameters
+        ----------
+        observations : `~pandas.DataFrame`
+            Observations dataframe containing at least the following columns:
+            `obs_id`, `time`, `night`, `truth`.
+        windows : List[tuples]
+            List of tuples containing the start and end night of each window.
+        findable : List`~pandas.DataFrame`]
+            List of dataframes containing the findable truths for each window.
+
+        Returns
+        -------
+        window_summary : `~pandas.DataFrame`
+            Dataframe containing the window summary.
+        """
+        windows_dict: Dict[str, List[Any]] = {
+            "window_id": [],
+            "start_night": [],
+            "end_night": [],
+            "num_obs": [],
+            "num_findable": [],
+        }
+
+        for i, (window, findable_i) in enumerate(zip(windows, findable)):
+            night_min, night_max = window
+            observations_in_window = observations[
+                observations["night"].between(night_min, night_max, inclusive="both")
+            ]
+
+            windows_dict["window_id"].append(i)
+            windows_dict["start_night"].append(night_min)
+            windows_dict["end_night"].append(night_max)
+            windows_dict["num_obs"].append(len(observations_in_window))
+            windows_dict["num_findable"].append(findable_i["findable"].sum())
+
+        return pd.DataFrame(windows_dict)
+
+    def run_by_window(self, observations: pd.DataFrame, windows: List[Tuple[int, int]]) -> List[pd.DataFrame]:
+        """
+        Run the findability metric on the observations split by windows where each window will
+        contain all of the observations within a span of detection_window nights.
+
+        Parameters
+        ----------
+        observations : `~pandas.DataFrame`
+            Observations dataframe containing at least the following columns:
+            `obs_id`, `time`, `night`, `truth`.
+        windows : List[tuples]
+            List of tuples containing the start and end night of each window.
+
+        Returns
+        -------
+        findable_dfs : List[`~pandas.DataFrame`]
+            List of dataframes containing the findable truths and the observations
+            that made them findable for each window.
+        """
+        findable_dfs = []
+        for i, window in enumerate(windows):
+            night_min, night_max = window
+            window_obs = observations[
+                (observations["night"] >= night_min) & (observations["night"] <= night_max)
+            ]
+            window_obs.sort_values(by=["truth", "time"])
+
+            findable = (
+                window_obs.groupby(by=["truth"]).apply(self.determine_object_findable).to_frame("findable")
+            )
+            findable.reset_index(inplace=True, drop=False)
+            expanded = pd.DataFrame(
+                findable["findable"].values.tolist(), index=findable.index, columns=["findable", "obs_ids"]
+            )
+            findable = findable[["truth"]].merge(expanded, left_index=True, right_index=True)
+            findable.insert(0, "window_id", i)
+            findable = findable[findable["findable"] == True]  # noqa: E712
+            findable.reset_index(inplace=True, drop=True)
+            findable_dfs.append(findable)
+
+        return findable_dfs
+
     def run(self, observations: pd.DataFrame, detection_window: Optional[int] = None):
         """
         Run the findability metric on the observations.
@@ -78,46 +165,11 @@ class FindabilityMetric(ABC):
         """
         observations_sorted = observations.sort_values(by=["time"])
 
-        findable_dfs = []
-        windows_dict: Dict[str, List[Any]] = {
-            "window_id": [],
-            "start_night": [],
-            "end_night": [],
-            "num_obs": [],
-            "num_findable": [],
-        }
-
         windows = self._compute_windows(observations_sorted, detection_window)
-
-        for i, window in enumerate(windows):
-            night_min, night_max = window
-            window_obs = observations_sorted[
-                (observations_sorted["night"] >= night_min) & (observations_sorted["night"] <= night_max)
-            ]
-            window_obs.sort_values(by=["truth", "time"])
-
-            findable = (
-                window_obs.groupby(by=["truth"]).apply(self.determine_object_findable).to_frame("findable")
-            )
-            findable.reset_index(inplace=True, drop=False)
-            expanded = pd.DataFrame(
-                findable["findable"].values.tolist(), index=findable.index, columns=["findable", "obs_ids"]
-            )
-            findable = findable[["truth"]].merge(expanded, left_index=True, right_index=True)
-            findable.insert(0, "window_id", i)
-            findable_dfs.append(findable)
-
-            windows_dict["window_id"].append(i)
-            windows_dict["start_night"].append(night_min)
-            windows_dict["end_night"].append(night_max)
-            windows_dict["num_obs"].append(len(window_obs))
-            windows_dict["num_findable"].append(findable["findable"].sum())
+        findable_dfs = self.run_by_window(observations_sorted, windows)
+        window_summary = self._create_window_summary(observations_sorted, windows, findable_dfs)
 
         findable = pd.concat(findable_dfs, ignore_index=True)
-        window_summary = pd.DataFrame(windows_dict)
-
-        findable = findable[findable["findable"] == True]  # noqa: E712
-        findable.reset_index(inplace=True, drop=True)
         return findable, window_summary
 
 
