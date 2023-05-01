@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, TypeVar, Union
+from typing import List, Optional, Tuple, TypeVar, Union
 
 import numpy as np
 import pandas as pd
@@ -9,6 +9,57 @@ from .utils import _classHandler
 __all__ = ["analyzeObservations"]
 
 Metrics = TypeVar("Metrics", bound=FindabilityMetric)
+
+
+def _create_summary(observations, classes, all_truths):
+    """
+    Create a summary dataframe that contains a summary of the number of members
+    per class, the number of observations per class, and the number of findable.
+
+    Parameters
+    ----------
+    observations : `~pandas.DataFrame`
+        Pandas DataFrame with at least two columns: observation IDs and the truth values
+        (the object to which the observation belongs to).
+    classes : dict
+        Dictionary containing the classes and their members.
+    all_truths : `~pandas.DataFrame`
+        Pandas DataFrame containing the truth values and the number of observations
+        that make them findable.
+
+    Returns
+    -------
+    summary : `~pandas.DataFrame`
+        Pandas DataFrame containing the summary of the number of members per class,
+        the number of observations per class, and the number of findable.
+    """
+    num_observations_list: List[int] = []
+    num_truths_list: List[int] = []
+    num_findable_list: List[int] = []
+    class_list, truths_list = _classHandler(classes, observations)
+
+    for c, v in zip(class_list, truths_list):
+        num_obs = len(observations[observations["truth"].isin(v)])
+        unique_truths = observations[observations["truth"].isin(v)]["truth"].unique()
+        num_unique_truths = len(unique_truths)
+        findable = int(all_truths[all_truths["truth"].isin(v)]["findable"].sum())
+
+        num_observations_list.append(num_obs)
+        num_truths_list.append(num_unique_truths)
+        num_findable_list.append(findable)
+
+    # Prepare summary DataFrame
+    summary = pd.DataFrame(
+        {
+            "class": class_list,
+            "num_members": num_truths_list,
+            "num_obs": num_observations_list,
+            "findable": num_findable_list,
+        }
+    )
+    summary.sort_values(by=["num_obs", "class"], ascending=False, inplace=True, ignore_index=True)
+
+    return summary
 
 
 def analyzeObservations(
@@ -109,10 +160,6 @@ def analyzeObservations(
     if len(observations) == 0:
         raise ValueError("There are no observations in the observations DataFrame!")
 
-    num_observations_list = []
-    num_truths_list = []
-    num_findable_list = []
-
     # Populate all_truths DataFrame
     dtypes = np.dtype([("truth", str), ("num_obs", int), ("findable", int)])
     data = np.empty(0, dtype=dtypes)
@@ -145,27 +192,7 @@ def analyzeObservations(
     all_truths["findable"] = all_truths["findable"].astype(int)
     all_truths.sort_values(by=["num_obs", "truth"], ascending=[False, True], inplace=True, ignore_index=True)
 
-    class_list, truths_list = _classHandler(classes, observations)
-
-    for c, v in zip(class_list, truths_list):
-        num_obs = len(observations[observations["truth"].isin(v)])
-        unique_truths = observations[observations["truth"].isin(v)]["truth"].unique()
-        num_unique_truths = len(unique_truths)
-        findable = int(all_truths[all_truths["truth"].isin(v)]["findable"].sum())
-
-        num_observations_list.append(num_obs)
-        num_truths_list.append(num_unique_truths)
-        num_findable_list.append(findable)
-
-    # Prepare summary DataFrame
-    summary = pd.DataFrame(
-        {
-            "class": class_list,
-            "num_members": num_truths_list,
-            "num_obs": num_observations_list,
-            "findable": num_findable_list,
-        }
-    )
-    summary.sort_values(by=["num_obs", "class"], ascending=False, inplace=True, ignore_index=True)
+    # Populate summary DataFrame
+    summary = _create_summary(observations, classes, all_truths)
 
     return all_truths, findable_observations, summary
