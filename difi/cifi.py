@@ -1,21 +1,162 @@
-from typing import Callable, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, TypeVar, Union
 
 import numpy as np
 import pandas as pd
 
-from .metrics import calcFindableMinObs, calcFindableNightlyLinkages
+from .metrics import FindabilityMetric, MinObsMetric, NightlyLinkagesMetric
 from .utils import _classHandler
 
 __all__ = ["analyzeObservations"]
+
+Metrics = TypeVar("Metrics", bound=FindabilityMetric)
+
+
+def _create_all_truths(
+    observations: pd.DataFrame, findable: pd.DataFrame, window_summary: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Create a dataframe containing all truths, the number of observations, and whether or
+    not they are findable per window.
+
+    Parameters
+    ----------
+    observations : `~pandas.DataFrame`
+        Observations dataframe containing at least the following columns:
+        `obs_id`, `time`, `night`, `truth`.
+    findable : `~pandas.DataFrame`
+        Findable dataframe containing at least the following columns:
+        `truth`, `window_id`.
+    window_summary : `~pandas.DataFrame`
+        Window summary dataframe containing at least the following columns:
+        `window_id`, `start_night`, `end_night`.
+
+    Returns
+    -------
+    all_truths : `~pandas.DataFrame`
+        Dataframe containing all truths, the number of observations, and whether or not they are findable
+        per window.
+    """
+    all_truths_dfs = []
+    window_ids = window_summary["window_id"].unique()
+    for window_id in window_ids:
+        # Create masks for the dataframes
+        window_i = window_summary[window_summary["window_id"] == window_id]
+
+        # Get the findable truths for this window
+        findable_i = findable[findable["window_id"] == window_id]
+
+        # Get the observations for this window
+        night_min = window_i["start_night"].values[0]
+        night_max = window_i["end_night"].values[0]
+        observations_in_window = observations[
+            observations["night"].between(night_min, night_max, inclusive="both")
+        ]
+
+        num_obs_per_object = observations_in_window["truth"].value_counts().values
+        truths_by_num_obs_descending = observations_in_window["truth"].value_counts().index.values
+
+        all_truths_i = pd.DataFrame(
+            {
+                "window_id": [window_id for _ in range(len(truths_by_num_obs_descending))],
+                "truth": truths_by_num_obs_descending,
+                "num_obs": num_obs_per_object,
+                "findable": np.zeros(len(truths_by_num_obs_descending), dtype=int),
+            }
+        )
+
+        all_truths_i.loc[all_truths_i["truth"].isin(findable_i["truth"].values), "findable"] = 1
+        all_truths_dfs.append(all_truths_i)
+
+    all_truths = pd.concat(all_truths_dfs, ignore_index=True)
+    all_truths.sort_values(by=["window_id", "truth"], ascending=[True, True], inplace=True, ignore_index=True)
+    for col in ["window_id", "num_obs", "findable"]:
+        all_truths.loc[:, col] = all_truths[col].astype(int)
+    return all_truths
+
+
+def _create_summary(
+    observations: pd.DataFrame,
+    classes: Union[None, str, Dict],
+    all_truths: pd.DataFrame,
+    window_summary: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Create a summary dataframe that contains a summary of the number of members
+    per class, the number of observations per class, and the number of findable.
+
+    Parameters
+    ----------
+    observations : `~pandas.DataFrame`
+        Pandas DataFrame with at least two columns: observation IDs and the truth values
+        (the object to which the observation belongs to).
+    classes : dict
+        Dictionary containing the classes and their members.
+    all_truths : `~pandas.DataFrame`
+        Pandas DataFrame containing the truth values and the number of observations
+        that make them findable.
+    window_summary : `~pandas.DataFrame`
+        Pandas DataFrame containing the window IDs and the start and end nights of the
+
+    Returns
+    -------
+    summary : `~pandas.DataFrame`
+        Pandas DataFrame containing the summary of the number of members per class,
+        the number of observations per class, and the number of findable.
+    """
+
+    window_ids = window_summary["window_id"].unique()
+
+    summary_dfs = []
+    for window_id in window_ids:
+        # Create masks for the dataframes
+        window_i = window_summary[window_summary["window_id"] == window_id]
+        all_truths_i = all_truths[all_truths["window_id"] == window_id]
+        night_min = window_i["start_night"].values[0]
+        night_max = window_i["end_night"].values[0]
+        observations_in_window = observations[
+            observations["night"].between(night_min, night_max, inclusive="both")
+        ]
+
+        num_observations_list: List[int] = []
+        num_truths_list: List[int] = []
+        num_findable_list: List[int] = []
+        class_list, truths_list = _classHandler(classes, observations_in_window)
+
+        for c, v in zip(class_list, truths_list):
+            num_obs = len(observations_in_window[observations_in_window["truth"].isin(v)])
+            unique_truths = observations_in_window[observations_in_window["truth"].isin(v)]["truth"].unique()
+            num_unique_truths = len(unique_truths)
+            findable = int(all_truths_i[all_truths_i["truth"].isin(v)]["findable"].sum())
+
+            num_observations_list.append(num_obs)
+            num_truths_list.append(num_unique_truths)
+            num_findable_list.append(findable)
+
+        # Prepare summary DataFrame
+        summary = pd.DataFrame(
+            {
+                "window_id": [window_id for _ in range(len(class_list))],
+                "class": class_list,
+                "num_members": num_truths_list,
+                "num_obs": num_observations_list,
+                "findable": num_findable_list,
+            }
+        )
+        summary_dfs.append(summary)
+
+    summary = pd.concat(summary_dfs, ignore_index=True)
+    summary.sort_values(by=["window_id", "num_obs"], ascending=[True, False], inplace=True, ignore_index=True)
+    return summary
 
 
 def analyzeObservations(
     observations: pd.DataFrame,
     classes: Optional[dict] = None,
-    metric: Union[str, Callable] = "min_obs",
-    detection_window: int = 15,
+    metric: Union[str, Metrics] = "min_obs",
+    detection_window: Optional[int] = None,
     ignore_after_detected: bool = True,
-    **metric_kwargs
+    num_jobs: Optional[int] = 1,
+    **metric_kwargs,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Can I Find It?
@@ -52,11 +193,17 @@ def analyzeObservations(
             truths belonging to each class as values.
         None : If there are no classes of truths.
     detection_window : int, optional
-        Number of nights within which the metric for detection must be met. Set `detection_window=None` to
-        ignore this requirement.
+        The number of days of observations to consider when
+        determining if a truth is findable. If the number of consecutive days
+        of observations exceeds the detection_window, then a rolling window
+        of size detection_window is used to determine if the truth is findable.
+        If None, then the detection_window is the entire range observations.
     ignore_after_detected : bool, optional
         For use with `detection_window` - Whether to ignore an object in subsequent windows after it has been
         detected in an earlier window.
+    num_jobs : int, optional
+        The number of jobs to run in parallel. If 1, then run in serial. If None, then use the number of
+        CPUs on the machine.
     **metric_kwargs
         Any additional keyword arguments are passed to the desired findability metric.
 
@@ -107,107 +254,27 @@ def analyzeObservations(
     if len(observations) == 0:
         raise ValueError("There are no observations in the observations DataFrame!")
 
-    num_observations_list = []
-    num_truths_list = []
-    num_findable_list = []
-
-    # Populate all_truths DataFrame
-    dtypes = np.dtype([("truth", str), ("num_obs", int), ("findable", int)])
-    data = np.empty(0, dtype=dtypes)
-    all_truths = pd.DataFrame(data)
-
-    num_obs_per_object = observations["truth"].value_counts().values
-    num_obs_descending = observations["truth"].value_counts().index.values
-    all_truths["truth"] = num_obs_descending
-    all_truths["num_obs"] = num_obs_per_object
-
-    night_range = None
-    # if we are using a detection window then work out what nights are in the observations
-    if detection_window is not None:
-        if "night" not in observations.columns:
-            raise ValueError("`night` must be included in `observations` if `detection_window` is not None")
-        night_range = observations["night"].sort_values().unique()
-
     metric_func_mapper = {
-        "min_obs": calcFindableMinObs,
-        "nightly_linkages": calcFindableNightlyLinkages,
+        "min_obs": MinObsMetric,
+        "nightly_linkages": NightlyLinkagesMetric,
     }
-
-    # require that the metric is inputted correctly
-    if not (isinstance(metric, str) or callable(metric)) or (
-        isinstance(metric, str) and metric not in metric_func_mapper
-    ):
-        err = (
-            "Metric should be either 'min_obs', 'nightly_linkages', or a user-defined function that returns\n"
-            "a `~pandas.DataFrame` with the truth IDs that are findable as an index, and a column named\n"
-            "'obs_ids' containing `~numpy.ndarray`s of the observations that made each truth findable"
-        )
-        raise ValueError(err)
-    # get the metric function
-    metric_func: Callable = metric if callable(metric) else metric_func_mapper[metric]  # type: ignore
-
-    # if user wants to use a detection window
-    detected_truths = np.array([])
-    if detection_window is not None:
-        all_findable_observations = []
-
-        # loop over potential detection windows
-        for night in night_range:
-            # mask observations to just this window
-            win_obs = observations[
-                ((observations["night"] >= night) & (observations["night"] < night + detection_window))
-            ]
-
-            # if ignoring previous detections then mask them out as well
-            if ignore_after_detected and len(detected_truths) > 0:
-                win_obs = win_obs[~win_obs["truth"].isin(detected_truths)]
-
-            # work out which observations are findable in this window
-            window_findable_observations = metric_func(win_obs, **metric_kwargs)
-
-            # if user only wants the first detection window then update the detected truths
-            if ignore_after_detected:
-                window_detected_truths = window_findable_observations["truth"].values
-                detected_truths = np.concatenate([detected_truths, window_detected_truths])
-
-            # add a column recording in which window this object was detected
-            window_findable_observations["window_start_night"] = night
-            all_findable_observations.append(window_findable_observations)
-
-        # combine the findable observations tables
-        findable_observations = pd.concat(all_findable_observations).reset_index()
-
-    # otherwise just continue without a detection_window
+    if isinstance(metric, str):
+        if metric not in metric_func_mapper:
+            raise ValueError(f"Unknown metric {metric}")
+        metric_func = metric_func_mapper[metric]
+        metric_ = metric_func(**metric_kwargs)
+    elif isinstance(metric, FindabilityMetric):
+        metric_ = metric
     else:
-        findable_observations = metric_func(observations, **metric_kwargs)
+        raise ValueError("metric must be a string or a FindabilityMetric")
 
-    all_truths.loc[:, "findable"] = 0
-    all_truths.loc[all_truths["truth"].isin(findable_observations["truth"].values), "findable"] = 1
-
-    all_truths["findable"] = all_truths["findable"].astype(int)
-    all_truths.sort_values(by=["num_obs", "truth"], ascending=[False, True], inplace=True, ignore_index=True)
-
-    class_list, truths_list = _classHandler(classes, observations)
-
-    for c, v in zip(class_list, truths_list):
-        num_obs = len(observations[observations["truth"].isin(v)])
-        unique_truths = observations[observations["truth"].isin(v)]["truth"].unique()
-        num_unique_truths = len(unique_truths)
-        findable = int(all_truths[all_truths["truth"].isin(v)]["findable"].sum())
-
-        num_observations_list.append(num_obs)
-        num_truths_list.append(num_unique_truths)
-        num_findable_list.append(findable)
-
-    # Prepare summary DataFrame
-    summary = pd.DataFrame(
-        {
-            "class": class_list,
-            "num_members": num_truths_list,
-            "num_obs": num_observations_list,
-            "findable": num_findable_list,
-        }
+    findable_observations, window_summary = metric_.run(
+        observations, detection_window=detection_window, num_jobs=num_jobs
     )
-    summary.sort_values(by=["num_obs", "class"], ascending=False, inplace=True, ignore_index=True)
+    # Create the all truths dataframe
+    all_truths = _create_all_truths(observations, findable_observations, window_summary)
+
+    # Populate summary DataFrame
+    summary = _create_summary(observations, classes, all_truths, window_summary)
 
     return all_truths, findable_observations, summary
