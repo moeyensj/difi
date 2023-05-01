@@ -68,6 +68,7 @@ def analyzeObservations(
     metric: Union[str, Metrics] = "min_obs",
     detection_window: Optional[int] = None,
     ignore_after_detected: bool = True,
+    num_jobs: Optional[int] = 1,
     **metric_kwargs,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
@@ -105,11 +106,17 @@ def analyzeObservations(
             truths belonging to each class as values.
         None : If there are no classes of truths.
     detection_window : int, optional
-        Number of nights within which the metric for detection must be met. Set `detection_window=None` to
-        ignore this requirement.
+        The number of days of observations to consider when
+        determining if a truth is findable. If the number of consecutive days
+        of observations exceeds the detection_window, then a rolling window
+        of size detection_window is used to determine if the truth is findable.
+        If None, then the detection_window is the entire range observations.
     ignore_after_detected : bool, optional
         For use with `detection_window` - Whether to ignore an object in subsequent windows after it has been
         detected in an earlier window.
+    num_jobs : int, optional
+        The number of jobs to run in parallel. If 1, then run in serial. If None, then use the number of
+        CPUs on the machine.
     **metric_kwargs
         Any additional keyword arguments are passed to the desired findability metric.
 
@@ -184,7 +191,9 @@ def analyzeObservations(
     else:
         raise ValueError("metric must be a string or a FindabilityMetric")
 
-    findable_observations, window_summary = metric_.run(observations, detection_window=detection_window)
+    findable_observations, window_summary = metric_.run(
+        observations, detection_window=detection_window, num_jobs=num_jobs
+    )
 
     all_truths.loc[:, "findable"] = 0
     all_truths.loc[all_truths["truth"].isin(findable_observations["truth"].values), "findable"] = 1

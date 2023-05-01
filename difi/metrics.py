@@ -98,7 +98,7 @@ class FindabilityMetric(ABC):
             windows_dict["start_night"].append(night_min)
             windows_dict["end_night"].append(night_max)
             windows_dict["num_obs"].append(len(observations_in_window))
-            windows_dict["num_findable"].append(findable_i["findable"].sum())
+            windows_dict["num_findable"].append(findable_i["findable"].sum().astype(int))
 
         return pd.DataFrame(windows_dict)
 
@@ -135,7 +135,7 @@ class FindabilityMetric(ABC):
                     {
                         "window_id": [i],
                         "truth": [window_obs["truth"].values[0]],
-                        "findable": [is_findable],
+                        "findable": [1],
                         "obs_ids": [obs_ids],
                     }
                 )
@@ -144,7 +144,11 @@ class FindabilityMetric(ABC):
 
             findable_dfs.append(findable)
 
-        return pd.concat(findable_dfs, ignore_index=True)
+        findable = pd.concat(findable_dfs, ignore_index=True)
+        if len(findable) > 0:
+            findable.loc[:, "window_id"] = findable["window_id"].astype(int)
+            findable.loc[:, "findable"] = findable["findable"].astype(int)
+        return findable
 
     def run_by_object(
         self, observations: pd.DataFrame, windows: List[Tuple[int, int]], num_jobs: Optional[int] = 1
@@ -187,7 +191,7 @@ class FindabilityMetric(ABC):
 
         return findable_dfs
 
-    def _run_window_worker(self, observations: pd.DataFrame) -> pd.DataFrame:
+    def _run_window_worker(self, observations: pd.DataFrame, window_id: int) -> pd.DataFrame:
         """
         Run the metric on a single window of observations.
 
@@ -196,6 +200,8 @@ class FindabilityMetric(ABC):
         observations : `~pandas.DataFrame`
             Observations dataframe containing at least the following columns:
             `obs_id`, `time`, `night`, `truth`.
+        window_id : int
+            The ID of this window.
 
         Returns
         -------
@@ -204,7 +210,7 @@ class FindabilityMetric(ABC):
             'obs_ids' containing `~numpy.ndarray`s of the observations that made each truth findable.
         """
         if len(observations) == 0:
-            return pd.DataFrame({"truth": [], "findable": [], "obs_ids": []})
+            return pd.DataFrame({"window_id": [], "truth": [], "findable": [], "obs_ids": []})
 
         findable = (
             observations.groupby(by=["truth"]).apply(self.determine_object_findable).to_frame("findable")
@@ -214,8 +220,11 @@ class FindabilityMetric(ABC):
             findable["findable"].values.tolist(), index=findable.index, columns=["findable", "obs_ids"]
         )
         findable = findable[["truth"]].merge(expanded, left_index=True, right_index=True)
-        findable = findable[findable["findable"] == True]  # noqa: E712
-        findable.reset_index(inplace=True, drop=True)
+        if len(findable) > 0:
+            findable.loc[:, "findable"] = findable["findable"].astype(int)
+            findable = findable[findable["findable"] == 1]  # noqa: E712
+            findable.insert(0, "window_id", window_id)
+            findable.reset_index(inplace=True, drop=True)
 
         return findable
 
@@ -253,15 +262,16 @@ class FindabilityMetric(ABC):
 
         if num_jobs is None or num_jobs > 1:
             pool = mp.Pool(num_jobs)
-            findable_dfs = pool.map(self._run_window_worker, window_observations)
+            findable_dfs = pool.starmap(
+                self._run_window_worker, zip(window_observations, range(len(windows)))
+            )
             pool.close()
             pool.join()
 
         else:
             findable_dfs = []
             for window_obs in window_observations:
-                findable_i = self._run_window_worker(window_obs)
-                findable_i.insert(0, "window_id", i)
+                findable_i = self._run_window_worker(window_obs, i)
                 findable_dfs.append(findable_i)
 
         return findable_dfs
@@ -315,6 +325,8 @@ class FindabilityMetric(ABC):
         window_summary = self._create_window_summary(observations_sorted, windows, findable_dfs)
 
         findable = pd.concat(findable_dfs, ignore_index=True)
+        findable.loc[:, "window_id"] = findable["window_id"].astype(int)
+        findable.loc[:, "findable"] = findable["findable"].astype(int)
         return findable, window_summary
 
 
