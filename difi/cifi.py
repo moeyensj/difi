@@ -75,7 +75,10 @@ def _create_all_truths(
 
 
 def _create_summary(
-    observations: pd.DataFrame, classes: Union[None, str, Dict], all_truths: pd.DataFrame
+    observations: pd.DataFrame,
+    classes: Union[None, str, Dict],
+    all_truths: pd.DataFrame,
+    window_summary: pd.DataFrame,
 ) -> pd.DataFrame:
     """
     Create a summary dataframe that contains a summary of the number of members
@@ -91,6 +94,8 @@ def _create_summary(
     all_truths : `~pandas.DataFrame`
         Pandas DataFrame containing the truth values and the number of observations
         that make them findable.
+    window_summary : `~pandas.DataFrame`
+        Pandas DataFrame containing the window IDs and the start and end nights of the
 
     Returns
     -------
@@ -98,32 +103,49 @@ def _create_summary(
         Pandas DataFrame containing the summary of the number of members per class,
         the number of observations per class, and the number of findable.
     """
-    num_observations_list: List[int] = []
-    num_truths_list: List[int] = []
-    num_findable_list: List[int] = []
-    class_list, truths_list = _classHandler(classes, observations)
 
-    for c, v in zip(class_list, truths_list):
-        num_obs = len(observations[observations["truth"].isin(v)])
-        unique_truths = observations[observations["truth"].isin(v)]["truth"].unique()
-        num_unique_truths = len(unique_truths)
-        findable = int(all_truths[all_truths["truth"].isin(v)]["findable"].sum())
+    window_ids = window_summary["window_id"].unique()
 
-        num_observations_list.append(num_obs)
-        num_truths_list.append(num_unique_truths)
-        num_findable_list.append(findable)
+    summary_dfs = []
+    for window_id in window_ids:
+        # Create masks for the dataframes
+        window_i = window_summary[window_summary["window_id"] == window_id]
+        all_truths_i = all_truths[all_truths["window_id"] == window_id]
+        night_min = window_i["start_night"].values[0]
+        night_max = window_i["end_night"].values[0]
+        observations_in_window = observations[
+            observations["night"].between(night_min, night_max, inclusive="both")
+        ]
 
-    # Prepare summary DataFrame
-    summary = pd.DataFrame(
-        {
-            "class": class_list,
-            "num_members": num_truths_list,
-            "num_obs": num_observations_list,
-            "findable": num_findable_list,
-        }
-    )
-    summary.sort_values(by=["num_obs", "class"], ascending=False, inplace=True, ignore_index=True)
+        num_observations_list: List[int] = []
+        num_truths_list: List[int] = []
+        num_findable_list: List[int] = []
+        class_list, truths_list = _classHandler(classes, observations_in_window)
 
+        for c, v in zip(class_list, truths_list):
+            num_obs = len(observations_in_window[observations_in_window["truth"].isin(v)])
+            unique_truths = observations_in_window[observations_in_window["truth"].isin(v)]["truth"].unique()
+            num_unique_truths = len(unique_truths)
+            findable = int(all_truths_i[all_truths_i["truth"].isin(v)]["findable"].sum())
+
+            num_observations_list.append(num_obs)
+            num_truths_list.append(num_unique_truths)
+            num_findable_list.append(findable)
+
+        # Prepare summary DataFrame
+        summary = pd.DataFrame(
+            {
+                "window_id": [window_id for _ in range(len(class_list))],
+                "class": class_list,
+                "num_members": num_truths_list,
+                "num_obs": num_observations_list,
+                "findable": num_findable_list,
+            }
+        )
+        summary_dfs.append(summary)
+
+    summary = pd.concat(summary_dfs, ignore_index=True)
+    summary.sort_values(by=["window_id", "num_obs"], ascending=[True, False], inplace=True, ignore_index=True)
     return summary
 
 
@@ -253,6 +275,6 @@ def analyzeObservations(
     all_truths = _create_all_truths(observations, findable_observations, window_summary)
 
     # Populate summary DataFrame
-    summary = _create_summary(observations, classes, all_truths)
+    summary = _create_summary(observations, classes, all_truths, window_summary)
 
     return all_truths, findable_observations, summary
