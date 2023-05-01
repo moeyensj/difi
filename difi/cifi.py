@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple, TypeVar, Union
+from typing import Dict, List, Optional, Tuple, TypeVar, Union
 
 import numpy as np
 import pandas as pd
@@ -11,7 +11,72 @@ __all__ = ["analyzeObservations"]
 Metrics = TypeVar("Metrics", bound=FindabilityMetric)
 
 
-def _create_summary(observations, classes, all_truths):
+def _create_all_truths(
+    observations: pd.DataFrame, findable: pd.DataFrame, window_summary: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Create a dataframe containing all truths, the number of observations, and whether or
+    not they are findable per window.
+
+    Parameters
+    ----------
+    observations : `~pandas.DataFrame`
+        Observations dataframe containing at least the following columns:
+        `obs_id`, `time`, `night`, `truth`.
+    findable : `~pandas.DataFrame`
+        Findable dataframe containing at least the following columns:
+        `truth`, `window_id`.
+    window_summary : `~pandas.DataFrame`
+        Window summary dataframe containing at least the following columns:
+        `window_id`, `start_night`, `end_night`.
+
+    Returns
+    -------
+    all_truths : `~pandas.DataFrame`
+        Dataframe containing all truths, the number of observations, and whether or not they are findable
+        per window.
+    """
+    all_truths_dfs = []
+    window_ids = window_summary["window_id"].unique()
+    for window_id in window_ids:
+        # Create masks for the dataframes
+        window_i = window_summary[window_summary["window_id"] == window_id]
+
+        # Get the findable truths for this window
+        findable_i = findable[findable["window_id"] == window_id]
+
+        # Get the observations for this window
+        night_min = window_i["start_night"].values[0]
+        night_max = window_i["end_night"].values[0]
+        observations_in_window = observations[
+            observations["night"].between(night_min, night_max, inclusive="both")
+        ]
+
+        num_obs_per_object = observations_in_window["truth"].value_counts().values
+        truths_by_num_obs_descending = observations_in_window["truth"].value_counts().index.values
+
+        all_truths_i = pd.DataFrame(
+            {
+                "window_id": [window_id for _ in range(len(truths_by_num_obs_descending))],
+                "truth": truths_by_num_obs_descending,
+                "num_obs": num_obs_per_object,
+                "findable": np.zeros(len(truths_by_num_obs_descending), dtype=int),
+            }
+        )
+
+        all_truths_i.loc[all_truths_i["truth"].isin(findable_i["truth"].values), "findable"] = 1
+        all_truths_dfs.append(all_truths_i)
+
+    all_truths = pd.concat(all_truths_dfs, ignore_index=True)
+    all_truths.sort_values(by=["window_id", "truth"], ascending=[True, True], inplace=True, ignore_index=True)
+    for col in ["window_id", "num_obs", "findable"]:
+        all_truths.loc[:, col] = all_truths[col].astype(int)
+    return all_truths
+
+
+def _create_summary(
+    observations: pd.DataFrame, classes: Union[None, str, Dict], all_truths: pd.DataFrame
+) -> pd.DataFrame:
     """
     Create a summary dataframe that contains a summary of the number of members
     per class, the number of observations per class, and the number of findable.
@@ -167,16 +232,6 @@ def analyzeObservations(
     if len(observations) == 0:
         raise ValueError("There are no observations in the observations DataFrame!")
 
-    # Populate all_truths DataFrame
-    dtypes = np.dtype([("truth", str), ("num_obs", int), ("findable", int)])
-    data = np.empty(0, dtype=dtypes)
-    all_truths = pd.DataFrame(data)
-
-    num_obs_per_object = observations["truth"].value_counts().values
-    num_obs_descending = observations["truth"].value_counts().index.values
-    all_truths["truth"] = num_obs_descending
-    all_truths["num_obs"] = num_obs_per_object
-
     metric_func_mapper = {
         "min_obs": MinObsMetric,
         "nightly_linkages": NightlyLinkagesMetric,
@@ -194,12 +249,8 @@ def analyzeObservations(
     findable_observations, window_summary = metric_.run(
         observations, detection_window=detection_window, num_jobs=num_jobs
     )
-
-    all_truths.loc[:, "findable"] = 0
-    all_truths.loc[all_truths["truth"].isin(findable_observations["truth"].values), "findable"] = 1
-
-    all_truths["findable"] = all_truths["findable"].astype(int)
-    all_truths.sort_values(by=["num_obs", "truth"], ascending=[False, True], inplace=True, ignore_index=True)
+    # Create the all truths dataframe
+    all_truths = _create_all_truths(observations, findable_observations, window_summary)
 
     # Populate summary DataFrame
     summary = _create_summary(observations, classes, all_truths)

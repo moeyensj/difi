@@ -60,7 +60,7 @@ class FindabilityMetric(ABC):
     @staticmethod
     def _create_window_summary(
         observations: pd.DataFrame, windows: List[Tuple[int, int]], findable: List[pd.DataFrame]
-    ):
+    ) -> pd.DataFrame:
         """
         Create a summary dataframe of the windows, their start and end nights, the number of observations
         and findable truths in each window.
