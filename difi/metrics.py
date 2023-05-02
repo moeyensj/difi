@@ -43,6 +43,89 @@ def haversine_distance(ra1: np.ndarray, dec1: np.ndarray, ra2: np.ndarray, dec2:
     return np.degrees(c)
 
 
+def find_observations_within_max_time_separation(
+    obs_ids: np.ndarray, times: np.ndarray, max_obs_separation: float
+) -> np.ndarray:
+    """
+    Find all observation IDs that are within max_obs_separation of another observation.
+
+    Parameters
+    ----------
+    obs_ids : `~numpy.ndarray`
+        Array of observation IDs.
+    times : `~numpy.ndarray`
+        Array of observation times in days.
+    max_obs_separation : float
+        Maximum time separation between observations in minutes.
+
+    Returns
+    -------
+    valid_obs : `~numpy.ndarray`
+        Array of observation IDs that are within max_obs_separation of another observation.
+    """
+    # Calculate the time difference between observations
+    # (assumes observations are sorted by ascending time)
+    delta_t = times[1:] - times[:-1]
+    delta_t_minutes = delta_t * 24 * 60
+
+    # Create mask that selects all observations within max_obs_separation of
+    # each other
+    mask = delta_t_minutes <= max_obs_separation
+    start_times = times[np.where(mask)[0]]
+    end_times = times[np.where(mask)[0] + 1]
+
+    # Combine times and select all observations match the linkage times
+    linkage_times = np.unique(np.concatenate([start_times, end_times]))
+    valid_obs = obs_ids[np.isin(times, linkage_times)]
+
+    if len(valid_obs) == 0:
+        return np.array([])
+    else:
+        return valid_obs
+
+
+def find_observations_beyond_angular_separation(obs_ids, nights, ra, dec, min_angular_separation):
+    """
+    Find all observation IDs that are separated by at least min_angular_separation in a night.
+
+    Parameters
+    ----------
+    obs_ids : `~numpy.ndarray`
+        Array of observation IDs.
+    nights : `~numpy.ndarray`
+        Array of observation nights.
+    ra : `~numpy.ndarray`
+        Array of observation right ascensions.
+    dec : `~numpy.ndarray`
+        Array of observation declinations.
+    min_angular_separation : float
+        Minimum angular separation between observations in arcseconds.
+
+    Returns
+    -------
+    valid_obs : `~numpy.ndarray`
+        Array of observation IDs that are separated by at least min_angular_separation in a night.
+    """
+    valid_obs = []
+    for night in nights:
+        obs_ids_night = obs_ids[nights == night]
+        ra_night = ra[nights == night]
+        dec_night = dec[nights == night]
+
+        # Calculate the angular separation between consecutive observations
+        distances = haversine_distance(ra_night[:-1], dec_night[:-1], ra_night[1:], dec_night[1:])
+        distance_mask = distances >= min_angular_separation / 3600
+
+        valid_obs_start = obs_ids_night[np.where(distance_mask)[0]]
+        valid_obs_end = obs_ids_night[np.where(distance_mask)[0] + 1]
+        valid_obs.append(np.unique(np.concatenate([valid_obs_start, valid_obs_end])))
+
+    if len(valid_obs) == 0:
+        return np.array([])
+    else:
+        return np.unique(np.concatenate(valid_obs))
+
+
 class FindabilityMetric(ABC):
     @abstractmethod
     def determine_object_findable(self, observations):
@@ -436,56 +519,44 @@ class NightlyLinkagesMetric(FindabilityMetric):
         dec = observations["dec"].values
 
         if self.linkage_min_obs > 1:
-            # Calculate the time difference between observations
-            # (assumes observations are sorted by ascending time)
-            delta_t = times[1:] - times[:-1]
 
-            # Create mask that selects all observations within max_obs_separation of
-            # each other
-            mask = delta_t <= self.max_obs_separation
-            start_times = times[np.where(mask)[0]]
-            end_times = times[np.where(mask)[0] + 1]
+            linkage_obs = find_observations_within_max_time_separation(
+                obs_ids,
+                times,
+                self.max_obs_separation * (60.0 * 24),
+            )
 
-            # Combine times and select all observations match the linkage times
-            linkage_times = np.unique(np.concatenate([start_times, end_times]))
-            linkage_obs = obs_ids[np.isin(times, linkage_times)]
+            # Find the number of observations on each night
             linkage_nights, night_counts = np.unique(
                 nights[np.isin(obs_ids, linkage_obs)], return_counts=True
             )
 
             # Make sure that there are enough observations on each night to make a linkage
-            valid_nights = linkage_nights[night_counts >= self.linkage_min_obs]
-            linkage_obs = obs_ids[np.isin(nights, valid_nights)]
+            valid_unique_nights = linkage_nights[night_counts >= self.linkage_min_obs]
+            valid_mask = np.isin(nights, valid_unique_nights)
+            valid_nights = nights[valid_mask]
+            linkage_obs = obs_ids[valid_mask]
 
             if self.min_obs_angular_separation > 0:
-                valid_obs = []
-                for night in valid_nights:
-                    obs_ids_night = obs_ids[nights == night]
-                    ra_night = ra[nights == night]
-                    dec_night = dec[nights == night]
 
-                    # Calculate the angular separation between consecutive observations
-                    distances = haversine_distance(ra_night[:-1], dec_night[:-1], ra_night[1:], dec_night[1:])
-                    distance_mask = distances >= self.min_obs_angular_separation / 3600
-
-                    valid_obs_start = obs_ids_night[np.where(distance_mask)[0]]
-                    valid_obs_end = obs_ids_night[np.where(distance_mask)[0] + 1]
-                    valid_obs.append(np.unique(np.concatenate([valid_obs_start, valid_obs_end])))
-
+                linkage_obs = find_observations_beyond_angular_separation(
+                    linkage_obs,
+                    valid_nights,
+                    ra[valid_mask],
+                    dec[valid_mask],
+                    self.min_obs_angular_separation,
+                )
                 # If there are no valid observations then the object is not findable
-                if len(valid_obs) == 0:
+                if len(linkage_obs) == 0:
                     return False, []
 
-                # Combine all valid observations
-                linkage_obs = np.unique(np.concatenate(valid_obs))
-
                 # Update the valid nights
-                valid_nights = np.unique(nights[np.isin(obs_ids, linkage_obs)])
+                valid_unique_nights = np.unique(nights[np.isin(obs_ids, linkage_obs)])
 
         else:
             # If linkage_min_obs is 1, then we don't need to check for time separation
             # All nights with at least one observation are valid
-            valid_nights = np.unique(nights)
+            valid_unique_nights = np.unique(nights)
             linkage_obs = obs_ids
 
         # Make sure that the number of observations is still linkage_min_obs * min_linkage_nights
@@ -493,7 +564,7 @@ class NightlyLinkagesMetric(FindabilityMetric):
 
         # Make sure that the number of unique nights on which a linkage is made
         # is still equal to or greater than the minimum number of nights.
-        enough_nights = len(valid_nights) >= self.min_linkage_nights
+        enough_nights = len(valid_unique_nights) >= self.min_linkage_nights
 
         if not enough_obs or not enough_nights:
             return False, []
