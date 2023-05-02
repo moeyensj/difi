@@ -71,7 +71,9 @@ def test_calcFindableNightlyLinkages(test_observations, by_object):
 
     # All three objects should be findable (each object has at least two tracklets
     # with consecutive observations no more than 2 hours apart)
-    metric = NightlyLinkagesMetric(linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=2)
+    metric = NightlyLinkagesMetric(
+        linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=2, min_obs_angular_separation=0
+    )
     findable_observations, window_summary = metric.run(test_observations, by_object=by_object)
     assert len(findable_observations) == 3
 
@@ -84,9 +86,9 @@ def test_calcFindableNightlyLinkages(test_observations, by_object):
         findable_observations[findable_observations["truth"] == "23636"]["obs_ids"].values[0],
         np.array(
             [
-                "obs_000001",
+                "obs_000001",  # tracklet 1
                 "obs_000002",  # tracklet 1
-                "obs_000004",
+                "obs_000004",  # tracklet 2
                 "obs_000005",  # tracklet 2
             ]
         ),
@@ -103,18 +105,18 @@ def test_calcFindableNightlyLinkages(test_observations, by_object):
         findable_observations[findable_observations["truth"] == "82134"]["obs_ids"].values[0],
         np.array(
             [
-                "obs_000016",
-                "obs_000017",
-                "obs_000018",
+                "obs_000016",  # tracklet 1
+                "obs_000017",  # tracklet 1
+                "obs_000018",  # tracklet 1
                 "obs_000019",  # tracklet 1
-                "obs_000021",
-                "obs_000022",
+                "obs_000021",  # tracklet 2
+                "obs_000022",  # tracklet 2
                 "obs_000023",  # tracklet 2
-                "obs_000024",
+                "obs_000024",  # tracklet 3
                 "obs_000025",  # tracklet 3
-                "obs_000026",
+                "obs_000026",  # tracklet 4
                 "obs_000027",  # tracklet 4
-                "obs_000028",
+                "obs_000028",  # tracklet 5
                 "obs_000029",  # tracklet 5
             ]
         ),
@@ -122,7 +124,9 @@ def test_calcFindableNightlyLinkages(test_observations, by_object):
 
     # Only two objects should be findable (each object has at least three tracklets
     # with consecutive observations no more than 2 hours apart)
-    metric = NightlyLinkagesMetric(linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=3)
+    metric = NightlyLinkagesMetric(
+        linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=3, min_obs_angular_separation=1
+    )
     findable_observations, window_summary = metric.run(test_observations, by_object=by_object)
     assert len(findable_observations) == 2
 
@@ -136,23 +140,24 @@ def test_calcFindableNightlyLinkages(test_observations, by_object):
         test_observations[test_observations["truth"] == "58177"]["obs_id"].values,
     )
 
-    # Object 82134 has 3 tracklets no more than 2 hours long
+    # Object 82134 has 3 tracklets no more than 2 hours long (but several observations that
+    # could form tracklets are too close together)
     np.testing.assert_equal(
         findable_observations[findable_observations["truth"] == "82134"]["obs_ids"].values[0],
         np.array(
             [
-                "obs_000016",
-                "obs_000017",
-                "obs_000018",
-                "obs_000019",  # tracklet 1
-                "obs_000021",
-                "obs_000022",
-                "obs_000023",  # tracklet 2
-                "obs_000024",
+                # "obs_000016",  # tracklet 1
+                "obs_000017",  # tracklet 1
+                "obs_000018",  # tracklet 1
+                # "obs_000019",  # tracklet 1
+                "obs_000021",  # tracklet 2
+                "obs_000022",  # tracklet 2
+                # "obs_000023",  # tracklet 2
+                "obs_000024",  # tracklet 3
                 "obs_000025",  # tracklet 3
-                "obs_000026",
+                "obs_000026",  # tracklet 4
                 "obs_000027",  # tracklet 4
-                "obs_000028",
+                "obs_000028",  # tracklet 5
                 "obs_000029",  # tracklet 5
             ]
         ),
@@ -160,7 +165,9 @@ def test_calcFindableNightlyLinkages(test_observations, by_object):
 
     # Only one object should be findable (this object has at least two tracklets
     # with at least 3 consecutive observations no more than 2 hours apart)
-    metric = NightlyLinkagesMetric(linkage_min_obs=3, max_obs_separation=2 / 24, min_linkage_nights=2)
+    metric = NightlyLinkagesMetric(
+        linkage_min_obs=3, max_obs_separation=2 / 24, min_linkage_nights=2, min_obs_angular_separation=0
+    )
     findable_observations, window_summary = metric.run(test_observations, by_object=by_object)
     assert len(findable_observations) == 1
 
@@ -173,17 +180,23 @@ def test_calcFindableNightlyLinkages(test_observations, by_object):
         findable_observations[findable_observations["truth"] == "82134"]["obs_ids"].values[0],
         np.array(
             [
-                "obs_000016",
-                "obs_000017",
-                "obs_000018",
+                "obs_000016",  # tracklet 1
+                "obs_000017",  # tracklet 1
+                "obs_000018",  # tracklet 1
                 "obs_000019",  # tracklet 1
-                "obs_000021",
-                "obs_000022",
+                "obs_000021",  # tracklet 2
+                "obs_000022",  # tracklet 2
                 "obs_000023",  # tracklet 2
             ]
         ),
     )
 
+    # No objects should be findable if the minimum separation is 100 arcseconds
+    metric = NightlyLinkagesMetric(
+        linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=3, min_obs_angular_separation=100
+    )
+    findable_observations, window_summary = metric.run(test_observations, by_object=by_object)
+    assert len(findable_observations) == 0
     return
 
 

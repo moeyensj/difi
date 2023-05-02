@@ -5,10 +5,42 @@ from typing import Any, Dict, List, Optional, Tuple, TypeVar
 
 import numpy as np
 import pandas as pd
+from numba import njit
 
 __all__ = ["FindabilityMetric", "NightlyLinkagesMetric", "MinObsMetric"]
 
 Metrics = TypeVar("Metrics", bound="FindabilityMetric")
+
+
+@njit(cache=True)
+def haversine_distance(ra1: np.ndarray, dec1: np.ndarray, ra2: np.ndarray, dec2: np.ndarray) -> np.ndarray:
+    """
+    Calculate the great circle distance between two points on a sphere.
+
+    Parameters
+    ----------
+    ra1 : `~numpy.ndarray`
+        Right ascension of the first point in degrees.
+    dec1 : `~numpy.ndarray`
+        Declination of the first point in degrees.
+    ra2 : `~numpy.ndarray`
+        Right ascension of the second point in degrees.
+    dec2 : `~numpy.ndarray`
+        Declination of the second point in degrees.
+
+    Returns
+    -------
+    distance : `~numpy.ndarray`
+        The great circle distance between the two points in degrees.
+    """
+    ra1, dec1, ra2, dec2 = map(np.radians, [ra1, dec1, ra2, dec2])
+
+    dlon = ra2 - ra1
+    dlat = dec2 - dec1
+
+    a = np.sin(dlat / 2.0) ** 2 + np.cos(dec1) * np.cos(dec2) * np.sin(dlon / 2.0) ** 2
+    c = 2 * np.arcsin(np.sqrt(a))
+    return np.degrees(c)
 
 
 class FindabilityMetric(ABC):
@@ -336,6 +368,7 @@ class NightlyLinkagesMetric(FindabilityMetric):
         linkage_min_obs: int = 2,
         max_obs_separation: float = 1.5 / 24,
         min_linkage_nights: int = 3,
+        min_obs_angular_separation: float = 1.0,
     ):
         """
         Given observations belonging to one object, finds all observations that are within
@@ -355,11 +388,15 @@ class NightlyLinkagesMetric(FindabilityMetric):
             Maximum timespan between two observations.
         min_linkage_nights : int, optional
             Minimum number of nights on which a linkage should appear.
+        min_obs_angular_separation : float, optional
+            Minimum angular separation between two consecutie observations for them
+            to be considered to be in a linkage (in arcseconds).
         """
         super().__init__()
         self.linkage_min_obs = linkage_min_obs
         self.min_linkage_nights = min_linkage_nights
         self.max_obs_separation = max_obs_separation
+        self.min_obs_angular_separation = min_obs_angular_separation
 
     def determine_object_findable(self, observations: pd.DataFrame) -> Tuple[bool, List[str]]:
         """
@@ -395,6 +432,8 @@ class NightlyLinkagesMetric(FindabilityMetric):
         times = observations["time"].values
         obs_ids = observations["obs_id"].values
         nights = observations["night"].values
+        ra = observations["ra"].values
+        dec = observations["dec"].values
 
         if self.linkage_min_obs > 1:
             # Calculate the time difference between observations
@@ -417,6 +456,32 @@ class NightlyLinkagesMetric(FindabilityMetric):
             # Make sure that there are enough observations on each night to make a linkage
             valid_nights = linkage_nights[night_counts >= self.linkage_min_obs]
             linkage_obs = obs_ids[np.isin(nights, valid_nights)]
+
+            if self.min_obs_angular_separation > 0:
+                valid_obs = []
+                for night in valid_nights:
+                    obs_ids_night = obs_ids[nights == night]
+                    ra_night = ra[nights == night]
+                    dec_night = dec[nights == night]
+
+                    # Calculate the angular separation between consecutive observations
+                    distances = haversine_distance(ra_night[:-1], dec_night[:-1], ra_night[1:], dec_night[1:])
+                    distance_mask = distances >= self.min_obs_angular_separation / 3600
+
+                    valid_obs_start = obs_ids_night[np.where(distance_mask)[0]]
+                    valid_obs_end = obs_ids_night[np.where(distance_mask)[0] + 1]
+                    valid_obs.append(np.unique(np.concatenate([valid_obs_start, valid_obs_end])))
+
+                # If there are no valid observations then the object is not findable
+                if len(valid_obs) == 0:
+                    return False, []
+
+                # Combine all valid observations
+                linkage_obs = np.unique(np.concatenate(valid_obs))
+
+                # Update the valid nights
+                valid_nights = np.unique(nights[np.isin(obs_ids, linkage_obs)])
+
         else:
             # If linkage_min_obs is 1, then we don't need to check for time separation
             # All nights with at least one observation are valid
