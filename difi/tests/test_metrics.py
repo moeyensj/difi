@@ -2,7 +2,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from ..metrics import FindabilityMetric, MinObsMetric, NightlyLinkagesMetric
+from ..metrics import (
+    FindabilityMetric,
+    MinObsMetric,
+    NightlyLinkagesMetric,
+    find_observations_within_max_time_separation,
+)
 
 
 def test_FindabilityMetric__compute_windows():
@@ -16,6 +21,25 @@ def test_FindabilityMetric__compute_windows():
     # Test that the function returns the correct windows when detection_window is 2
     windows = FindabilityMetric._compute_windows(test_observations, detection_window=2)
     assert windows == [(1, 3), (2, 4), (3, 5), (4, 6), (5, 7), (6, 8), (7, 9), (8, 10), (9, 10)]
+
+
+def test_find_observations_within_max_time_separation():
+    # Create test data
+    obs_ids = np.array(["obs_1", "obs_2", "obs_3", "obs_4"])
+    times = np.array([1, 1.9, 3.8, 5.7], dtype=np.float64)
+    times = times / 24.0 / 60  # Convert to days
+
+    # Test that the function returns the correct observations when max_time_separation is 0.1
+    valid_obs_ids = find_observations_within_max_time_separation(obs_ids, times, 1.0)
+    np.testing.assert_array_equal(valid_obs_ids, np.array(["obs_1", "obs_2"]))
+
+    # Test that the function returns the correct observations when max_time_separation is 0.2
+    valid_obs_ids = find_observations_within_max_time_separation(obs_ids, times, 2.0)
+    np.testing.assert_array_equal(valid_obs_ids, np.array(["obs_1", "obs_2", "obs_3", "obs_4"]))
+
+    # Test that the function returns the correct observations when max_time_separation is 0.0
+    valid_obs_ids = find_observations_within_max_time_separation(obs_ids, times, 0.0)
+    np.testing.assert_array_equal(valid_obs_ids, np.array([]))
 
 
 @pytest.mark.parametrize(

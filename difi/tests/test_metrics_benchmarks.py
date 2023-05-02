@@ -1,6 +1,25 @@
+import numpy as np
 import pytest
 
-from ..metrics import MinObsMetric, NightlyLinkagesMetric
+from ..metrics import (
+    MinObsMetric,
+    NightlyLinkagesMetric,
+    find_observations_within_max_time_separation,
+)
+
+
+@pytest.mark.benchmark(group="metric_helpers")
+def test_benchmark_find_observations_within_max_time_separation(benchmark):
+
+    N = 1000
+    obs_ids = np.array(["obs_{}".format(i) for i in range(N)])
+    times = np.random.uniform(0, 100, N)
+    times = times / 24.0 / 60  # Convert to days
+
+    # Test that the function returns the correct observations when max_time_separation is 0.1
+    benchmark(find_observations_within_max_time_separation, obs_ids, times, 1.0)
+
+    return
 
 
 @pytest.mark.parametrize(
