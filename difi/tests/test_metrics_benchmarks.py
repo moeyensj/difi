@@ -4,6 +4,7 @@ import pytest
 from ..metrics import (
     MinObsMetric,
     NightlyLinkagesMetric,
+    find_observations_beyond_angular_separation,
     find_observations_within_max_time_separation,
 )
 
@@ -11,13 +12,30 @@ from ..metrics import (
 @pytest.mark.benchmark(group="metric_helpers")
 def test_benchmark_find_observations_within_max_time_separation(benchmark):
 
+    rng = np.random.default_rng(20230503)
     N = 1000
     obs_ids = np.array(["obs_{}".format(i) for i in range(N)])
-    times = np.random.uniform(0, 100, N)
+    times = rng.uniform(0, 30, N)
     times = times / 24.0 / 60  # Convert to days
 
-    # Test that the function returns the correct observations when max_time_separation is 0.1
     benchmark(find_observations_within_max_time_separation, obs_ids, times, 1.0)
+
+    return
+
+
+@pytest.mark.benchmark(group="metric_helpers")
+def test_benchmark_find_observations_beyond_angular_separation(benchmark):
+
+    rng = np.random.default_rng(20230503)
+    N = 1000
+    obs_ids = np.array(["obs_{}".format(i) for i in range(N)])
+    times = rng.uniform(0, 30, N)
+    times = times / 24.0 / 60  # Convert to days
+    ra = rng.uniform(0, 360, N)
+    dec = rng.uniform(-90, 90, N)
+    nights = np.floor(times).astype(int)
+
+    benchmark(find_observations_beyond_angular_separation, obs_ids, nights, ra, dec, 1.0)
 
     return
 
