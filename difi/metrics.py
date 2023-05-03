@@ -81,14 +81,12 @@ def find_observations_within_max_time_separation(times: np.ndarray, max_obs_sepa
     return valid_obs
 
 
-def find_observations_beyond_angular_separation(obs_ids, nights, ra, dec, min_angular_separation):
+def find_observations_beyond_angular_separation(nights, ra, dec, min_angular_separation):
     """
     Find all observation IDs that are separated by at least min_angular_separation in a night.
 
     Parameters
     ----------
-    obs_ids : `~numpy.ndarray`
-        Array of observation IDs.
     nights : `~numpy.ndarray`
         Array of observation nights.
     ra : `~numpy.ndarray`
@@ -101,11 +99,12 @@ def find_observations_beyond_angular_separation(obs_ids, nights, ra, dec, min_an
     Returns
     -------
     valid_obs : `~numpy.ndarray`
-        Array of observation IDs that are separated by at least min_angular_separation in a night.
+        Array of indices of observations that are separated by at least min_angular_separation in a night.
     """
+    obs_indices = np.arange(len(nights))
     valid_obs = []
     for night in nights:
-        obs_ids_night = obs_ids[nights == night]
+        obs_ids_night = obs_indices[nights == night]
         ra_night = ra[nights == night]
         dec_night = dec[nights == night]
 
@@ -537,13 +536,14 @@ class NightlyLinkagesMetric(FindabilityMetric):
 
             if self.min_obs_angular_separation > 0:
 
-                linkage_obs = find_observations_beyond_angular_separation(
-                    linkage_obs,
-                    valid_nights,
-                    ra[valid_mask],
-                    dec[valid_mask],
-                    self.min_obs_angular_separation,
-                )
+                linkage_obs = linkage_obs[
+                    find_observations_beyond_angular_separation(
+                        valid_nights,
+                        ra[valid_mask],
+                        dec[valid_mask],
+                        self.min_obs_angular_separation,
+                    )
+                ]
                 # If there are no valid observations then the object is not findable
                 if len(linkage_obs) == 0:
                     return False, []

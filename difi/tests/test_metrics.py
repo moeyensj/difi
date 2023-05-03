@@ -53,15 +53,15 @@ def test_find_observations_beyond_angular_separation():
     nights = np.array([1, 1, 2, 2], dtype=np.int64)
 
     # Test that the function returns the correct observations the minimum angular separation is 0.0
-    valid_obs = find_observations_beyond_angular_separation(obs_ids, nights, ra, dec, 0.0)
+    valid_obs = obs_ids[find_observations_beyond_angular_separation(nights, ra, dec, 0.0)]
     np.testing.assert_array_equal(valid_obs, np.array(["obs_1", "obs_2", "obs_3", "obs_4"]))
 
     # Test that the function returns the correct observations the minimum angular separation is 1.5
-    valid_obs = find_observations_beyond_angular_separation(obs_ids, nights, ra, dec, 1.5)
+    valid_obs = obs_ids[find_observations_beyond_angular_separation(nights, ra, dec, 1.5)]
     np.testing.assert_array_equal(valid_obs, np.array(["obs_3", "obs_4"]))
 
     # Test that the function returns the correct observations the minimum angular separation is 3.0
-    valid_obs = find_observations_beyond_angular_separation(obs_ids, nights, ra, dec, 3.0)
+    valid_obs = obs_ids[find_observations_beyond_angular_separation(nights, ra, dec, 3.0)]
     np.testing.assert_array_equal(valid_obs, np.array([], dtype=np.str))
 
 

@@ -27,14 +27,13 @@ def test_benchmark_find_observations_beyond_angular_separation(benchmark):
 
     rng = np.random.default_rng(20230503)
     N = 1000
-    obs_ids = np.array(["obs_{}".format(i) for i in range(N)])
     times = rng.uniform(0, 30, N)
     times = times / 24.0 / 60  # Convert to days
     ra = rng.uniform(0, 360, N)
     dec = rng.uniform(-90, 90, N)
     nights = np.floor(times).astype(int)
 
-    benchmark(find_observations_beyond_angular_separation, obs_ids, nights, ra, dec, 1.0)
+    benchmark(find_observations_beyond_angular_separation, nights, ra, dec, 1.0)
 
     return
 
