@@ -1,7 +1,7 @@
 import multiprocessing as mp
 from abc import ABC, abstractmethod
 from itertools import repeat
-from typing import Any, Dict, List, Optional, Tuple, TypeVar
+from typing import Any, Dict, List, Optional, Tuple, TypeVar, Union
 
 import numpy as np
 import pandas as pd
@@ -44,15 +44,13 @@ def haversine_distance(ra1: np.ndarray, dec1: np.ndarray, ra2: np.ndarray, dec2:
 
 
 def find_observations_within_max_time_separation(
-    obs_ids: np.ndarray, times: np.ndarray, max_obs_separation: float
-) -> np.ndarray:
+    times: np.ndarray, max_obs_separation: float
+) -> Union[np.ndarray, List]:
     """
     Find all observation IDs that are within max_obs_separation of another observation.
 
     Parameters
     ----------
-    obs_ids : `~numpy.ndarray`
-        Array of observation IDs.
     times : `~numpy.ndarray`
         Array of observation times in days.
     max_obs_separation : float
@@ -60,9 +58,12 @@ def find_observations_within_max_time_separation(
 
     Returns
     -------
-    valid_obs : `~numpy.ndarray`
-        Array of observation IDs that are within max_obs_separation of another observation.
+    valid_obs : Union[`~numpy.ndarray`, List]
+        Array of indices of observations that are within max_obs_separation of another observation.
     """
+    # Create array of observation indices
+    obs_indices = np.arange(len(times))
+
     # Calculate the time difference between observations
     # (assumes observations are sorted by ascending time)
     delta_t = times[1:] - times[:-1]
@@ -71,15 +72,14 @@ def find_observations_within_max_time_separation(
     # Create mask that selects all observations within max_obs_separation of
     # each other
     mask = delta_t_minutes <= max_obs_separation
-    start_times = times[np.where(mask)[0]]
-    end_times = times[np.where(mask)[0] + 1]
+    start_times_indices = obs_indices[np.where(mask)[0]]
+    end_times_indices = obs_indices[np.where(mask)[0] + 1]
 
     # Combine times and select all observations match the linkage times
-    linkage_times = np.unique(np.concatenate([start_times, end_times]))
-    valid_obs = obs_ids[np.isin(times, linkage_times)]
+    valid_obs = np.unique(np.concatenate([start_times_indices, end_times_indices]))
 
     if len(valid_obs) == 0:
-        return np.array([])
+        return []
     else:
         return valid_obs
 
@@ -520,11 +520,12 @@ class NightlyLinkagesMetric(FindabilityMetric):
 
         if self.linkage_min_obs > 1:
 
-            linkage_obs = find_observations_within_max_time_separation(
-                obs_ids,
-                times,
-                self.max_obs_separation * (60.0 * 24),
-            )
+            linkage_obs = obs_ids[
+                find_observations_within_max_time_separation(
+                    times,
+                    self.max_obs_separation * (60.0 * 24),
+                )
+            ]
 
             # Find the number of observations on each night
             linkage_nights, night_counts = np.unique(

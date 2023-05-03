@@ -14,11 +14,10 @@ def test_benchmark_find_observations_within_max_time_separation(benchmark):
 
     rng = np.random.default_rng(20230503)
     N = 1000
-    obs_ids = np.array(["obs_{}".format(i) for i in range(N)])
     times = rng.uniform(0, 30, N)
     times = times / 24.0 / 60  # Convert to days
 
-    benchmark(find_observations_within_max_time_separation, obs_ids, times, 1.0)
+    benchmark(find_observations_within_max_time_separation, times, 1.0)
 
     return
 
