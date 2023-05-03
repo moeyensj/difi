@@ -43,6 +43,25 @@ def test_find_observations_within_max_time_separation():
     np.testing.assert_array_equal(valid_obs, np.array([], dtype=str))
 
 
+def test_find_observations_within_max_time_separation_no_numba():
+    # Create test data
+    obs_ids = np.array(["obs_1", "obs_2", "obs_3", "obs_4"])
+    times = np.array([1, 1.9, 3.8, 5.7], dtype=np.float64)
+    times = times / 24.0 / 60  # Convert to days
+
+    # Test that the function returns the correct observations when max_time_separation is 0.1
+    valid_obs = obs_ids[find_observations_within_max_time_separation.py_func(times, 1.0)]
+    np.testing.assert_array_equal(valid_obs, np.array(["obs_1", "obs_2"]))
+
+    # Test that the function returns the correct observations when max_time_separation is 0.2
+    valid_obs = obs_ids[find_observations_within_max_time_separation.py_func(times, 2.0)]
+    np.testing.assert_array_equal(valid_obs, np.array(["obs_1", "obs_2", "obs_3", "obs_4"]))
+
+    # Test that the function returns the correct observations when max_time_separation is 0.0
+    valid_obs = obs_ids[find_observations_within_max_time_separation.py_func(times, 0.0)]
+    np.testing.assert_array_equal(valid_obs, np.array([], dtype=str))
+
+
 def test_find_observations_beyond_angular_separation():
     # Create test data
     obs_ids = np.array(["obs_1", "obs_2", "obs_3", "obs_4"])
@@ -62,6 +81,28 @@ def test_find_observations_beyond_angular_separation():
 
     # Test that the function returns the correct observations the minimum angular separation is 3.0
     valid_obs = obs_ids[find_observations_beyond_angular_separation(nights, ra, dec, 3.0)]
+    np.testing.assert_array_equal(valid_obs, np.array([], dtype=str))
+
+
+def test_find_observations_beyond_angular_separation_no_numba():
+    # Create test data
+    obs_ids = np.array(["obs_1", "obs_2", "obs_3", "obs_4"])
+    ra = np.array([0, 0, 4, 6], dtype=np.float64) / 3600
+    dec = np.array([0, 1, 4, 4], dtype=np.float64) / 3600
+    times = np.array([1, 1.9, 3.8, 5.7], dtype=np.float64)
+    times = times / 24.0 / 60  # Convert to days
+    nights = np.array([1, 1, 2, 2], dtype=np.int64)
+
+    # Test that the function returns the correct observations the minimum angular separation is 0.0
+    valid_obs = obs_ids[find_observations_beyond_angular_separation.py_func(nights, ra, dec, 0.0)]
+    np.testing.assert_array_equal(valid_obs, np.array(["obs_1", "obs_2", "obs_3", "obs_4"]))
+
+    # Test that the function returns the correct observations the minimum angular separation is 1.5
+    valid_obs = obs_ids[find_observations_beyond_angular_separation.py_func(nights, ra, dec, 1.5)]
+    np.testing.assert_array_equal(valid_obs, np.array(["obs_3", "obs_4"]))
+
+    # Test that the function returns the correct observations the minimum angular separation is 3.0
+    valid_obs = obs_ids[find_observations_beyond_angular_separation.py_func(nights, ra, dec, 3.0)]
     np.testing.assert_array_equal(valid_obs, np.array([], dtype=str))
 
 

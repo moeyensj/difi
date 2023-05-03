@@ -61,7 +61,7 @@ def find_observations_within_max_time_separation(times: np.ndarray, max_obs_sepa
         Array of indices of observations that are within max_obs_separation of another observation.
     """
     # Create array of observation indices
-    obs_indices = np.arange(len(times))
+    obs_indices = np.arange(len(times), dtype=np.int32)
 
     # Calculate the time difference between observations
     # (assumes observations are sorted by ascending time)
@@ -104,7 +104,7 @@ def find_observations_beyond_angular_separation(
     valid_obs : `~numpy.ndarray`
         Array of indices of observations that are separated by at least min_angular_separation in a night.
     """
-    obs_indices = np.arange(len(nights))
+    obs_indices = np.arange(len(nights), dtype=np.int32)
     valid_obs = set()
     for night in nights:
         obs_ids_night = obs_indices[nights == night]
@@ -122,7 +122,7 @@ def find_observations_beyond_angular_separation(
         for obs_id in valid_obs_end:
             valid_obs.add(obs_id)
 
-    return np.array(list(valid_obs))
+    return np.array(list(valid_obs), dtype=np.int32)
 
 
 class FindabilityMetric(ABC):
