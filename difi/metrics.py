@@ -1,7 +1,7 @@
 import multiprocessing as mp
 from abc import ABC, abstractmethod
 from itertools import repeat
-from typing import Any, Dict, List, Optional, Tuple, TypeVar, Union
+from typing import Any, Dict, List, Optional, Tuple, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -43,9 +43,8 @@ def haversine_distance(ra1: np.ndarray, dec1: np.ndarray, ra2: np.ndarray, dec2:
     return np.degrees(c)
 
 
-def find_observations_within_max_time_separation(
-    times: np.ndarray, max_obs_separation: float
-) -> Union[np.ndarray, List]:
+@njit(cache=True)
+def find_observations_within_max_time_separation(times: np.ndarray, max_obs_separation: float) -> np.ndarray:
     """
     Find all observation IDs that are within max_obs_separation of another observation.
 
@@ -58,7 +57,7 @@ def find_observations_within_max_time_separation(
 
     Returns
     -------
-    valid_obs : Union[`~numpy.ndarray`, List]
+    valid_obs : `~numpy.ndarray
         Array of indices of observations that are within max_obs_separation of another observation.
     """
     # Create array of observation indices
@@ -76,12 +75,10 @@ def find_observations_within_max_time_separation(
     end_times_indices = obs_indices[np.where(mask)[0] + 1]
 
     # Combine times and select all observations match the linkage times
-    valid_obs = np.unique(np.concatenate([start_times_indices, end_times_indices]))
+    # Pass tuple for numba compatibility
+    valid_obs = np.unique(np.concatenate((start_times_indices, end_times_indices)))
 
-    if len(valid_obs) == 0:
-        return []
-    else:
-        return valid_obs
+    return valid_obs
 
 
 def find_observations_beyond_angular_separation(obs_ids, nights, ra, dec, min_angular_separation):
