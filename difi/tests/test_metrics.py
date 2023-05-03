@@ -2,7 +2,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from ..metrics import FindabilityMetric, MinObsMetric, NightlyLinkagesMetric
+from ..metrics import (
+    FindabilityMetric,
+    MinObsMetric,
+    NightlyLinkagesMetric,
+    find_observations_beyond_angular_separation,
+    find_observations_within_max_time_separation,
+)
 
 
 def test_FindabilityMetric__compute_windows():
@@ -16,6 +22,88 @@ def test_FindabilityMetric__compute_windows():
     # Test that the function returns the correct windows when detection_window is 2
     windows = FindabilityMetric._compute_windows(test_observations, detection_window=2)
     assert windows == [(1, 3), (2, 4), (3, 5), (4, 6), (5, 7), (6, 8), (7, 9), (8, 10), (9, 10)]
+
+
+def test_find_observations_within_max_time_separation():
+    # Create test data
+    obs_ids = np.array(["obs_1", "obs_2", "obs_3", "obs_4"])
+    times = np.array([1, 1.9, 3.8, 5.7], dtype=np.float64)
+    times = times / 24.0 / 60  # Convert to days
+
+    # Test that the function returns the correct observations when max_time_separation is 0.1
+    valid_obs = obs_ids[find_observations_within_max_time_separation(times, 1.0)]
+    np.testing.assert_array_equal(valid_obs, np.array(["obs_1", "obs_2"]))
+
+    # Test that the function returns the correct observations when max_time_separation is 0.2
+    valid_obs = obs_ids[find_observations_within_max_time_separation(times, 2.0)]
+    np.testing.assert_array_equal(valid_obs, np.array(["obs_1", "obs_2", "obs_3", "obs_4"]))
+
+    # Test that the function returns the correct observations when max_time_separation is 0.0
+    valid_obs = obs_ids[find_observations_within_max_time_separation(times, 0.0)]
+    np.testing.assert_array_equal(valid_obs, np.array([], dtype=str))
+
+
+def test_find_observations_within_max_time_separation_no_numba():
+    # Create test data
+    obs_ids = np.array(["obs_1", "obs_2", "obs_3", "obs_4"])
+    times = np.array([1, 1.9, 3.8, 5.7], dtype=np.float64)
+    times = times / 24.0 / 60  # Convert to days
+
+    # Test that the function returns the correct observations when max_time_separation is 0.1
+    valid_obs = obs_ids[find_observations_within_max_time_separation.py_func(times, 1.0)]
+    np.testing.assert_array_equal(valid_obs, np.array(["obs_1", "obs_2"]))
+
+    # Test that the function returns the correct observations when max_time_separation is 0.2
+    valid_obs = obs_ids[find_observations_within_max_time_separation.py_func(times, 2.0)]
+    np.testing.assert_array_equal(valid_obs, np.array(["obs_1", "obs_2", "obs_3", "obs_4"]))
+
+    # Test that the function returns the correct observations when max_time_separation is 0.0
+    valid_obs = obs_ids[find_observations_within_max_time_separation.py_func(times, 0.0)]
+    np.testing.assert_array_equal(valid_obs, np.array([], dtype=str))
+
+
+def test_find_observations_beyond_angular_separation():
+    # Create test data
+    obs_ids = np.array(["obs_1", "obs_2", "obs_3", "obs_4"])
+    ra = np.array([0, 0, 4, 6], dtype=np.float64) / 3600
+    dec = np.array([0, 1, 4, 4], dtype=np.float64) / 3600
+    times = np.array([1, 1.9, 3.8, 5.7], dtype=np.float64)
+    times = times / 24.0 / 60  # Convert to days
+    nights = np.array([1, 1, 2, 2], dtype=np.int64)
+
+    # Test that the function returns the correct observations the minimum angular separation is 0.0
+    valid_obs = obs_ids[find_observations_beyond_angular_separation(nights, ra, dec, 0.0)]
+    np.testing.assert_array_equal(valid_obs, np.array(["obs_1", "obs_2", "obs_3", "obs_4"]))
+
+    # Test that the function returns the correct observations the minimum angular separation is 1.5
+    valid_obs = obs_ids[find_observations_beyond_angular_separation(nights, ra, dec, 1.5)]
+    np.testing.assert_array_equal(valid_obs, np.array(["obs_3", "obs_4"]))
+
+    # Test that the function returns the correct observations the minimum angular separation is 3.0
+    valid_obs = obs_ids[find_observations_beyond_angular_separation(nights, ra, dec, 3.0)]
+    np.testing.assert_array_equal(valid_obs, np.array([], dtype=str))
+
+
+def test_find_observations_beyond_angular_separation_no_numba():
+    # Create test data
+    obs_ids = np.array(["obs_1", "obs_2", "obs_3", "obs_4"])
+    ra = np.array([0, 0, 4, 6], dtype=np.float64) / 3600
+    dec = np.array([0, 1, 4, 4], dtype=np.float64) / 3600
+    times = np.array([1, 1.9, 3.8, 5.7], dtype=np.float64)
+    times = times / 24.0 / 60  # Convert to days
+    nights = np.array([1, 1, 2, 2], dtype=np.int64)
+
+    # Test that the function returns the correct observations the minimum angular separation is 0.0
+    valid_obs = obs_ids[find_observations_beyond_angular_separation.py_func(nights, ra, dec, 0.0)]
+    np.testing.assert_array_equal(valid_obs, np.array(["obs_1", "obs_2", "obs_3", "obs_4"]))
+
+    # Test that the function returns the correct observations the minimum angular separation is 1.5
+    valid_obs = obs_ids[find_observations_beyond_angular_separation.py_func(nights, ra, dec, 1.5)]
+    np.testing.assert_array_equal(valid_obs, np.array(["obs_3", "obs_4"]))
+
+    # Test that the function returns the correct observations the minimum angular separation is 3.0
+    valid_obs = obs_ids[find_observations_beyond_angular_separation.py_func(nights, ra, dec, 3.0)]
+    np.testing.assert_array_equal(valid_obs, np.array([], dtype=str))
 
 
 @pytest.mark.parametrize(
@@ -71,7 +159,9 @@ def test_calcFindableNightlyLinkages(test_observations, by_object):
 
     # All three objects should be findable (each object has at least two tracklets
     # with consecutive observations no more than 2 hours apart)
-    metric = NightlyLinkagesMetric(linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=2)
+    metric = NightlyLinkagesMetric(
+        linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=2, min_obs_angular_separation=0
+    )
     findable_observations, window_summary = metric.run(test_observations, by_object=by_object)
     assert len(findable_observations) == 3
 
@@ -84,9 +174,9 @@ def test_calcFindableNightlyLinkages(test_observations, by_object):
         findable_observations[findable_observations["truth"] == "23636"]["obs_ids"].values[0],
         np.array(
             [
-                "obs_000001",
+                "obs_000001",  # tracklet 1
                 "obs_000002",  # tracklet 1
-                "obs_000004",
+                "obs_000004",  # tracklet 2
                 "obs_000005",  # tracklet 2
             ]
         ),
@@ -103,18 +193,18 @@ def test_calcFindableNightlyLinkages(test_observations, by_object):
         findable_observations[findable_observations["truth"] == "82134"]["obs_ids"].values[0],
         np.array(
             [
-                "obs_000016",
-                "obs_000017",
-                "obs_000018",
+                "obs_000016",  # tracklet 1
+                "obs_000017",  # tracklet 1
+                "obs_000018",  # tracklet 1
                 "obs_000019",  # tracklet 1
-                "obs_000021",
-                "obs_000022",
+                "obs_000021",  # tracklet 2
+                "obs_000022",  # tracklet 2
                 "obs_000023",  # tracklet 2
-                "obs_000024",
+                "obs_000024",  # tracklet 3
                 "obs_000025",  # tracklet 3
-                "obs_000026",
+                "obs_000026",  # tracklet 4
                 "obs_000027",  # tracklet 4
-                "obs_000028",
+                "obs_000028",  # tracklet 5
                 "obs_000029",  # tracklet 5
             ]
         ),
@@ -122,7 +212,9 @@ def test_calcFindableNightlyLinkages(test_observations, by_object):
 
     # Only two objects should be findable (each object has at least three tracklets
     # with consecutive observations no more than 2 hours apart)
-    metric = NightlyLinkagesMetric(linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=3)
+    metric = NightlyLinkagesMetric(
+        linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=3, min_obs_angular_separation=1
+    )
     findable_observations, window_summary = metric.run(test_observations, by_object=by_object)
     assert len(findable_observations) == 2
 
@@ -136,23 +228,24 @@ def test_calcFindableNightlyLinkages(test_observations, by_object):
         test_observations[test_observations["truth"] == "58177"]["obs_id"].values,
     )
 
-    # Object 82134 has 3 tracklets no more than 2 hours long
+    # Object 82134 has 3 tracklets no more than 2 hours long (but several observations that
+    # could form tracklets are too close together)
     np.testing.assert_equal(
         findable_observations[findable_observations["truth"] == "82134"]["obs_ids"].values[0],
         np.array(
             [
-                "obs_000016",
-                "obs_000017",
-                "obs_000018",
-                "obs_000019",  # tracklet 1
-                "obs_000021",
-                "obs_000022",
-                "obs_000023",  # tracklet 2
-                "obs_000024",
+                # "obs_000016",  # tracklet 1
+                "obs_000017",  # tracklet 1
+                "obs_000018",  # tracklet 1
+                # "obs_000019",  # tracklet 1
+                "obs_000021",  # tracklet 2
+                "obs_000022",  # tracklet 2
+                # "obs_000023",  # tracklet 2
+                "obs_000024",  # tracklet 3
                 "obs_000025",  # tracklet 3
-                "obs_000026",
+                "obs_000026",  # tracklet 4
                 "obs_000027",  # tracklet 4
-                "obs_000028",
+                "obs_000028",  # tracklet 5
                 "obs_000029",  # tracklet 5
             ]
         ),
@@ -160,7 +253,9 @@ def test_calcFindableNightlyLinkages(test_observations, by_object):
 
     # Only one object should be findable (this object has at least two tracklets
     # with at least 3 consecutive observations no more than 2 hours apart)
-    metric = NightlyLinkagesMetric(linkage_min_obs=3, max_obs_separation=2 / 24, min_linkage_nights=2)
+    metric = NightlyLinkagesMetric(
+        linkage_min_obs=3, max_obs_separation=2 / 24, min_linkage_nights=2, min_obs_angular_separation=0
+    )
     findable_observations, window_summary = metric.run(test_observations, by_object=by_object)
     assert len(findable_observations) == 1
 
@@ -173,17 +268,23 @@ def test_calcFindableNightlyLinkages(test_observations, by_object):
         findable_observations[findable_observations["truth"] == "82134"]["obs_ids"].values[0],
         np.array(
             [
-                "obs_000016",
-                "obs_000017",
-                "obs_000018",
+                "obs_000016",  # tracklet 1
+                "obs_000017",  # tracklet 1
+                "obs_000018",  # tracklet 1
                 "obs_000019",  # tracklet 1
-                "obs_000021",
-                "obs_000022",
+                "obs_000021",  # tracklet 2
+                "obs_000022",  # tracklet 2
                 "obs_000023",  # tracklet 2
             ]
         ),
     )
 
+    # No objects should be findable if the minimum separation is 100 arcseconds
+    metric = NightlyLinkagesMetric(
+        linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=3, min_obs_angular_separation=100
+    )
+    findable_observations, window_summary = metric.run(test_observations, by_object=by_object)
+    assert len(findable_observations) == 0
     return
 
 
