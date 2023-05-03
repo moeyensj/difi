@@ -81,7 +81,10 @@ def find_observations_within_max_time_separation(times: np.ndarray, max_obs_sepa
     return valid_obs
 
 
-def find_observations_beyond_angular_separation(nights, ra, dec, min_angular_separation):
+@njit(cache=True)
+def find_observations_beyond_angular_separation(
+    nights: np.ndarray, ra: np.ndarray, dec: np.ndarray, min_angular_separation: float
+) -> np.ndarray:
     """
     Find all observation IDs that are separated by at least min_angular_separation in a night.
 
@@ -102,7 +105,7 @@ def find_observations_beyond_angular_separation(nights, ra, dec, min_angular_sep
         Array of indices of observations that are separated by at least min_angular_separation in a night.
     """
     obs_indices = np.arange(len(nights))
-    valid_obs = []
+    valid_obs = set()
     for night in nights:
         obs_ids_night = obs_indices[nights == night]
         ra_night = ra[nights == night]
@@ -114,12 +117,12 @@ def find_observations_beyond_angular_separation(nights, ra, dec, min_angular_sep
 
         valid_obs_start = obs_ids_night[np.where(distance_mask)[0]]
         valid_obs_end = obs_ids_night[np.where(distance_mask)[0] + 1]
-        valid_obs.append(np.unique(np.concatenate([valid_obs_start, valid_obs_end])))
+        for obs_id in valid_obs_start:
+            valid_obs.add(obs_id)
+        for obs_id in valid_obs_end:
+            valid_obs.add(obs_id)
 
-    if len(valid_obs) == 0:
-        return np.array([])
-    else:
-        return np.unique(np.concatenate(valid_obs))
+    return np.array(list(valid_obs))
 
 
 class FindabilityMetric(ABC):
