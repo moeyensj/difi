@@ -40,7 +40,7 @@ def test_find_observations_within_max_time_separation():
 
     # Test that the function returns the correct observations when max_time_separation is 0.0
     valid_obs = obs_ids[find_observations_within_max_time_separation(times, 0.0)]
-    np.testing.assert_array_equal(valid_obs, np.array([], dtype=np.str))
+    np.testing.assert_array_equal(valid_obs, np.array([], dtype=str))
 
 
 def test_find_observations_beyond_angular_separation():
@@ -62,7 +62,7 @@ def test_find_observations_beyond_angular_separation():
 
     # Test that the function returns the correct observations the minimum angular separation is 3.0
     valid_obs = obs_ids[find_observations_beyond_angular_separation(nights, ra, dec, 3.0)]
-    np.testing.assert_array_equal(valid_obs, np.array([], dtype=np.str))
+    np.testing.assert_array_equal(valid_obs, np.array([], dtype=str))
 
 
 @pytest.mark.parametrize(
