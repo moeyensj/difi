@@ -170,6 +170,9 @@ class FindabilityMetric(ABC):
         detection_window. If detection_window is None, then the entire range of nights
         is used.
 
+        If the detection_window is larger than the range of the observations, then
+        the entire range of nights is used.
+
         Parameters
         ----------
         observations : `~pandas.DataFrame`
@@ -193,6 +196,8 @@ class FindabilityMetric(ABC):
         # If the detection window is not specified, then use the entire
         # range of nights
         if detection_window is None:
+            windows = [(min_night, max_night)]
+        elif detection_window > max_night - min_night:
             windows = [(min_night, max_night)]
         else:
             for night in range(min_night, max_night):

@@ -24,6 +24,10 @@ def test_FindabilityMetric__compute_windows():
     windows = FindabilityMetric._compute_windows(test_observations, detection_window=2)
     assert windows == [(1, 3), (2, 4), (3, 5), (4, 6), (5, 7), (6, 8), (7, 9), (8, 10), (9, 10)]
 
+    # Test that the function returns the correct windows when detection_window is 15
+    windows = FindabilityMetric._compute_windows(test_observations, detection_window=15)
+    assert windows == [(1, 10)]
+
 
 def test_find_observations_within_max_time_separation():
     # Create test data
