@@ -1,7 +1,6 @@
 import multiprocessing as mp
 from abc import ABC, abstractmethod
-from functools import partial
-from itertools import combinations
+from itertools import combinations, repeat
 from typing import Any, Dict, List, Optional, Tuple, TypeVar
 
 import numpy as np
@@ -355,10 +354,8 @@ class FindabilityMetric(ABC):
         if num_jobs is None or num_jobs > 1:
             pool = mp.Pool(num_jobs)
             findable_dfs = pool.starmap(
-                partial(
-                    self._run_object_worker, windows=windows, discovery_opportunities=discovery_opportunities
-                ),
-                truth_observations,
+                self._run_object_worker,
+                zip(truth_observations, repeat(windows), repeat(discovery_opportunities)),
             )
             pool.close()
             pool.join()
@@ -462,8 +459,8 @@ class FindabilityMetric(ABC):
         if num_jobs is None or num_jobs > 1:
             pool = mp.Pool(num_jobs)
             findable_dfs = pool.starmap(
-                partial(self._run_window_worker, discovery_opportunities=discovery_opportunities),
-                zip(window_observations, range(len(windows))),
+                self._run_window_worker,
+                zip(window_observations, range(len(windows)), repeat(discovery_opportunities)),
             )
             pool.close()
             pool.join()

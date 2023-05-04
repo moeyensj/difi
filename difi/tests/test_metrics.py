@@ -133,17 +133,21 @@ def test_select_tracklet_combinations():
 
 
 @pytest.mark.parametrize(
-    "by_object",
+    ["by_object", "num_jobs"],
     [
-        True,
-        False,
+        (True, None),
+        (True, 1),
+        (False, None),
+        (False, 1),
     ],
 )
-def test_calcFindableMinObs(test_observations, by_object):
+def test_calcFindableMinObs(test_observations, by_object, num_jobs):
 
     # All three objects should be findable
     metric = MinObsMetric(min_obs=5)
-    findable_observations, window_summary = metric.run(test_observations, by_object=by_object)
+    findable_observations, window_summary = metric.run(
+        test_observations, by_object=by_object, num_jobs=num_jobs
+    )
     assert len(findable_observations) == 3
 
     findable_ids = {k for k in findable_observations["truth"].values}
@@ -156,7 +160,9 @@ def test_calcFindableMinObs(test_observations, by_object):
 
     # Only two objects should be findable
     metric = MinObsMetric(min_obs=10)
-    findable_observations, window_summary = metric.run(test_observations, by_object=by_object)
+    findable_observations, window_summary = metric.run(
+        test_observations, by_object=by_object, num_jobs=num_jobs
+    )
 
     assert len(findable_observations) == 2
     for object_id in ["58177", "82134"]:
@@ -168,27 +174,33 @@ def test_calcFindableMinObs(test_observations, by_object):
 
     # No objects should be findable
     metric = MinObsMetric(min_obs=16)
-    findable_observations, window_summary = metric.run(test_observations, by_object=by_object)
+    findable_observations, window_summary = metric.run(
+        test_observations, by_object=by_object, num_jobs=num_jobs
+    )
     assert len(findable_observations) == 0
 
     return
 
 
 @pytest.mark.parametrize(
-    "by_object",
+    ["by_object", "num_jobs"],
     [
-        True,
-        False,
+        (True, None),
+        (True, 1),
+        (False, None),
+        (False, 1),
     ],
 )
-def test_calcFindableNightlyLinkages(test_observations, by_object):
+def test_calcFindableNightlyLinkages(test_observations, by_object, num_jobs):
 
     # All three objects should be findable (each object has at least two tracklets
     # with consecutive observations no more than 2 hours apart)
     metric = NightlyLinkagesMetric(
         linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=2, min_obs_angular_separation=0
     )
-    findable_observations, window_summary = metric.run(test_observations, by_object=by_object)
+    findable_observations, window_summary = metric.run(
+        test_observations, by_object=by_object, num_jobs=num_jobs
+    )
     assert len(findable_observations) == 3
 
     findable_ids = {k for k in findable_observations["truth"].values}
@@ -241,7 +253,9 @@ def test_calcFindableNightlyLinkages(test_observations, by_object):
     metric = NightlyLinkagesMetric(
         linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=3, min_obs_angular_separation=1
     )
-    findable_observations, window_summary = metric.run(test_observations, by_object=by_object)
+    findable_observations, window_summary = metric.run(
+        test_observations, by_object=by_object, num_jobs=num_jobs
+    )
     assert len(findable_observations) == 2
 
     findable_ids = {k for k in findable_observations["truth"].values}
@@ -282,7 +296,9 @@ def test_calcFindableNightlyLinkages(test_observations, by_object):
     metric = NightlyLinkagesMetric(
         linkage_min_obs=3, max_obs_separation=2 / 24, min_linkage_nights=2, min_obs_angular_separation=0
     )
-    findable_observations, window_summary = metric.run(test_observations, by_object=by_object)
+    findable_observations, window_summary = metric.run(
+        test_observations, by_object=by_object, num_jobs=num_jobs
+    )
     assert len(findable_observations) == 1
 
     findable_ids = {k for k in findable_observations["truth"].values}
@@ -309,7 +325,9 @@ def test_calcFindableNightlyLinkages(test_observations, by_object):
     metric = NightlyLinkagesMetric(
         linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=3, min_obs_angular_separation=100
     )
-    findable_observations, window_summary = metric.run(test_observations, by_object=by_object)
+    findable_observations, window_summary = metric.run(
+        test_observations, by_object=by_object, num_jobs=num_jobs
+    )
     assert len(findable_observations) == 0
     return
 
