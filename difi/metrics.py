@@ -192,7 +192,6 @@ class FindabilityMetric(ABC):
         min_night = nights.min()
         max_night = nights.max()
 
-        windows = []
         # If the detection window is not specified, then use the entire
         # range of nights
         if detection_window is None:
@@ -200,12 +199,15 @@ class FindabilityMetric(ABC):
         elif detection_window > max_night - min_night:
             windows = [(min_night, max_night)]
         else:
+            windows = []
             for night in range(min_night, max_night):
-                if night + detection_window > max_night:
+                if night + detection_window >= max_night:
                     window = (night, max_night)
+                    windows.append(window)
+                    break
                 else:
                     window = (night, night + detection_window)
-                windows.append(window)
+                    windows.append(window)
 
         return windows
 

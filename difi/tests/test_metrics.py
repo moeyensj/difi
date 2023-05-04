@@ -22,7 +22,15 @@ def test_FindabilityMetric__compute_windows():
 
     # Test that the function returns the correct windows when detection_window is 2
     windows = FindabilityMetric._compute_windows(test_observations, detection_window=2)
-    assert windows == [(1, 3), (2, 4), (3, 5), (4, 6), (5, 7), (6, 8), (7, 9), (8, 10), (9, 10)]
+    assert windows == [(1, 3), (2, 4), (3, 5), (4, 6), (5, 7), (6, 8), (7, 9), (8, 10)]
+
+    # Test that the function returns the correct windows when detection_window is 3
+    windows = FindabilityMetric._compute_windows(test_observations, detection_window=3)
+    assert windows == [(1, 4), (2, 5), (3, 6), (4, 7), (5, 8), (6, 9), (7, 10)]
+
+    # Test that the function returns the correct windows when detection_window is 6
+    windows = FindabilityMetric._compute_windows(test_observations, detection_window=6)
+    assert windows == [(1, 7), (2, 8), (3, 9), (4, 10)]
 
     # Test that the function returns the correct windows when detection_window is 15
     windows = FindabilityMetric._compute_windows(test_observations, detection_window=15)
