@@ -517,10 +517,10 @@ class FindabilityMetric(ABC):
             A dataframe containing the number of observations, number of findable
             objects and the start and end night of each window.
         """
-        observations_sorted = observations.sort_values(by=["time"])
+        windows = self._compute_windows(observations, detection_window)
 
-        windows = self._compute_windows(observations_sorted, detection_window)
         if by_object:
+            observations_sorted = observations.sort_values(by=["truth", "time"], ascending=True)
             findable_dfs = self.run_by_object(
                 observations_sorted,
                 windows,
@@ -528,6 +528,7 @@ class FindabilityMetric(ABC):
                 num_jobs=num_jobs,
             )
         else:
+            observations_sorted = observations.sort_values(by=["time"], ascending=True)
             findable_dfs = self.run_by_window(
                 observations_sorted,
                 windows,
