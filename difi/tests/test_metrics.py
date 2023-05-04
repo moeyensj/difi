@@ -8,6 +8,7 @@ from ..metrics import (
     NightlyLinkagesMetric,
     find_observations_beyond_angular_separation,
     find_observations_within_max_time_separation,
+    select_tracklet_combinations,
 )
 
 
@@ -104,6 +105,31 @@ def test_find_observations_beyond_angular_separation_no_numba():
     # Test that the function returns the correct observations the minimum angular separation is 3.0
     valid_obs = obs_ids[find_observations_beyond_angular_separation.py_func(nights, ra, dec, 3.0)]
     np.testing.assert_array_equal(valid_obs, np.array([], dtype=str))
+
+
+def test_select_tracklet_combinations():
+    # Test that the function returns the correct combinations when there are three tracklets
+    # one on each night
+    nights = np.array([0, 0, 1, 1, 2, 2])
+    obs_indices = np.arange(len(nights))
+    combinations = select_tracklet_combinations(nights, 3)
+    np.testing.assert_array_equal(combinations, [obs_indices])
+
+    # Test that the function returns the correct combinations when there are three tracklets
+    # two on the first night and one on the second night
+    nights = np.array([0, 0, 0, 0, 1, 1])
+    obs_indices = np.arange(len(nights))
+    combinations = select_tracklet_combinations(nights, 3)
+    np.testing.assert_array_equal(combinations, [])
+
+    # Test that the function returns the correct combinations when there are three tracklets
+    # one on each night (now only requiring two nights)
+    nights = np.array([0, 0, 1, 1, 2, 2])
+    obs_indices = np.arange(len(nights))
+    combinations = select_tracklet_combinations(nights, 2)
+    np.testing.assert_array_equal(
+        combinations, [np.array([0, 1, 2, 3]), np.array([0, 1, 4, 5]), np.array([2, 3, 4, 5])]
+    )
 
 
 @pytest.mark.parametrize(

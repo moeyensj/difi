@@ -1,6 +1,6 @@
 import multiprocessing as mp
 from abc import ABC, abstractmethod
-from itertools import repeat
+from itertools import combinations, repeat
 from typing import Any, Dict, List, Optional, Tuple, TypeVar
 
 import numpy as np
@@ -123,6 +123,37 @@ def find_observations_beyond_angular_separation(
             valid_obs.add(obs_id)
 
     return np.array(list(valid_obs), dtype=np.int32)
+
+
+def select_tracklet_combinations(nights: np.ndarray, min_nights: int) -> List[np.ndarray]:
+    """
+    Select all possible combinations of tracklets that span at least
+    min_nights.
+
+    All detections within one night are considered to be part of the same
+    tracklet.
+
+    Parameters
+    ----------
+    nights : `~numpy.ndarray`
+        Array of nights on which observations occur.
+    min_nights : int
+        Minimum number of nights on which a tracklet must occur.
+
+    Returns
+    -------
+    linkages : List[`~numpy.ndarray`]
+        List of arrays of indices of observations .
+    """
+    linkages = []
+    unique_nights = np.unique(nights)
+    obs_indices = np.arange(len(nights), dtype=np.int32)
+    for combination in combinations(unique_nights, min_nights):
+        linkage_i = []
+        for night in combination:
+            linkage_i.append(obs_indices[nights == night])
+        linkages.append(np.concatenate(linkage_i))
+    return linkages
 
 
 class FindabilityMetric(ABC):
