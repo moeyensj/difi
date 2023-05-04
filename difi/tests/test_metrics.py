@@ -191,6 +191,36 @@ def test_calcFindableMinObs(test_observations, by_object, num_jobs):
     )
     assert len(findable_observations) == 0
 
+    # Set the detection window to 15 days, each object should still be findable
+    metric = MinObsMetric(min_obs=5)
+    findable_observations, window_summary = metric.run(
+        test_observations, by_object=by_object, num_jobs=num_jobs, detection_window=15
+    )
+    assert len(findable_observations) == 3
+    assert len(window_summary) == 1
+    assert window_summary["start_night"].values[0] == 612
+    assert window_summary["end_night"].values[0] == 624
+
+    # Set the detection window to 10 days, there should now be 3 windows
+    metric = MinObsMetric(min_obs=5)
+    findable_observations, window_summary = metric.run(
+        test_observations, by_object=by_object, num_jobs=num_jobs, detection_window=10
+    )
+    assert len(window_summary) == 3
+    assert window_summary["start_night"].values[0] == 612
+    assert window_summary["end_night"].values[0] == 622
+    assert window_summary["num_findable"].values[0] == 3
+    assert window_summary["num_obs"].values[0] == 26
+
+    assert window_summary["start_night"].values[1] == 613
+    assert window_summary["end_night"].values[1] == 623
+    assert window_summary["num_findable"].values[1] == 3
+    assert window_summary["num_obs"].values[1] == 19
+
+    assert window_summary["start_night"].values[2] == 614
+    assert window_summary["end_night"].values[2] == 624
+    assert window_summary["num_findable"].values[2] == 3
+    assert window_summary["num_obs"].values[2] == 23
     return
 
 
@@ -341,6 +371,44 @@ def test_calcFindableNightlyLinkages(test_observations, by_object, num_jobs):
         test_observations, by_object=by_object, num_jobs=num_jobs
     )
     assert len(findable_observations) == 0
+
+    # All three objects should be findable (each object has at least two tracklets
+    # with consecutive observations no more than 2 hours apart)
+    # Set the detection window to 15 days, each object should still be findable
+    metric = NightlyLinkagesMetric(
+        linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=2, min_obs_angular_separation=0
+    )
+    findable_observations, window_summary = metric.run(
+        test_observations, by_object=by_object, num_jobs=num_jobs, detection_window=15
+    )
+    assert len(findable_observations) == 3
+    assert len(window_summary) == 1
+    assert window_summary["start_night"].values[0] == 612
+    assert window_summary["end_night"].values[0] == 624
+
+    # Set the detection window to 10 days and set the min_linkage nights to 3
+    # There should be 3 windows and object one will never be findable
+    metric = NightlyLinkagesMetric(
+        linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=3, min_obs_angular_separation=0
+    )
+    findable_observations, window_summary = metric.run(
+        test_observations, by_object=by_object, num_jobs=num_jobs, detection_window=10
+    )
+    assert len(window_summary) == 3
+    assert window_summary["start_night"].values[0] == 612
+    assert window_summary["end_night"].values[0] == 622
+    assert window_summary["num_findable"].values[0] == 2
+    assert window_summary["num_obs"].values[0] == 26
+
+    assert window_summary["start_night"].values[1] == 613
+    assert window_summary["end_night"].values[1] == 623
+    assert window_summary["num_findable"].values[1] == 2
+    assert window_summary["num_obs"].values[1] == 19
+
+    assert window_summary["start_night"].values[2] == 614
+    assert window_summary["end_night"].values[2] == 624
+    assert window_summary["num_findable"].values[2] == 2
+    assert window_summary["num_obs"].values[2] == 23
     return
 
 

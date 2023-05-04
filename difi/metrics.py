@@ -213,7 +213,7 @@ class FindabilityMetric(ABC):
 
     @staticmethod
     def _create_window_summary(
-        observations: pd.DataFrame, windows: List[Tuple[int, int]], findable: List[pd.DataFrame]
+        observations: pd.DataFrame, windows: List[Tuple[int, int]], findable: pd.DataFrame
     ) -> pd.DataFrame:
         """
         Create a summary dataframe of the windows, their start and end nights, the number of observations
@@ -226,8 +226,8 @@ class FindabilityMetric(ABC):
             `obs_id`, `time`, `night`, `truth`.
         windows : List[tuples]
             List of tuples containing the start and end night of each window.
-        findable : List`~pandas.DataFrame`]
-            List of dataframes containing the findable truths for each window.
+        findable : ~pandas.DataFrame`
+            Dataframes containing the findable truths for each window.
 
         Returns
         -------
@@ -242,11 +242,12 @@ class FindabilityMetric(ABC):
             "num_findable": [],
         }
 
-        for i, (window, findable_i) in enumerate(zip(windows, findable)):
+        for i, window in enumerate(windows):
             night_min, night_max = window
             observations_in_window = observations[
                 observations["night"].between(night_min, night_max, inclusive="both")
             ]
+            findable_i = findable[findable["window_id"] == i]
 
             windows_dict["window_id"].append(i)
             windows_dict["start_night"].append(night_min)
@@ -543,13 +544,13 @@ class FindabilityMetric(ABC):
                 num_jobs=num_jobs,
             )
 
-        window_summary = self._create_window_summary(observations_sorted, windows, findable_dfs)
-
         findable = pd.concat(findable_dfs, ignore_index=True)
         findable.loc[:, "window_id"] = findable["window_id"].astype(int)
         findable.loc[:, "findable"] = findable["findable"].astype(int)
         findable.loc[:, "discovery_opportunities"] = findable["discovery_opportunities"].astype(int)
         findable.sort_values(by=["window_id", "truth"], inplace=True, ignore_index=True)
+
+        window_summary = self._create_window_summary(observations_sorted, windows, findable)
         return findable, window_summary
 
 
