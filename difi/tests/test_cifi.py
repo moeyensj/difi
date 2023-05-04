@@ -71,10 +71,7 @@ def test_analyzeObservations_withClassesColumn(test_observations):
         test_observations.loc[test_observations["truth"] == object_id, "class"] = "Class_{}".format(i)
 
     all_truths, findable_observations, summary = analyzeObservations(
-        test_observations,
-        min_obs=5,
-        classes="class",
-        detection_window=None,
+        test_observations, min_obs=5, classes="class", detection_window=None, discovery_opportunities=False
     )
 
     # Check that all three objects are in the all_truths data frame
@@ -127,6 +124,7 @@ def test_analyzeObservations_withClassesDictionary(test_observations):
         min_obs=5,
         classes=classes_dict,
         detection_window=None,
+        discovery_opportunities=False,
     )
 
     # Check that all three objects are in the all_truths data frame
@@ -171,9 +169,7 @@ def test_analyzeObservations_noObservations(test_observations):
     with pytest.raises(ValueError):
         # Build the all_truths and summary data frames
         all_truths, findable_observations, summary = analyzeObservations(
-            test_observations,
-            min_obs=5,
-            classes=None,
+            test_observations, min_obs=5, classes=None, discovery_opportunities=False
         )
 
     return
@@ -184,10 +180,7 @@ def test_analyzeObservations_errors(test_observations):
     with pytest.raises(ValueError):
         # Build the all_truths and summary data frames
         all_truths, findable_observations, summary = analyzeObservations(
-            test_observations,
-            min_obs=5,
-            metric="wrong_metric",
-            classes=None,
+            test_observations, min_obs=5, metric="wrong_metric", classes=None, discovery_opportunities=False
         )
 
     return

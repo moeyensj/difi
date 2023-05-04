@@ -1,6 +1,7 @@
 import multiprocessing as mp
 from abc import ABC, abstractmethod
-from itertools import combinations, repeat
+from functools import partial
+from itertools import combinations
 from typing import Any, Dict, List, Optional, Tuple, TypeVar
 
 import numpy as np
@@ -158,7 +159,9 @@ def select_tracklet_combinations(nights: np.ndarray, min_nights: int) -> List[np
 
 class FindabilityMetric(ABC):
     @abstractmethod
-    def determine_object_findable(self, observations):
+    def determine_object_findable(
+        self, observations: pd.DataFrame, discovery_opportunities: bool = False
+    ) -> List[List[str]]:
         pass
 
     @staticmethod
@@ -247,7 +250,12 @@ class FindabilityMetric(ABC):
 
         return pd.DataFrame(windows_dict)
 
-    def _run_object_worker(self, observations: pd.DataFrame, windows: List[Tuple[int, int]]) -> pd.DataFrame:
+    def _run_object_worker(
+        self,
+        observations: pd.DataFrame,
+        windows: List[Tuple[int, int]],
+        discovery_opportunities: bool = False,
+    ) -> pd.DataFrame:
         """
         Run the metric on a single object.
 
@@ -258,8 +266,9 @@ class FindabilityMetric(ABC):
             `obs_id`, `time`, `night`, `truth`.
         windows : list of tuples
             A list of tuples containing the start and end nights of each window.
-        metric : `~difi.metrics.FindabilityMetric`
-            The desired findability metric that calculates which truths are actually findable.
+        discovery_opportunities : bool, optional
+            If True, then return the combinations of observations that made each truth findable.
+            Note that if the window is large, this can greatly increase the computation time.
 
         Returns
         -------
@@ -274,18 +283,30 @@ class FindabilityMetric(ABC):
                 (observations["night"] >= night_min) & (observations["night"] <= night_max)
             ]
 
-            is_findable, obs_ids = self.determine_object_findable(window_obs)
-            if is_findable:
+            obs_ids = self.determine_object_findable(
+                window_obs, discovery_opportunities=discovery_opportunities
+            )
+            chances = len(obs_ids)
+            if chances > 0:
                 findable = pd.DataFrame(
                     {
                         "window_id": [i],
                         "truth": [window_obs["truth"].values[0]],
                         "findable": [1],
+                        "discovery_opportunities": [chances],
                         "obs_ids": [obs_ids],
                     }
                 )
             else:
-                findable = pd.DataFrame({"window_id": [], "truth": [], "findable": [], "obs_ids": []})
+                findable = pd.DataFrame(
+                    {
+                        "window_id": [],
+                        "truth": [],
+                        "findable": [],
+                        "discovery_opportunities": [],
+                        "obs_ids": [],
+                    }
+                )
 
             findable_dfs.append(findable)
 
@@ -293,10 +314,15 @@ class FindabilityMetric(ABC):
         if len(findable) > 0:
             findable.loc[:, "window_id"] = findable["window_id"].astype(int)
             findable.loc[:, "findable"] = findable["findable"].astype(int)
+            findable.loc[:, "discovery_opportunities"] = findable["discovery_opportunities"].astype(int)
         return findable
 
     def run_by_object(
-        self, observations: pd.DataFrame, windows: List[Tuple[int, int]], num_jobs: Optional[int] = 1
+        self,
+        observations: pd.DataFrame,
+        windows: List[Tuple[int, int]],
+        discovery_opportunities: bool = False,
+        num_jobs: Optional[int] = 1,
     ) -> List[pd.DataFrame]:
         """
         Run the findability metric on the observations split by objects. For windows where there are many
@@ -310,6 +336,9 @@ class FindabilityMetric(ABC):
             `obs_id`, `time`, `night`, `truth`.
         windows : List[tuples]
             List of tuples containing the start and end night of each window.
+        discovery_opportunities : bool, optional
+            If True, then return the combinations of observations that made each truth findable.
+            Note that if the window is large, this can greatly increase the computation time.
         num_jobs : int, optional
             The number of jobs to run in parallel. If 1, then run in serial. If None, then use the number of
             CPUs on the machine.
@@ -325,18 +354,29 @@ class FindabilityMetric(ABC):
 
         if num_jobs is None or num_jobs > 1:
             pool = mp.Pool(num_jobs)
-            findable_dfs = pool.starmap(self._run_object_worker, zip(truth_observations, repeat(windows)))
+            findable_dfs = pool.starmap(
+                partial(
+                    self._run_object_worker, windows=windows, discovery_opportunities=discovery_opportunities
+                ),
+                truth_observations,
+            )
             pool.close()
             pool.join()
 
         else:
             findable_dfs = []
             for truth_obs in truth_observations:
-                findable_dfs.append(self._run_object_worker(truth_obs, windows))
+                findable_dfs.append(
+                    self._run_object_worker(
+                        truth_obs, windows, discovery_opportunities=discovery_opportunities
+                    )
+                )
 
         return findable_dfs
 
-    def _run_window_worker(self, observations: pd.DataFrame, window_id: int) -> pd.DataFrame:
+    def _run_window_worker(
+        self, observations: pd.DataFrame, window_id: int, discovery_opportunities: bool = False
+    ) -> pd.DataFrame:
         """
         Run the metric on a single window of observations.
 
@@ -347,6 +387,9 @@ class FindabilityMetric(ABC):
             `obs_id`, `time`, `night`, `truth`.
         window_id : int
             The ID of this window.
+        discovery_opportunities : bool, optional
+            If True, then return the combinations of observations that made each truth findable.
+            Note that if the window is large, this can greatly increase the computation time.
 
         Returns
         -------
@@ -355,26 +398,34 @@ class FindabilityMetric(ABC):
             'obs_ids' containing `~numpy.ndarray`s of the observations that made each truth findable.
         """
         if len(observations) == 0:
-            return pd.DataFrame({"window_id": [], "truth": [], "findable": [], "obs_ids": []})
+            return pd.DataFrame(
+                {"window_id": [], "truth": [], "findable": [], "discovery_opportunities": [], "obs_ids": []}
+            )
 
         findable = (
-            observations.groupby(by=["truth"]).apply(self.determine_object_findable).to_frame("findable")
+            observations.groupby(by=["truth"])
+            .apply(self.determine_object_findable, discovery_opportunities=discovery_opportunities)
+            .to_frame("obs_ids")
         )
         findable.reset_index(inplace=True, drop=False)
-        expanded = pd.DataFrame(
-            findable["findable"].values.tolist(), index=findable.index, columns=["findable", "obs_ids"]
-        )
-        findable = findable[["truth"]].merge(expanded, left_index=True, right_index=True)
+
         if len(findable) > 0:
-            findable.loc[:, "findable"] = findable["findable"].astype(int)
-            findable = findable[findable["findable"] == 1]  # noqa: E712
             findable.insert(0, "window_id", window_id)
+            findable.insert(2, "discovery_opportunities", findable["obs_ids"].apply(len))
+            findable.insert(
+                2, "findable", findable["discovery_opportunities"].apply(lambda x: 1 if x > 0 else 0)
+            )
+            findable = findable[findable["findable"] == 1]  # noqa: E712
             findable.reset_index(inplace=True, drop=True)
 
         return findable
 
     def run_by_window(
-        self, observations: pd.DataFrame, windows: List[Tuple[int, int]], num_jobs: Optional[int] = 1
+        self,
+        observations: pd.DataFrame,
+        windows: List[Tuple[int, int]],
+        discovery_opportunities: bool = False,
+        num_jobs: Optional[int] = 1,
     ) -> List[pd.DataFrame]:
         """
         Run the findability metric on the observations split by windows where each window will
@@ -387,6 +438,9 @@ class FindabilityMetric(ABC):
             `obs_id`, `time`, `night`, `truth`.
         windows : List[tuples]
             List of tuples containing the start and end night of each window.
+        discovery_opportunities : bool, optional
+            If True, then return the combinations of observations that made each truth findable.
+            Note that if the window is large, this can greatly increase the computation time.
         num_jobs : int, optional
             The number of jobs to run in parallel. If 1, then run in serial. If None, then use the number of
             CPUs on the machine.
@@ -398,7 +452,7 @@ class FindabilityMetric(ABC):
             that made them findable for each window.
         """
         window_observations = []
-        for i, window in enumerate(windows):
+        for window in windows:
             night_min, night_max = window
             window_obs = observations[
                 (observations["night"] >= night_min) & (observations["night"] <= night_max)
@@ -408,15 +462,18 @@ class FindabilityMetric(ABC):
         if num_jobs is None or num_jobs > 1:
             pool = mp.Pool(num_jobs)
             findable_dfs = pool.starmap(
-                self._run_window_worker, zip(window_observations, range(len(windows)))
+                partial(self._run_window_worker, discovery_opportunities=discovery_opportunities),
+                zip(window_observations, range(len(windows))),
             )
             pool.close()
             pool.join()
 
         else:
             findable_dfs = []
-            for window_obs in window_observations:
-                findable_i = self._run_window_worker(window_obs, i)
+            for i, window_obs in enumerate(window_observations):
+                findable_i = self._run_window_worker(
+                    window_obs, i, discovery_opportunities=discovery_opportunities
+                )
                 findable_dfs.append(findable_i)
 
         return findable_dfs
@@ -425,6 +482,7 @@ class FindabilityMetric(ABC):
         self,
         observations: pd.DataFrame,
         detection_window: Optional[int] = None,
+        discovery_opportunities: bool = False,
         by_object: bool = False,
         num_jobs: Optional[int] = 1,
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -442,6 +500,9 @@ class FindabilityMetric(ABC):
             of observations exceeds the detection_window, then a rolling window
             of size detection_window is used to determine if the truth is findable.
             If None, then the detection_window is the entire range observations.
+        discovery_opportunities : bool, optional
+            If True, then return the combinations of observations that made each truth findable.
+            Note that if the window is large, this can greatly increase the computation time.
         by_object : bool, optional
             If True, run the metric on the observations split by objects. For windows where there are many
             observations, this may be faster than running the metric on each window individually
@@ -463,15 +524,27 @@ class FindabilityMetric(ABC):
 
         windows = self._compute_windows(observations_sorted, detection_window)
         if by_object:
-            findable_dfs = self.run_by_object(observations_sorted, windows, num_jobs=num_jobs)
+            findable_dfs = self.run_by_object(
+                observations_sorted,
+                windows,
+                discovery_opportunities=discovery_opportunities,
+                num_jobs=num_jobs,
+            )
         else:
-            findable_dfs = self.run_by_window(observations_sorted, windows, num_jobs=num_jobs)
+            findable_dfs = self.run_by_window(
+                observations_sorted,
+                windows,
+                discovery_opportunities=discovery_opportunities,
+                num_jobs=num_jobs,
+            )
 
         window_summary = self._create_window_summary(observations_sorted, windows, findable_dfs)
 
         findable = pd.concat(findable_dfs, ignore_index=True)
         findable.loc[:, "window_id"] = findable["window_id"].astype(int)
         findable.loc[:, "findable"] = findable["findable"].astype(int)
+        findable.loc[:, "discovery_opportunities"] = findable["discovery_opportunities"].astype(int)
+        findable.sort_values(by=["window_id", "truth"], inplace=True, ignore_index=True)
         return findable, window_summary
 
 
@@ -511,7 +584,9 @@ class NightlyLinkagesMetric(FindabilityMetric):
         self.max_obs_separation = max_obs_separation
         self.min_obs_angular_separation = min_obs_angular_separation
 
-    def determine_object_findable(self, observations: pd.DataFrame) -> Tuple[bool, List[str]]:
+    def determine_object_findable(
+        self, observations: pd.DataFrame, discovery_opportunities: bool = False
+    ) -> List[List[str]]:
         """
         Given observations belonging to one object, finds all observations that are within
         max_obs_separation of each other.
@@ -524,22 +599,27 @@ class NightlyLinkagesMetric(FindabilityMetric):
         observations : `~pandas.DataFrame` or `~pandas.core.groupby.generic.DataFrameGroupBy`
             Pandas DataFrame with at least two columns for a single unique truth: observation IDs
             and the observation times in units of decimal days.
+        discovery_opportunities : bool, optional
+            If True, return the observation combinations that represent unique discovery
+            opportunites.
 
         Returns
         -------
-        linkage_obs : `~numpy.ndarray`
-            Array of observation IDs that made the object findable.
+        obs_ids : List[List[str]]
+            List of lists containing observation IDs for each discovery opportunity.
+            If discovery_opportunities is False, then the list will contain a single
+            list of all valid observation IDs.
         """
         # If the len of observations is 0 then the object is not findable
         if len(observations) == 0:
-            return False, []
+            return []
 
         assert observations["truth"].nunique() == 1
 
         # Exit early if there are not enough observations
         total_required_obs = self.linkage_min_obs * self.min_linkage_nights
         if len(observations) < total_required_obs:
-            return False, []
+            return []
 
         # Grab times and observation IDs from grouped observations
         times = observations["time"].values
@@ -580,15 +660,17 @@ class NightlyLinkagesMetric(FindabilityMetric):
                 ]
                 # If there are no valid observations then the object is not findable
                 if len(linkage_obs) == 0:
-                    return False, []
+                    return []
 
                 # Update the valid nights
-                valid_unique_nights = np.unique(nights[np.isin(obs_ids, linkage_obs)])
+                valid_nights = nights[np.isin(obs_ids, linkage_obs)]
+                valid_unique_nights = np.unique(valid_nights)
 
         else:
             # If linkage_min_obs is 1, then we don't need to check for time separation
             # All nights with at least one observation are valid
-            valid_unique_nights = np.unique(nights)
+            valid_nights = nights
+            valid_unique_nights = np.unique(valid_nights)
             linkage_obs = obs_ids
 
         # Make sure that the number of observations is still linkage_min_obs * min_linkage_nights
@@ -599,9 +681,14 @@ class NightlyLinkagesMetric(FindabilityMetric):
         enough_nights = len(valid_unique_nights) >= self.min_linkage_nights
 
         if not enough_obs or not enough_nights:
-            return False, []
+            return []
         else:
-            return True, linkage_obs.tolist()
+            if discovery_opportunities:
+                obs_indices = select_tracklet_combinations(valid_nights, self.min_linkage_nights)
+                obs_ids = [linkage_obs[ind].tolist() for ind in obs_indices]
+                return obs_ids
+            else:
+                return [linkage_obs.tolist()]
 
 
 class MinObsMetric(FindabilityMetric):
@@ -620,7 +707,9 @@ class MinObsMetric(FindabilityMetric):
         super().__init__()
         self.min_obs = min_obs
 
-    def determine_object_findable(self, observations: pd.DataFrame) -> Tuple[bool, List[str]]:
+    def determine_object_findable(
+        self, observations: pd.DataFrame, discovery_opportunities: bool = False
+    ) -> List[List[str]]:
         """
         Finds all truths with a minimum of self.min_obs observations and the observations
         that makes them findable.
@@ -630,20 +719,29 @@ class MinObsMetric(FindabilityMetric):
         observations : `~pandas.DataFrame`
             Pandas DataFrame with at least two columns: observation IDs and the truth values
             (the object to which the observation belongs to).
+        discovery_opportunities : bool, optional
+            If True, return the observation combinations that represent unique discovery
+            opportunites.
 
         Returns
         -------
-        findable : bool
-            Whether or not the object is findable.
-        obs_ids : List[str]
-            A list of the observation IDs that made the object findable within the window.
+        obs_ids : List[List[str]]
+            List of lists containing observation IDs for each discovery opportunity.
+            If discovery_opportunities is False, then the list will contain a single
+            list of all valid observation IDs.
         """
         # If the len of observations is 0 then the object is not findable
         if len(observations) == 0:
-            return False, []
+            return []
 
         assert observations["truth"].nunique() == 1
         if len(observations) >= self.min_obs:
-            return True, observations["obs_id"].unique().tolist()
+            obs_ids = observations["obs_id"].values
+            if discovery_opportunities:
+                obs_ids = list(combinations(obs_ids, self.min_obs))
+                return obs_ids
+            else:
+                obs_ids = [obs_ids.tolist()]
+                return obs_ids
         else:
-            return False, []
+            return []

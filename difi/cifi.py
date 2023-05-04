@@ -154,6 +154,7 @@ def analyzeObservations(
     classes: Optional[dict] = None,
     metric: Union[str, Metrics] = "min_obs",
     detection_window: Optional[int] = None,
+    discovery_opportunities: bool = False,
     ignore_after_detected: bool = True,
     num_jobs: Optional[int] = 1,
     **metric_kwargs,
@@ -269,7 +270,10 @@ def analyzeObservations(
         raise ValueError("metric must be a string or a FindabilityMetric")
 
     findable_observations, window_summary = metric_.run(
-        observations, detection_window=detection_window, num_jobs=num_jobs
+        observations,
+        detection_window=detection_window,
+        discovery_opportunities=discovery_opportunities,
+        num_jobs=num_jobs,
     )
     # Create the all truths dataframe
     all_truths = _create_all_truths(observations, findable_observations, window_summary)

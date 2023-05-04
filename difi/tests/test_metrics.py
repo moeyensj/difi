@@ -150,7 +150,7 @@ def test_calcFindableMinObs(test_observations, by_object):
     for object_id in ["23636", "58177", "82134"]:
         assert object_id in findable_ids
         np.testing.assert_equal(
-            findable_observations[findable_observations["truth"] == object_id]["obs_ids"].values[0],
+            findable_observations[findable_observations["truth"] == object_id]["obs_ids"].values[0][0],
             test_observations[test_observations["truth"] == object_id]["obs_id"].values,
         )
 
@@ -162,7 +162,7 @@ def test_calcFindableMinObs(test_observations, by_object):
     for object_id in ["58177", "82134"]:
         assert object_id in findable_observations["truth"].values
         np.testing.assert_equal(
-            findable_observations[findable_observations["truth"] == object_id]["obs_ids"].values[0],
+            findable_observations[findable_observations["truth"] == object_id]["obs_ids"].values[0][0],
             test_observations[test_observations["truth"] == object_id]["obs_id"].values,
         )
 
@@ -197,7 +197,7 @@ def test_calcFindableNightlyLinkages(test_observations, by_object):
 
     # Object 23636 has two tracklets (no more than 2 hours long)
     np.testing.assert_equal(
-        findable_observations[findable_observations["truth"] == "23636"]["obs_ids"].values[0],
+        findable_observations[findable_observations["truth"] == "23636"]["obs_ids"].values[0][0],
         np.array(
             [
                 "obs_000001",  # tracklet 1
@@ -210,13 +210,13 @@ def test_calcFindableNightlyLinkages(test_observations, by_object):
 
     # Object 58177 has 5 tracklets no more than 2 hours long (all of its observations)
     np.testing.assert_equal(
-        findable_observations[findable_observations["truth"] == "58177"]["obs_ids"].values[0],
+        findable_observations[findable_observations["truth"] == "58177"]["obs_ids"].values[0][0],
         test_observations[test_observations["truth"] == "58177"]["obs_id"].values,
     )
 
     # Object 82134 has 3 tracklets no more than 2 hours long
     np.testing.assert_equal(
-        findable_observations[findable_observations["truth"] == "82134"]["obs_ids"].values[0],
+        findable_observations[findable_observations["truth"] == "82134"]["obs_ids"].values[0][0],
         np.array(
             [
                 "obs_000016",  # tracklet 1
@@ -250,14 +250,14 @@ def test_calcFindableNightlyLinkages(test_observations, by_object):
 
     # Object 58177 has 5 tracklets no more than 2 hours long (all of its observations)
     np.testing.assert_equal(
-        findable_observations[findable_observations["truth"] == "58177"]["obs_ids"].values[0],
+        findable_observations[findable_observations["truth"] == "58177"]["obs_ids"].values[0][0],
         test_observations[test_observations["truth"] == "58177"]["obs_id"].values,
     )
 
     # Object 82134 has 3 tracklets no more than 2 hours long (but several observations that
     # could form tracklets are too close together)
     np.testing.assert_equal(
-        findable_observations[findable_observations["truth"] == "82134"]["obs_ids"].values[0],
+        findable_observations[findable_observations["truth"] == "82134"]["obs_ids"].values[0][0],
         np.array(
             [
                 # "obs_000016",  # tracklet 1
@@ -291,7 +291,7 @@ def test_calcFindableNightlyLinkages(test_observations, by_object):
 
     # Object 82134 has 3 tracklets no more than 2 hours long
     np.testing.assert_equal(
-        findable_observations[findable_observations["truth"] == "82134"]["obs_ids"].values[0],
+        findable_observations[findable_observations["truth"] == "82134"]["obs_ids"].values[0][0],
         np.array(
             [
                 "obs_000016",  # tracklet 1
@@ -325,7 +325,7 @@ def test_calcFindableNightlyLinkages_edge_cases(test_observations):
     for object_id in ["23636", "58177", "82134"]:
         assert object_id in findable_ids
         np.testing.assert_equal(
-            findable_observations[findable_observations["truth"] == object_id]["obs_ids"].values[0],
+            findable_observations[findable_observations["truth"] == object_id]["obs_ids"].values[0][0],
             test_observations[test_observations["truth"] == object_id]["obs_id"].values,
         )
 
@@ -339,7 +339,7 @@ def test_calcFindableNightlyLinkages_edge_cases(test_observations):
     for object_id in ["58177", "82134"]:
         assert object_id in findable_ids
         np.testing.assert_equal(
-            findable_observations[findable_observations["truth"] == object_id]["obs_ids"].values[0],
+            findable_observations[findable_observations["truth"] == object_id]["obs_ids"].values[0][0],
             test_observations[test_observations["truth"] == object_id]["obs_id"].values,
         )
 
