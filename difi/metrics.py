@@ -242,17 +242,27 @@ class FindabilityMetric(ABC):
             "num_findable": [],
         }
 
+        # Extract the counts of observations in each night
+        nights = observations["night"].values
+        nights, night_counts = np.unique(nights, return_counts=True)
+
+        # Sort the nights and night counts
+        night_counts = night_counts[np.argsort(nights)]
+        nights = np.sort(nights)
+
         for i, window in enumerate(windows):
             night_min, night_max = window
-            observations_in_window = observations[
-                observations["night"].between(night_min, night_max, inclusive="both")
-            ]
+
+            observations_in_window = night_counts[
+                np.where((nights >= night_min) & (nights <= night_max))
+            ].sum()
+
             findable_i = findable[findable["window_id"] == i]
 
             windows_dict["window_id"].append(i)
             windows_dict["start_night"].append(night_min)
             windows_dict["end_night"].append(night_max)
-            windows_dict["num_obs"].append(len(observations_in_window))
+            windows_dict["num_obs"].append(observations_in_window)
             windows_dict["num_findable"].append(findable_i["findable"].sum().astype(int))
 
         return pd.DataFrame(windows_dict)
