@@ -164,7 +164,7 @@ class FindabilityMetric(ABC):
         pass
 
     @staticmethod
-    def _compute_windows(observations, detection_window: Optional[int] = None) -> List[Tuple[int, int]]:
+    def _compute_windows(nights: np.ndarray, detection_window: Optional[int] = None) -> List[Tuple[int, int]]:
         """
         Calculate the minimum and maximum night for windows of observations of length
         detection_window. If detection_window is None, then the entire range of nights
@@ -175,9 +175,8 @@ class FindabilityMetric(ABC):
 
         Parameters
         ----------
-        observations : `~pandas.DataFrame`
-            Observations dataframe containing at least the following columns:
-            `obs_id`, `time`, `night`, `truth`.
+        nights : `~numpy.ndarray`
+            Array of nights on which observations occur.
         detection_window : int, optional
             The number of nights of observations within a single window. If None, then
             the entire range of nights is used.
@@ -188,7 +187,6 @@ class FindabilityMetric(ABC):
             List of tuples containing the start and end night of each window.
         """
         # Calculate the unique number of nights
-        nights = observations["night"].unique()
         min_night = nights.min()
         max_night = nights.max()
 
@@ -525,7 +523,9 @@ class FindabilityMetric(ABC):
             A dataframe containing the number of observations, number of findable
             objects and the start and end night of each window.
         """
-        windows = self._compute_windows(observations, detection_window)
+        # Extract arrays
+        nights = observations["night"].values
+        windows = self._compute_windows(nights, detection_window)
 
         if by_object:
             observations_sorted = observations.sort_values(by=["truth", "time"], ascending=True)
