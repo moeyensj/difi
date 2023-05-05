@@ -751,23 +751,21 @@ class FindabilityMetric(ABC):
         windows = self._compute_windows(nights, detection_window)
 
         if by_object:
-            observations_sorted = observations.sort_values(by=["object_id", "time"], ascending=True)
             findable = self.run_by_object(
-                observations_sorted,
+                observations,
                 windows,
                 discovery_opportunities=discovery_opportunities,
                 num_jobs=num_jobs,
             )
         else:
-            observations_sorted = observations.sort_values(by=["time"], ascending=True)
             findable = self.run_by_window(
-                observations_sorted,
+                observations,
                 windows,
                 discovery_opportunities=discovery_opportunities,
                 num_jobs=num_jobs,
             )
 
-        window_summary = self._create_window_summary(observations_sorted, windows, findable)
+        window_summary = self._create_window_summary(observations, windows, findable)
         return findable, window_summary
 
 
