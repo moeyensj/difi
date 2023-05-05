@@ -11,6 +11,8 @@ __all__ = ["FindabilityMetric", "NightlyLinkagesMetric", "MinObsMetric"]
 
 Metrics = TypeVar("Metrics", bound="FindabilityMetric")
 
+__DIFI_ARRAY: np.ndarray
+
 
 @njit(cache=True)
 def haversine_distance(ra1: np.ndarray, dec1: np.ndarray, ra2: np.ndarray, dec2: np.ndarray) -> np.ndarray:
@@ -159,7 +161,7 @@ def select_tracklet_combinations(nights: np.ndarray, min_nights: int) -> List[np
 class FindabilityMetric(ABC):
     @abstractmethod
     def determine_object_findable(
-        self, observations: pd.DataFrame, discovery_opportunities: bool = False
+        self, observations: np.ndarray, discovery_opportunities: bool = False
     ) -> List[List[str]]:
         pass
 
@@ -255,9 +257,171 @@ class FindabilityMetric(ABC):
 
         return pd.DataFrame(windows_dict)
 
+    @staticmethod
+    def _sort_by_object_times(truths, obs_ids, times, ra, dec, nights):
+        """
+        Sort the observations by object and then by time. This is optimal for
+        computing the findability metrics by object.
+
+        Parameters
+        ----------
+        truths : `~numpy.ndarray`
+            Array of truth values for each observation.
+        obs_ids : `~numpy.ndarray`
+            Array of observation IDs.
+        times : `~numpy.ndarray`
+            Array of times of each observation.
+        ra : `~numpy.ndarray`
+            Array of right ascensions of each observation.
+        dec : `~numpy.ndarray`
+            Array of declinations of each observation.
+        nights : `~numpy.ndarray`
+            Array of nights on which observations occur.
+
+        Returns
+        -------
+        truths : `~numpy.ndarray`
+            Sorted array of truth values for each observation.
+        obs_ids : `~numpy.ndarray`
+            Sorted array of observation IDs.
+        times : `~numpy.ndarray`
+            Sorted array of times of each observation.
+        ra : `~numpy.ndarray`
+            Sorted array of right ascensions of each observation.
+        dec : `~numpy.ndarray`
+            Sorted array of declinations of each observation.
+        nights : `~numpy.ndarray`
+            Sorted array of nights on which observations occur.
+        """
+        # Sort order is declared in reverse order
+        sorted_indices = np.lexsort((times, truths))
+
+        return (
+            truths[sorted_indices],
+            obs_ids[sorted_indices],
+            times[sorted_indices],
+            ra[sorted_indices],
+            dec[sorted_indices],
+            nights[sorted_indices],
+        )
+
+    @staticmethod
+    def _sort_by_times_object(truths, obs_ids, times, ra, dec, nights):
+        """
+        Sort the observations by time and then by object. This is optimal for
+        computing the findability metrics by windows of time.
+
+        Parameters
+        ----------
+        truths : `~numpy.ndarray`
+            Array of truth values for each observation.
+        obs_ids : `~numpy.ndarray`
+            Array of observation IDs.
+        times : `~numpy.ndarray`
+            Array of times of each observation.
+        ra : `~numpy.ndarray`
+            Array of right ascensions of each observation.
+        dec : `~numpy.ndarray`
+            Array of declinations of each observation.
+        nights : `~numpy.ndarray`
+            Array of nights on which observations occur.
+
+        Returns
+        -------
+        truths : `~numpy.ndarray`
+            Sorted array of truth values for each observation.
+        obs_ids : `~numpy.ndarray`
+            Sorted array of observation IDs.
+        times : `~numpy.ndarray`
+            Sorted array of times of each observation.
+        ra : `~numpy.ndarray`
+            Sorted array of right ascensions of each observation.
+        dec : `~numpy.ndarray`
+            Sorted array of declinations of each observation.
+        nights : `~numpy.ndarray`
+            Sorted array of nights on which observations occur.
+        """
+        # Sort order is declared in reverse order
+        sorted_indices = np.lexsort((truths, times))
+
+        return (
+            truths[sorted_indices],
+            obs_ids[sorted_indices],
+            times[sorted_indices],
+            ra[sorted_indices],
+            dec[sorted_indices],
+            nights[sorted_indices],
+        )
+
+    @staticmethod
+    def _split_by_object(truths: np.ndarray) -> List[np.ndarray]:
+        """
+        Create a list of arrays of indices for each object in the observations.
+
+        Parameters
+        ----------
+        truths : `~numpy.ndarray`
+            Array of truth values for each observation.
+
+        Returns
+        -------
+        split_by_object_indices : List[`~numpy.ndarray`]
+            List of arrays of indices for each object in the observations.
+        """
+        unique_truths, object_indices = np.unique(truths, return_index=True)
+        split_by_object_indices = np.split(np.arange(len(truths)), object_indices[1:])
+
+        return split_by_object_indices
+
+    @staticmethod
+    def _store_as_record_array(truths, obs_ids, times, ra, dec, nights):
+        """
+        Store the observations as a record array.
+
+        Parameters
+        ----------
+        truths : `~numpy.ndarray`
+            Array of truth values for each observation.
+        obs_ids : `~numpy.ndarray`
+            Array of observation IDs.
+        times : `~numpy.ndarray`
+            Array of times of each observation.
+        ra : `~numpy.ndarray`
+            Array of right ascensions of each observation.
+        dec : `~numpy.ndarray`
+            Array of declinations of each observation.
+        nights : `~numpy.ndarray`
+            Array of nights on which observations occur.
+
+        Returns
+        -------
+        observations_array : `~numpy.ndarray`
+            Record array of observations.
+        """
+        # Store arrays as global variables
+        observations_array = np.empty(
+            len(truths),
+            dtype=[
+                ("truth", truths.dtype),
+                ("obs_id", obs_ids.dtype),
+                ("time", np.float64),
+                ("ra", np.float64),
+                ("dec", np.float64),
+                ("night", np.int64),
+            ],
+        )
+
+        observations_array["truth"] = truths
+        observations_array["obs_id"] = obs_ids
+        observations_array["time"] = times
+        observations_array["ra"] = ra
+        observations_array["dec"] = dec
+        observations_array["night"] = nights
+        return observations_array
+
     def _run_object_worker(
         self,
-        observations: pd.DataFrame,
+        object_indices: np.ndarray,
         windows: List[Tuple[int, int]],
         discovery_opportunities: bool = False,
     ) -> pd.DataFrame:
@@ -282,6 +446,7 @@ class FindabilityMetric(ABC):
             'obs_ids' containing `~numpy.ndarray`s of the observations that made each truth findable.
         """
         findable_dfs = []
+        observations = __DIFI_ARRAY[object_indices]
         for i, window in enumerate(windows):
             night_min, night_max = window
             window_obs = observations[
@@ -296,7 +461,7 @@ class FindabilityMetric(ABC):
                 findable = pd.DataFrame(
                     {
                         "window_id": [i],
-                        "truth": [window_obs["truth"].values[0]],
+                        "truth": [window_obs["truth"][0]],
                         "findable": [1],
                         "discovery_opportunities": [chances],
                         "obs_ids": [obs_ids],
@@ -354,31 +519,45 @@ class FindabilityMetric(ABC):
             List of dataframes containing the findable truths and the observations
             that made them findable for each window.
         """
-        grouped_observations = observations.groupby(by=["truth"])
-        truth_observations = [grouped_observations.get_group(x) for x in grouped_observations.groups]
+        # Sort arrays by object and then by times
+        truths, obs_ids, times, ra, dec, nights = self._sort_by_object_times(
+            observations["truth"].values.astype(str),
+            observations["obs_id"].values.astype(str),
+            observations["time"].values,
+            observations["ra"].values,
+            observations["dec"].values,
+            observations["night"].values,
+        )
+
+        # Split arrays by object
+        split_by_object_indices = self._split_by_object(truths)
+
+        # Store the observations in a global variable so that the worker functions can access them
+        global __DIFI_ARRAY
+        __DIFI_ARRAY = self._store_as_record_array(truths, obs_ids, times, ra, dec, nights)
 
         if num_jobs is None or num_jobs > 1:
             pool = mp.Pool(num_jobs)
             findable_dfs = pool.starmap(
                 self._run_object_worker,
-                zip(truth_observations, repeat(windows), repeat(discovery_opportunities)),
+                zip(split_by_object_indices, repeat(windows), repeat(discovery_opportunities)),
             )
             pool.close()
             pool.join()
 
         else:
             findable_dfs = []
-            for truth_obs in truth_observations:
+            for object_indices in split_by_object_indices:
                 findable_dfs.append(
                     self._run_object_worker(
-                        truth_obs, windows, discovery_opportunities=discovery_opportunities
+                        object_indices, windows, discovery_opportunities=discovery_opportunities
                     )
                 )
 
         return findable_dfs
 
     def _run_window_worker(
-        self, observations: pd.DataFrame, window_id: int, discovery_opportunities: bool = False
+        self, window_indices, window_id: int, discovery_opportunities: bool = False
     ) -> pd.DataFrame:
         """
         Run the metric on a single window of observations.
@@ -400,27 +579,48 @@ class FindabilityMetric(ABC):
             A dataframe containing the truth IDs that are findable as an index, and a column named
             'obs_ids' containing `~numpy.ndarray`s of the observations that made each truth findable.
         """
+        observations = __DIFI_ARRAY[window_indices]
         if len(observations) == 0:
             return pd.DataFrame(
                 {"window_id": [], "truth": [], "findable": [], "discovery_opportunities": [], "obs_ids": []}
             )
 
-        findable = (
-            observations.groupby(by=["truth"])
-            .apply(self.determine_object_findable, discovery_opportunities=discovery_opportunities)
-            .to_frame("obs_ids")
-        )
-        findable.reset_index(inplace=True, drop=False)
+        findable_dfs = []
+        for object_id in np.unique(observations["truth"]):
 
-        if len(findable) > 0:
-            findable.insert(0, "window_id", window_id)
-            findable.insert(2, "discovery_opportunities", findable["obs_ids"].apply(len))
-            findable.insert(
-                2, "findable", findable["discovery_opportunities"].apply(lambda x: 1 if x > 0 else 0)
+            obs_ids = self.determine_object_findable(
+                observations[np.where(observations["truth"] == object_id)[0]],
+                discovery_opportunities=discovery_opportunities,
             )
-            findable = findable[findable["findable"] == 1]  # noqa: E712
-            findable.reset_index(inplace=True, drop=True)
+            chances = len(obs_ids)
+            if chances > 0:
+                findable = pd.DataFrame(
+                    {
+                        "window_id": [window_id],
+                        "truth": [object_id],
+                        "findable": [1],
+                        "discovery_opportunities": [chances],
+                        "obs_ids": [obs_ids],
+                    }
+                )
+            else:
+                findable = pd.DataFrame(
+                    {
+                        "window_id": [],
+                        "truth": [],
+                        "findable": [],
+                        "discovery_opportunities": [],
+                        "obs_ids": [],
+                    }
+                )
 
+            findable_dfs.append(findable)
+
+        findable = pd.concat(findable_dfs, ignore_index=True)
+        if len(findable) > 0:
+            findable.loc[:, "window_id"] = findable["window_id"].astype(int)
+            findable.loc[:, "findable"] = findable["findable"].astype(int)
+            findable.loc[:, "discovery_opportunities"] = findable["discovery_opportunities"].astype(int)
         return findable
 
     def run_by_window(
@@ -454,28 +654,41 @@ class FindabilityMetric(ABC):
             List of dataframes containing the findable truths and the observations
             that made them findable for each window.
         """
-        window_observations = []
+        # Sort arrays by times then objects
+        truths, obs_ids, times, ra, dec, nights = self._sort_by_times_object(
+            observations["truth"].values.astype(str),
+            observations["obs_id"].values.astype(str),
+            observations["time"].values,
+            observations["ra"].values,
+            observations["dec"].values,
+            observations["night"].values,
+        )
+
+        # Split the observations by window
+        split_by_window_indices = []
         for window in windows:
             night_min, night_max = window
-            window_obs = observations[
-                (observations["night"] >= night_min) & (observations["night"] <= night_max)
-            ]
-            window_observations.append(window_obs)
+            window_indices = np.where((nights >= night_min) & (nights <= night_max))[0]
+            split_by_window_indices.append(window_indices)
+
+        # Store the observations in a global variable so that the worker functions can access them
+        global __DIFI_ARRAY
+        __DIFI_ARRAY = self._store_as_record_array(truths, obs_ids, times, ra, dec, nights)
 
         if num_jobs is None or num_jobs > 1:
             pool = mp.Pool(num_jobs)
             findable_dfs = pool.starmap(
                 self._run_window_worker,
-                zip(window_observations, range(len(windows)), repeat(discovery_opportunities)),
+                zip(split_by_window_indices, range(len(windows)), repeat(discovery_opportunities)),
             )
             pool.close()
             pool.join()
 
         else:
             findable_dfs = []
-            for i, window_obs in enumerate(window_observations):
+            for i, window_indices in enumerate(split_by_window_indices):
                 findable_i = self._run_window_worker(
-                    window_obs, i, discovery_opportunities=discovery_opportunities
+                    window_indices, i, discovery_opportunities=discovery_opportunities
                 )
                 findable_dfs.append(findable_i)
 
@@ -591,7 +804,7 @@ class NightlyLinkagesMetric(FindabilityMetric):
         self.min_obs_angular_separation = min_obs_angular_separation
 
     def determine_object_findable(
-        self, observations: pd.DataFrame, discovery_opportunities: bool = False
+        self, observations: np.ndarray, discovery_opportunities: bool = False
     ) -> List[List[str]]:
         """
         Given observations belonging to one object, finds all observations that are within
@@ -602,9 +815,9 @@ class NightlyLinkagesMetric(FindabilityMetric):
 
         Parameters
         ----------
-        observations : `~pandas.DataFrame` or `~pandas.core.groupby.generic.DataFrameGroupBy`
-            Pandas DataFrame with at least two columns for a single unique truth: observation IDs
-            and the observation times in units of decimal days.
+        observations : `~numpy.ndarray`
+            Numpy record array with at least the following columns:
+            `truth`, `obs_id`, `time`, `night`, `ra`, `dec`.
         discovery_opportunities : bool, optional
             If True, return the observation combinations that represent unique discovery
             opportunites.
@@ -620,7 +833,7 @@ class NightlyLinkagesMetric(FindabilityMetric):
         if len(observations) == 0:
             return []
 
-        assert observations["truth"].nunique() == 1
+        assert len(np.unique(observations["truth"])) == 1
 
         # Exit early if there are not enough observations
         total_required_obs = self.linkage_min_obs * self.min_linkage_nights
@@ -628,11 +841,11 @@ class NightlyLinkagesMetric(FindabilityMetric):
             return []
 
         # Grab times and observation IDs from grouped observations
-        times = observations["time"].values
-        obs_ids = observations["obs_id"].values
-        nights = observations["night"].values
-        ra = observations["ra"].values
-        dec = observations["dec"].values
+        times = observations["time"]
+        obs_ids = observations["obs_id"]
+        nights = observations["night"]
+        ra = observations["ra"]
+        dec = observations["dec"]
 
         if self.linkage_min_obs > 1:
 
@@ -714,7 +927,7 @@ class MinObsMetric(FindabilityMetric):
         self.min_obs = min_obs
 
     def determine_object_findable(
-        self, observations: pd.DataFrame, discovery_opportunities: bool = False
+        self, observations: np.ndarray, discovery_opportunities: bool = False
     ) -> List[List[str]]:
         """
         Finds all truths with a minimum of self.min_obs observations and the observations
@@ -722,9 +935,9 @@ class MinObsMetric(FindabilityMetric):
 
         Parameters
         ----------
-        observations : `~pandas.DataFrame`
-            Pandas DataFrame with at least two columns: observation IDs and the truth values
-            (the object to which the observation belongs to).
+        observations : `~numpy.ndarray`
+            Numpy record array with at least the following columns:
+            `truth`, `obs_id`, `time`, `night`, `ra`, `dec`.
         discovery_opportunities : bool, optional
             If True, return the observation combinations that represent unique discovery
             opportunites.
@@ -740,9 +953,9 @@ class MinObsMetric(FindabilityMetric):
         if len(observations) == 0:
             return []
 
-        assert observations["truth"].nunique() == 1
+        assert len(np.unique(observations["truth"])) == 1
         if len(observations) >= self.min_obs:
-            obs_ids = observations["obs_id"].values
+            obs_ids = observations["obs_id"]
             if discovery_opportunities:
                 obs_ids = list(combinations(obs_ids, self.min_obs))
                 return obs_ids
