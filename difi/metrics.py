@@ -424,7 +424,7 @@ class FindabilityMetric(ABC):
         object_indices: np.ndarray,
         windows: List[Tuple[int, int]],
         discovery_opportunities: bool = False,
-    ) -> pd.DataFrame:
+    ) -> List[Dict[str, Any]]:
         """
         Run the metric on a single object.
 
@@ -441,11 +441,11 @@ class FindabilityMetric(ABC):
 
         Returns
         -------
-        findable : `~pandas.DataFrame`
-            A dataframe containing the truth IDs that are findable as an index, and a column named
-            'obs_ids' containing `~numpy.ndarray`s of the observations that made each truth findable.
+        findable : List[Dict[str, Any]]]
+            A list of dictionaries containing the findable truths and the observations
+            that made them findable for each window.
         """
-        findable_dfs = []
+        findable_dicts = []
         observations = __DIFI_ARRAY[object_indices]
         for i, window in enumerate(windows):
             night_min, night_max = window
@@ -458,34 +458,25 @@ class FindabilityMetric(ABC):
             )
             chances = len(obs_ids)
             if chances > 0:
-                findable = pd.DataFrame(
-                    {
-                        "window_id": [i],
-                        "truth": [window_obs["truth"][0]],
-                        "findable": [1],
-                        "discovery_opportunities": [chances],
-                        "obs_ids": [obs_ids],
-                    }
-                )
+                findable = {
+                    "window_id": i,
+                    "truth": observations["truth"][0],
+                    "findable": 1,
+                    "discovery_opportunities": chances,
+                    "obs_ids": obs_ids,
+                }
             else:
-                findable = pd.DataFrame(
-                    {
-                        "window_id": [],
-                        "truth": [],
-                        "findable": [],
-                        "discovery_opportunities": [],
-                        "obs_ids": [],
-                    }
-                )
+                findable = {
+                    "window_id": np.NaN,
+                    "truth": np.NaN,
+                    "findable": np.NaN,
+                    "discovery_opportunities": np.NaN,
+                    "obs_ids": np.NaN,
+                }
 
-            findable_dfs.append(findable)
+            findable_dicts.append(findable)
 
-        findable = pd.concat(findable_dfs, ignore_index=True)
-        if len(findable) > 0:
-            findable.loc[:, "window_id"] = findable["window_id"].astype(int)
-            findable.loc[:, "findable"] = findable["findable"].astype(int)
-            findable.loc[:, "discovery_opportunities"] = findable["discovery_opportunities"].astype(int)
-        return findable
+        return findable_dicts
 
     def run_by_object(
         self,
@@ -515,8 +506,8 @@ class FindabilityMetric(ABC):
 
         Returns
         -------
-        findable_dfs : List[`~pandas.DataFrame`]
-            List of dataframes containing the findable truths and the observations
+        findable : List[`~pandas.DataFrame`]
+            Dataframe containing the findable truths and the observations
             that made them findable for each window.
         """
         # Sort arrays by object and then by times
@@ -536,29 +527,40 @@ class FindabilityMetric(ABC):
         global __DIFI_ARRAY
         __DIFI_ARRAY = self._store_as_record_array(truths, obs_ids, times, ra, dec, nights)
 
+        findable_lists: List[List[Dict[str, Any]]] = []
         if num_jobs is None or num_jobs > 1:
             pool = mp.Pool(num_jobs)
-            findable_dfs = pool.starmap(
+            findable_lists = pool.starmap(
                 self._run_object_worker,
                 zip(split_by_object_indices, repeat(windows), repeat(discovery_opportunities)),
             )
+
             pool.close()
             pool.join()
 
         else:
-            findable_dfs = []
             for object_indices in split_by_object_indices:
-                findable_dfs.append(
+                findable_lists.append(
                     self._run_object_worker(
                         object_indices, windows, discovery_opportunities=discovery_opportunities
                     )
                 )
 
-        return findable_dfs
+        findable_flattened = [item for sublist in findable_lists for item in sublist]
+
+        findable = pd.DataFrame(findable_flattened)
+        findable.dropna(subset=["window_id"], inplace=True)
+        if len(findable) > 0:
+            findable.loc[:, "window_id"] = findable["window_id"].astype(int)
+            findable.loc[:, "findable"] = findable["findable"].astype(int)
+            findable.loc[:, "discovery_opportunities"] = findable["discovery_opportunities"].astype(int)
+            findable.sort_values(by=["window_id", "truth"], inplace=True, ignore_index=True)
+
+        return findable
 
     def _run_window_worker(
         self, window_indices, window_id: int, discovery_opportunities: bool = False
-    ) -> pd.DataFrame:
+    ) -> List[Dict[str, Any]]:
         """
         Run the metric on a single window of observations.
 
@@ -575,17 +577,23 @@ class FindabilityMetric(ABC):
 
         Returns
         -------
-        findable : `~pandas.DataFrame`
-            A dataframe containing the truth IDs that are findable as an index, and a column named
-            'obs_ids' containing `~numpy.ndarray`s of the observations that made each truth findable.
+        findable : List[Dict[str, Any]]]
+            A list of dictionaries containing the findable truths and the observations
+            that made them findable for each window.
         """
         observations = __DIFI_ARRAY[window_indices]
         if len(observations) == 0:
-            return pd.DataFrame(
-                {"window_id": [], "truth": [], "findable": [], "discovery_opportunities": [], "obs_ids": []}
-            )
+            return [
+                {
+                    "window_id": np.nan,
+                    "truth": np.nan,
+                    "findable": np.nan,
+                    "discovery_opportunities": np.nan,
+                    "obs_ids": np.nan,
+                }
+            ]
 
-        findable_dfs = []
+        findable_dicts = []
         for object_id in np.unique(observations["truth"]):
 
             obs_ids = self.determine_object_findable(
@@ -594,34 +602,25 @@ class FindabilityMetric(ABC):
             )
             chances = len(obs_ids)
             if chances > 0:
-                findable = pd.DataFrame(
-                    {
-                        "window_id": [window_id],
-                        "truth": [object_id],
-                        "findable": [1],
-                        "discovery_opportunities": [chances],
-                        "obs_ids": [obs_ids],
-                    }
-                )
+                findable = {
+                    "window_id": window_id,
+                    "truth": object_id,
+                    "findable": 1,
+                    "discovery_opportunities": chances,
+                    "obs_ids": obs_ids,
+                }
             else:
-                findable = pd.DataFrame(
-                    {
-                        "window_id": [],
-                        "truth": [],
-                        "findable": [],
-                        "discovery_opportunities": [],
-                        "obs_ids": [],
-                    }
-                )
+                findable = {
+                    "window_id": np.nan,
+                    "truth": np.nan,
+                    "findable": np.nan,
+                    "discovery_opportunities": np.nan,
+                    "obs_ids": np.nan,
+                }
 
-            findable_dfs.append(findable)
+            findable_dicts.append(findable)
 
-        findable = pd.concat(findable_dfs, ignore_index=True)
-        if len(findable) > 0:
-            findable.loc[:, "window_id"] = findable["window_id"].astype(int)
-            findable.loc[:, "findable"] = findable["findable"].astype(int)
-            findable.loc[:, "discovery_opportunities"] = findable["discovery_opportunities"].astype(int)
-        return findable
+        return findable_dicts
 
     def run_by_window(
         self,
@@ -650,8 +649,8 @@ class FindabilityMetric(ABC):
 
         Returns
         -------
-        findable_dfs : List[`~pandas.DataFrame`]
-            List of dataframes containing the findable truths and the observations
+        findable : List[`~pandas.DataFrame`]
+            Dataframe containing the findable truths and the observations
             that made them findable for each window.
         """
         # Sort arrays by times then objects
@@ -675,9 +674,10 @@ class FindabilityMetric(ABC):
         global __DIFI_ARRAY
         __DIFI_ARRAY = self._store_as_record_array(truths, obs_ids, times, ra, dec, nights)
 
+        findable_lists: List[List[Dict[str, Any]]] = []
         if num_jobs is None or num_jobs > 1:
             pool = mp.Pool(num_jobs)
-            findable_dfs = pool.starmap(
+            findable_lists = pool.starmap(
                 self._run_window_worker,
                 zip(split_by_window_indices, range(len(windows)), repeat(discovery_opportunities)),
             )
@@ -685,14 +685,24 @@ class FindabilityMetric(ABC):
             pool.join()
 
         else:
-            findable_dfs = []
             for i, window_indices in enumerate(split_by_window_indices):
-                findable_i = self._run_window_worker(
-                    window_indices, i, discovery_opportunities=discovery_opportunities
+                findable_lists.append(
+                    self._run_window_worker(
+                        window_indices, i, discovery_opportunities=discovery_opportunities
+                    )
                 )
-                findable_dfs.append(findable_i)
 
-        return findable_dfs
+        findable_flattened = [item for sublist in findable_lists for item in sublist]
+
+        findable = pd.DataFrame(findable_flattened)
+        findable.dropna(subset=["window_id"], inplace=True)
+        if len(findable) > 0:
+            findable.loc[:, "window_id"] = findable["window_id"].astype(int)
+            findable.loc[:, "findable"] = findable["findable"].astype(int)
+            findable.loc[:, "discovery_opportunities"] = findable["discovery_opportunities"].astype(int)
+            findable.sort_values(by=["window_id", "truth"], inplace=True, ignore_index=True)
+
+        return findable
 
     def run(
         self,
@@ -742,7 +752,7 @@ class FindabilityMetric(ABC):
 
         if by_object:
             observations_sorted = observations.sort_values(by=["truth", "time"], ascending=True)
-            findable_dfs = self.run_by_object(
+            findable = self.run_by_object(
                 observations_sorted,
                 windows,
                 discovery_opportunities=discovery_opportunities,
@@ -750,18 +760,12 @@ class FindabilityMetric(ABC):
             )
         else:
             observations_sorted = observations.sort_values(by=["time"], ascending=True)
-            findable_dfs = self.run_by_window(
+            findable = self.run_by_window(
                 observations_sorted,
                 windows,
                 discovery_opportunities=discovery_opportunities,
                 num_jobs=num_jobs,
             )
-
-        findable = pd.concat(findable_dfs, ignore_index=True)
-        findable.loc[:, "window_id"] = findable["window_id"].astype(int)
-        findable.loc[:, "findable"] = findable["findable"].astype(int)
-        findable.loc[:, "discovery_opportunities"] = findable["discovery_opportunities"].astype(int)
-        findable.sort_values(by=["window_id", "truth"], inplace=True, ignore_index=True)
 
         window_summary = self._create_window_summary(observations_sorted, windows, findable)
         return findable, window_summary
