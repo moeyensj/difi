@@ -3,7 +3,8 @@ import pytest
 from ..cifi import analyzeObservations
 
 
-def test_analyzeObservations_noClasses(test_observations):
+@pytest.mark.parametrize("num_jobs", [1, None])
+def test_analyzeObservations_noClasses(test_observations, num_jobs):
     # Test analyzeObservations when no truth classes are given
 
     all_truths, findable_observations, summary = analyzeObservations(
@@ -37,6 +38,7 @@ def test_analyzeObservations_noClasses(test_observations):
         min_obs=10,
         classes=None,
         detection_window=None,
+        num_jobs=num_jobs,
     )
 
     # Check that all three objects are in the all_truths data frame
@@ -63,7 +65,8 @@ def test_analyzeObservations_noClasses(test_observations):
     return
 
 
-def test_analyzeObservations_withClassesColumn(test_observations):
+@pytest.mark.parametrize("num_jobs", [1, None])
+def test_analyzeObservations_withClassesColumn(test_observations, num_jobs):
     # Test analyzeObservations when a column name is given for the truth classes
 
     # Add class column to test observations
@@ -75,6 +78,8 @@ def test_analyzeObservations_withClassesColumn(test_observations):
         min_obs=5,
         classes="class",
         detection_window=None,
+        discovery_opportunities=False,
+        num_jobs=num_jobs,
     )
 
     # Check that all three objects are in the all_truths data frame
@@ -112,7 +117,8 @@ def test_analyzeObservations_withClassesColumn(test_observations):
     return
 
 
-def test_analyzeObservations_withClassesDictionary(test_observations):
+@pytest.mark.parametrize("num_jobs", [1, None])
+def test_analyzeObservations_withClassesDictionary(test_observations, num_jobs):
     # Test analyzeObservations when a dictionary is given for the truth classes
 
     # Add class column to test observations
@@ -127,6 +133,8 @@ def test_analyzeObservations_withClassesDictionary(test_observations):
         min_obs=5,
         classes=classes_dict,
         detection_window=None,
+        discovery_opportunities=False,
+        num_jobs=num_jobs,
     )
 
     # Check that all three objects are in the all_truths data frame
@@ -171,9 +179,7 @@ def test_analyzeObservations_noObservations(test_observations):
     with pytest.raises(ValueError):
         # Build the all_truths and summary data frames
         all_truths, findable_observations, summary = analyzeObservations(
-            test_observations,
-            min_obs=5,
-            classes=None,
+            test_observations, min_obs=5, classes=None, discovery_opportunities=False
         )
 
     return
@@ -184,10 +190,7 @@ def test_analyzeObservations_errors(test_observations):
     with pytest.raises(ValueError):
         # Build the all_truths and summary data frames
         all_truths, findable_observations, summary = analyzeObservations(
-            test_observations,
-            min_obs=5,
-            metric="wrong_metric",
-            classes=None,
+            test_observations, min_obs=5, metric="wrong_metric", classes=None, discovery_opportunities=False
         )
 
     return
