@@ -15,7 +15,7 @@ def _create_all_truths(
     observations: pd.DataFrame, findable: pd.DataFrame, window_summary: pd.DataFrame
 ) -> pd.DataFrame:
     """
-    Create a dataframe containing all truths, the number of observations, and whether or
+    Create a dataframe containing all objects, the number of observations, and whether or
     not they are findable per window.
 
     Parameters
@@ -32,8 +32,8 @@ def _create_all_truths(
 
     Returns
     -------
-    all_truths : `~pandas.DataFrame`
-        Dataframe containing all truths, the number of observations, and whether or not they are findable
+    all_objects : `~pandas.DataFrame`
+        Dataframe containing all objects, the number of observations, and whether or not they are findable
         per window.
     """
     all_truths_dfs = []
@@ -42,7 +42,7 @@ def _create_all_truths(
         # Create masks for the dataframes
         window_i = window_summary[window_summary["window_id"] == window_id]
 
-        # Get the findable truths for this window
+        # Get the findable objects for this window
         findable_i = findable[findable["window_id"] == window_id]
 
         # Get the observations for this window
@@ -52,32 +52,34 @@ def _create_all_truths(
             observations["night"].between(night_min, night_max, inclusive="both")
         ]
 
-        num_obs_per_object = observations_in_window["truth"].value_counts().values
-        truths_by_num_obs_descending = observations_in_window["truth"].value_counts().index.values
+        num_obs_per_object = observations_in_window["object_id"].value_counts().values
+        truths_by_num_obs_descending = observations_in_window["object_id"].value_counts().index.values
 
         all_truths_i = pd.DataFrame(
             {
                 "window_id": [window_id for _ in range(len(truths_by_num_obs_descending))],
-                "truth": truths_by_num_obs_descending,
+                "object_id": truths_by_num_obs_descending,
                 "num_obs": num_obs_per_object,
                 "findable": np.zeros(len(truths_by_num_obs_descending), dtype=int),
             }
         )
 
-        all_truths_i.loc[all_truths_i["truth"].isin(findable_i["truth"].values), "findable"] = 1
+        all_truths_i.loc[all_truths_i["object_id"].isin(findable_i["object_id"].values), "findable"] = 1
         all_truths_dfs.append(all_truths_i)
 
-    all_truths = pd.concat(all_truths_dfs, ignore_index=True)
-    all_truths.sort_values(by=["window_id", "truth"], ascending=[True, True], inplace=True, ignore_index=True)
+    all_objects = pd.concat(all_truths_dfs, ignore_index=True)
+    all_objects.sort_values(
+        by=["window_id", "object_id"], ascending=[True, True], inplace=True, ignore_index=True
+    )
     for col in ["window_id", "num_obs", "findable"]:
-        all_truths.loc[:, col] = all_truths[col].astype(int)
-    return all_truths
+        all_objects.loc[:, col] = all_objects[col].astype(int)
+    return all_objects
 
 
 def _create_summary(
     observations: pd.DataFrame,
     classes: Union[None, str, Dict],
-    all_truths: pd.DataFrame,
+    all_objects: pd.DataFrame,
     window_summary: pd.DataFrame,
 ) -> pd.DataFrame:
     """
@@ -91,7 +93,7 @@ def _create_summary(
         (the object to which the observation belongs to).
     classes : dict
         Dictionary containing the classes and their members.
-    all_truths : `~pandas.DataFrame`
+    all_objects : `~pandas.DataFrame`
         Pandas DataFrame containing the truth values and the number of observations
         that make them findable.
     window_summary : `~pandas.DataFrame`
@@ -110,7 +112,7 @@ def _create_summary(
     for window_id in window_ids:
         # Create masks for the dataframes
         window_i = window_summary[window_summary["window_id"] == window_id]
-        all_truths_i = all_truths[all_truths["window_id"] == window_id]
+        all_truths_i = all_objects[all_objects["window_id"] == window_id]
         night_min = window_i["start_night"].values[0]
         night_max = window_i["end_night"].values[0]
         observations_in_window = observations[
@@ -123,10 +125,12 @@ def _create_summary(
         class_list, truths_list = _classHandler(classes, observations_in_window)
 
         for c, v in zip(class_list, truths_list):
-            num_obs = len(observations_in_window[observations_in_window["truth"].isin(v)])
-            unique_truths = observations_in_window[observations_in_window["truth"].isin(v)]["truth"].unique()
+            num_obs = len(observations_in_window[observations_in_window["object_id"].isin(v)])
+            unique_truths = observations_in_window[observations_in_window["object_id"].isin(v)][
+                "object_id"
+            ].unique()
             num_unique_truths = len(unique_truths)
-            findable = int(all_truths_i[all_truths_i["truth"].isin(v)]["findable"].sum())
+            findable = int(all_truths_i[all_truths_i["object_id"].isin(v)]["findable"].sum())
 
             num_observations_list.append(num_obs)
             num_truths_list.append(num_unique_truths)
@@ -172,13 +176,13 @@ def analyzeObservations(
         Pandas DataFrame with at least two columns: observation IDs and the truth values
         (the object to which the observation belongs to).
     metric : {'min_obs', 'nightly_linkages', callable}
-        The desired findability metric that calculates which truths are actually findable.
+        The desired findability metric that calculates which objects are actually findable.
         If 'min_obs' [default]:
-            Finds all truths with a minimum of min_obs observations and the observations
+            Finds all objects with a minimum of min_obs observations and the observations
             that makes them findable.
             See `~difi.calcFindableMinObs` for more details.
         If 'nightly_linkages':
-            Finds the truths that have at least min_linkage_nights linkages of length
+            Finds the objects that have at least min_linkage_nights linkages of length
             linkage_min_obs or more. Observations are considered to be in a possible intra-night
             linkage if their observation time does not exceed max_obs_separation.
             See `~difi.calcFindableNightlyLinkages` for more details.
@@ -187,12 +191,12 @@ def analyzeObservations(
             with the truth IDs that are findable as an index, and a column named
             'obs_ids' containing `~numpy.ndarray`s of the observations that made each truth findable.
     classes : {dict, str, None}
-        Analyze observations for truths grouped in different classes.
+        Analyze observations for objects grouped in different classes.
         str : Name of the column in the dataframe which identifies
             the class of each truth.
         dict : A dictionary with class names as keys and a list of unique
-            truths belonging to each class as values.
-        None : If there are no classes of truths.
+            objects belonging to each class as values.
+        None : If there are no classes of objects.
     detection_window : int, optional
         The number of days of observations to consider when
         determining if a truth is findable. If the number of consecutive days
@@ -210,18 +214,18 @@ def analyzeObservations(
 
     Returns
     -------
-    all_truths: `~pandas.DataFrame`
+    all_objects: `~pandas.DataFrame`
         A per-truth summary.
 
         Columns:
-            "truth" : str
+            "object_id" : str
                 Truth
             "num_obs" : int
                 Number of observations in the observations dataframe
                 for each truth
             "findable" : int
                 1 if the object is findable, 0 if the object is not findable.
-                (NaN if no findable column is found in the all_truths dataframe)
+                (NaN if no findable column is found in the all_objects dataframe)
 
     findable_observations : `~pandas.DataFrame`
         A breakdown of the which observations made each object findable.
@@ -239,12 +243,12 @@ def analyzeObservations(
             "class" : str
                 Name of class (if none are defined, will only contain) "All".
             "num_members" : int
-                Number of unique truths that belong to the class.
+                Number of unique objects that belong to the class.
             "num_obs" : int
-                Number of observations of truths belonging to the class in
+                Number of observations of objects belonging to the class in
                 the observations dataframe.
             "findable" : int
-                Number of truths deemed findable (all_truths must be passed to this
+                Number of objects deemed findable (all_objects must be passed to this
                 function with a findable column)
 
     Raises
@@ -275,10 +279,10 @@ def analyzeObservations(
         discovery_opportunities=discovery_opportunities,
         num_jobs=num_jobs,
     )
-    # Create the all truths dataframe
-    all_truths = _create_all_truths(observations, findable_observations, window_summary)
+    # Create the all objects dataframe
+    all_objects = _create_all_truths(observations, findable_observations, window_summary)
 
     # Populate summary DataFrame
-    summary = _create_summary(observations, classes, all_truths, window_summary)
+    summary = _create_summary(observations, classes, all_objects, window_summary)
 
-    return all_truths, findable_observations, summary
+    return all_objects, findable_observations, summary

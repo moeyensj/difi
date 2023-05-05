@@ -54,7 +54,7 @@ def test_observations():
         index_col=False,
         dtype={
             "obs_id": str,
-            "truth": str,
+            "object_id": str,
         },
     )
     return observations
@@ -65,7 +65,7 @@ def test_linkages(test_observations):
     """
     Create a test data set of linkages.
 
-    linkage_id,obs_id,truth
+    linkage_id,obs_id,object_id
     pure_complete_23636,obs_000000,23636
     pure_complete_23636,obs_000001,23636
     pure_complete_23636,obs_000002,23636
@@ -187,14 +187,14 @@ def test_linkages(test_observations):
         "found_pure": [],
         "found_partial": [],
         "found": [],
-        "linked_truth": [],
+        "linked_object_id": [],
     }
 
     rng = np.random.default_rng(20230428)
 
     # Create pure complete linkages for each object
     for object_id in ["23636", "58177", "82134"]:
-        obs_ids = test_observations[test_observations["truth"] == object_id]["obs_id"].values
+        obs_ids = test_observations[test_observations["object_id"] == object_id]["obs_id"].values
         linkage_id = f"pure_complete_{object_id}"
         for obs_id in obs_ids:
             linkage_members["linkage_id"].append(linkage_id)
@@ -211,11 +211,11 @@ def test_linkages(test_observations):
         all_linkages_expected["found_pure"].append(True)
         all_linkages_expected["found_partial"].append(False)
         all_linkages_expected["found"].append(True)
-        all_linkages_expected["linked_truth"].append(object_id)
+        all_linkages_expected["linked_object_id"].append(object_id)
 
     # Create pure linkages but not complete for each object
     for object_id in ["23636", "58177", "82134"]:
-        obs_ids = test_observations[test_observations["truth"] == object_id]["obs_id"].values[2:]
+        obs_ids = test_observations[test_observations["object_id"] == object_id]["obs_id"].values[2:]
         linkage_id = f"pure_{object_id}"
         for obs_id in obs_ids:
             linkage_members["linkage_id"].append(linkage_id)
@@ -232,18 +232,18 @@ def test_linkages(test_observations):
         all_linkages_expected["found_pure"].append(True)
         all_linkages_expected["found_partial"].append(False)
         all_linkages_expected["found"].append(True)
-        all_linkages_expected["linked_truth"].append(object_id)
+        all_linkages_expected["linked_object_id"].append(object_id)
 
     # Create partial linkages for each object (7 observations each)
     for object_id in ["23636", "58177", "82134"]:
-        obs_ids = test_observations[test_observations["truth"] == object_id]["obs_id"].values
-        other_obs_ids = test_observations[test_observations["truth"] != object_id]["obs_id"].values
+        obs_ids = test_observations[test_observations["object_id"] == object_id]["obs_id"].values
+        other_obs_ids = test_observations[test_observations["object_id"] != object_id]["obs_id"].values
         obs_ids = rng.choice(obs_ids, size=5, replace=False)
         obs_ids_linkage = rng.choice(other_obs_ids, size=2, replace=False)
         obs_ids = np.concatenate([obs_ids, obs_ids_linkage])
         obs_ids.sort()
 
-        num_members = test_observations[test_observations["obs_id"].isin(obs_ids)]["truth"].nunique()
+        num_members = test_observations[test_observations["obs_id"].isin(obs_ids)]["object_id"].nunique()
         contamination_percentage = 100.0 * len(obs_ids_linkage) / len(obs_ids)
 
         linkage_id = f"partial_{object_id}"
@@ -262,18 +262,18 @@ def test_linkages(test_observations):
         all_linkages_expected["found_pure"].append(False)
         all_linkages_expected["found_partial"].append(True)
         all_linkages_expected["found"].append(True)
-        all_linkages_expected["linked_truth"].append(object_id)
+        all_linkages_expected["linked_object_id"].append(object_id)
 
     # Create mixed linkages (7 observations each)
     for i, object_id in enumerate(["23636", "58177", "82134"]):
-        obs_ids = test_observations[test_observations["truth"] == object_id]["obs_id"].values
-        other_obs_ids = test_observations[test_observations["truth"] != object_id]["obs_id"].values
+        obs_ids = test_observations[test_observations["object_id"] == object_id]["obs_id"].values
+        other_obs_ids = test_observations[test_observations["object_id"] != object_id]["obs_id"].values
         obs_ids = rng.choice(obs_ids, size=2, replace=False)
         obs_ids_linkage = rng.choice(other_obs_ids, size=5, replace=False)
         obs_ids = np.concatenate([obs_ids, obs_ids_linkage])
         obs_ids.sort()
 
-        num_members = test_observations[test_observations["obs_id"].isin(obs_ids)]["truth"].nunique()
+        num_members = test_observations[test_observations["obs_id"].isin(obs_ids)]["object_id"].nunique()
 
         linkage_id = f"mixed_{i}"
         for obs_id in obs_ids:
@@ -291,7 +291,7 @@ def test_linkages(test_observations):
         all_linkages_expected["found_pure"].append(False)
         all_linkages_expected["found_partial"].append(False)
         all_linkages_expected["found"].append(False)
-        all_linkages_expected["linked_truth"].append("nan")
+        all_linkages_expected["linked_object_id"].append("nan")
 
     linkage_members = pd.DataFrame(linkage_members)
     all_linkages_expected = pd.DataFrame(all_linkages_expected)
@@ -300,18 +300,18 @@ def test_linkages(test_observations):
 
 
 @pytest.fixture
-def test_all_truths(test_observations):
+def test_all_objects(test_observations):
     """
     Creates a dataframe with the truth for each observation.
     """
     all_truths_dict = {
-        "truth": [],
+        "object_id": [],
         "num_obs": [],
     }
-    for truth in test_observations["truth"].unique():
-        all_truths_dict["truth"].append(truth)
-        all_truths_dict["num_obs"].append(len(test_observations[test_observations["truth"] == truth]))
+    for truth in test_observations["object_id"].unique():
+        all_truths_dict["object_id"].append(truth)
+        all_truths_dict["num_obs"].append(len(test_observations[test_observations["object_id"] == truth]))
 
     all_truths = pd.DataFrame(all_truths_dict)
-    all_truths.sort_values(by="truth", inplace=True, ignore_index=True)
+    all_truths.sort_values(by="object_id", inplace=True, ignore_index=True)
     return all_truths

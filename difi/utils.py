@@ -95,35 +95,35 @@ def _classHandler(classes: Union[str, dict, None], dataframe: pd.DataFrame):
         str : Name of the column in the dataframe which identifies
             the class of each truth.
         dict : A dictionary with class names as keys and a list of unique
-            truths belonging to each class as values.
-        None : If there are no classes of truths.
+            objects belonging to each class as values.
+        None : If there are no classes of objects.
 
     Parameters
     ----------
     classes : {str, dict, or None}
-        Declares if the truths in a data frame have classes.
+        Declares if the objects in a data frame have classes.
     dataframe : `~pandas.DataFrame`
-        A pandas data frame containing a column of truths and optionally
+        A pandas data frame containing a column of objects and optionally
         a column that specifies the class (if classes is a str).
 
     Returns
     -------
     class_list : list
         A list of class names.
-    truths_list : list
-        A list of the truths belonging to each class.
+    object_ids_list : list
+        A list of the objects belonging to each class.
 
     Raises
     ------
-    UserWarning : If not all truths in the dataframe are assigned a class
+    UserWarning : If not all objects in the dataframe are assigned a class
     """
     class_list = ["All"]
-    truths_list = [[]]  # type: ignore
-    unique_truths = []
+    object_ids_list = [[]]  # type: ignore
+    unique_objects = []
 
     if classes is None:
-        truths_list = [dataframe["truth"].unique()]
-        unique_truths = [truths_list[0]]
+        object_ids_list = [dataframe["object_id"].unique()]
+        unique_objects = [object_ids_list[0]]
 
     elif type(classes) == str:
         if classes not in dataframe.columns:
@@ -132,11 +132,11 @@ def _classHandler(classes: Union[str, dict, None], dataframe: pd.DataFrame):
         else:
             for c in dataframe[~dataframe[classes].isna()][classes].unique():
                 class_list.append(c)
-                class_truths = dataframe[dataframe[classes].isin([c])]["truth"].unique()
-                unique_truths.append(class_truths)
-                truths_list.append(class_truths)
+                class_objects = dataframe[dataframe[classes].isin([c])]["object_id"].unique()
+                unique_objects.append(class_objects)
+                object_ids_list.append(class_objects)
 
-        truths_list[0] = dataframe["truth"].unique()
+        object_ids_list[0] = dataframe["object_id"].unique()
 
     elif type(classes) == dict:
         for c, t in classes.items():
@@ -145,14 +145,14 @@ def _classHandler(classes: Union[str, dict, None], dataframe: pd.DataFrame):
                 raise ValueError(err.format(c))
             else:
                 class_list.append(c)
-                truths_list[0].append(t)
-                unique_truths.append(t)
+                object_ids_list[0].append(t)
+                unique_objects.append(t)
                 if type(t) is list:
-                    truths_list.append(np.array(t))
+                    object_ids_list.append(np.array(t))
                 else:
-                    truths_list.append(t)
+                    object_ids_list.append(t)
 
-        truths_list[0] = np.hstack(truths_list[0])
+        object_ids_list[0] = np.hstack(object_ids_list[0])
 
     else:
         err = (
@@ -160,31 +160,31 @@ def _classHandler(classes: Union[str, dict, None], dataframe: pd.DataFrame):
             "  str : Name of the column in the dataframe which\n"
             "        identifies the class of each truth.\n"
             "  dict : A dictionary with class names as keys\n"
-            "        and a list of unique truths belonging to each class\n"
+            "        and a list of unique objects belonging to each class\n"
             "        as values.\n"
-            "  None : If there are no classes of truths."
+            "  None : If there are no classes of objects."
         )
         raise ValueError(err)
 
-    # Test that the unique truths are in fact unique
-    unique_truths = np.concatenate(unique_truths)
-    if not len(np.unique(unique_truths)) == len(unique_truths):
-        err = "Some truths are duplicated in multiple classes."
+    # Test that the unique objects are in fact unique
+    unique_objects = np.concatenate(unique_objects)
+    if not len(np.unique(unique_objects)) == len(unique_objects):
+        err = "Some objects are duplicated in multiple classes."
         raise ValueError(err)
 
-    if not dataframe["truth"].isin(unique_truths).all():
+    if not dataframe["object_id"].isin(unique_objects).all():
         warning = (
-            "Some truths do not have an assigned class.\n"
-            "Unclassified truths have been added as 'Unclassified'."
+            "Some objects do not have an assigned class.\n"
+            "Unclassified objects have been added as 'Unclassified'."
         )
 
-        unclassified = dataframe[~dataframe["truth"].isin(unique_truths)]["truth"].unique()
+        unclassified = dataframe[~dataframe["object_id"].isin(unique_objects)]["object_id"].unique()
         class_list.append("Unclassified")
-        truths_list.append(unclassified)
-        truths_list[0] = np.concatenate([truths_list[0], unclassified])
+        object_ids_list.append(unclassified)
+        object_ids_list[0] = np.concatenate([object_ids_list[0], unclassified])
         warnings.warn(warning, UserWarning)
 
-    return class_list, truths_list
+    return class_list, object_ids_list
 
 
 def _percentHandler(number: float, number_total: float) -> float:
@@ -299,13 +299,13 @@ def calcFirstFindableNight(
         Pandas DataFrame with at least two columns: observation IDs and the truth values
         (the object to which the observation belongs to).
     metric : {'min_obs', 'nightly_linkages'}
-        The desired findability metric that calculates which truths are actually findable.
+        The desired findability metric that calculates which objects are actually findable.
         If 'min_obs' [default]:
-            Finds all truths with a minimum of min_obs observations and the observations
+            Finds all objects with a minimum of min_obs observations and the observations
             that makes them findable.
             See `~difi.calcFindableMinObs` for more details.
         If 'nightly_linkages':
-            Finds the truths that have at least min_linkage_nights linkages of length
+            Finds the objects that have at least min_linkage_nights linkages of length
             linkage_min_obs or more. Observations are considered to be in a possible intra-night
             linkage if their observation time does not exceed max_obs_separation.
             See `~difi.calcFindableNightlyLinkages` for more details.
