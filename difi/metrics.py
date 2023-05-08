@@ -1,6 +1,7 @@
 import multiprocessing as mp
 from abc import ABC, abstractmethod
 from itertools import combinations, repeat
+from multiprocessing import shared_memory
 from typing import Any, Dict, List, Optional, Tuple, TypeVar
 
 import numpy as np
@@ -10,8 +11,6 @@ from numba import njit
 __all__ = ["FindabilityMetric", "NightlyLinkagesMetric", "MinObsMetric"]
 
 Metrics = TypeVar("Metrics", bound="FindabilityMetric")
-
-__DIFI_ARRAY: np.ndarray
 
 
 @njit(cache=True)
@@ -383,10 +382,9 @@ class FindabilityMetric(ABC):
 
         return split_by_object_indices
 
-    @staticmethod
-    def _store_as_record_array(object_ids, obs_ids, times, ra, dec, nights):
+    def _store_as_shared_record_array(self, object_ids, obs_ids, times, ra, dec, nights):
         """
-        Store the observations as a record array.
+        Store the observations as a record array in shared memory.
 
         Parameters
         ----------
@@ -409,25 +407,38 @@ class FindabilityMetric(ABC):
             Record array of observations.
         """
         # Store arrays as global variables
+        dtypes = [
+            ("object_id", object_ids.dtype),
+            ("obs_id", obs_ids.dtype),
+            ("time", np.float64),
+            ("ra", np.float64),
+            ("dec", np.float64),
+            ("night", np.int64),
+        ]
+        self._dtypes = dtypes
         observations_array = np.empty(
             len(object_ids),
-            dtype=[
-                ("object_id", object_ids.dtype),
-                ("obs_id", obs_ids.dtype),
-                ("time", np.float64),
-                ("ra", np.float64),
-                ("dec", np.float64),
-                ("night", np.int64),
-            ],
+            dtype=dtypes,
         )
+        self._num_observations = observations_array.shape[0]
 
-        observations_array["object_id"] = object_ids
-        observations_array["obs_id"] = obs_ids
-        observations_array["time"] = times
-        observations_array["ra"] = ra
-        observations_array["dec"] = dec
-        observations_array["night"] = nights
-        return observations_array
+        shared_mem = shared_memory.SharedMemory("DIFI_ARRAY", create=True, size=observations_array.nbytes)
+        shared_memory_array = np.ndarray(
+            observations_array.shape, dtype=observations_array.dtype, buffer=shared_mem.buf
+        )
+        shared_memory_array["object_id"] = object_ids
+        shared_memory_array["obs_id"] = obs_ids
+        shared_memory_array["time"] = times
+        shared_memory_array["ra"] = ra
+        shared_memory_array["dec"] = dec
+        shared_memory_array["night"] = nights
+        shared_mem.close()
+        return
+
+    @staticmethod
+    def _clear_shared_record_array():
+        shared_mem = shared_memory.SharedMemory("DIFI_ARRAY")
+        shared_mem.unlink()
 
     def _run_object_worker(
         self,
@@ -456,7 +467,10 @@ class FindabilityMetric(ABC):
             that made them findable for each window.
         """
         findable_dicts = []
-        observations = __DIFI_ARRAY[object_indices]
+        existing_shm = shared_memory.SharedMemory(name="DIFI_ARRAY")
+        observations = np.ndarray(self._num_observations, dtype=self._dtypes, buffer=existing_shm.buf)
+        observations = observations[object_indices]
+
         for i, window in enumerate(windows):
             night_min, night_max = window
             window_obs = observations[
@@ -486,6 +500,7 @@ class FindabilityMetric(ABC):
 
             findable_dicts.append(findable)
 
+        existing_shm.close()
         return findable_dicts
 
     def run_by_object(
@@ -534,8 +549,7 @@ class FindabilityMetric(ABC):
         split_by_object_indices = self._split_by_object(objects)
 
         # Store the observations in a global variable so that the worker functions can access them
-        global __DIFI_ARRAY
-        __DIFI_ARRAY = self._store_as_record_array(objects, obs_ids, times, ra, dec, nights)
+        self._store_as_shared_record_array(objects, obs_ids, times, ra, dec, nights)
 
         findable_lists: List[List[Dict[str, Any]]] = []
         if num_jobs is None or num_jobs > 1:
@@ -555,6 +569,8 @@ class FindabilityMetric(ABC):
                         object_indices, windows, discovery_opportunities=discovery_opportunities
                     )
                 )
+
+        self._clear_shared_record_array()
 
         findable_flattened = [item for sublist in findable_lists for item in sublist]
 
@@ -591,8 +607,12 @@ class FindabilityMetric(ABC):
             A list of dictionaries containing the findable objects and the observations
             that made them findable for each window.
         """
-        observations = __DIFI_ARRAY[window_indices]
+        existing_shm = shared_memory.SharedMemory(name="DIFI_ARRAY")
+        observations = np.ndarray(self._num_observations, dtype=self._dtypes, buffer=existing_shm.buf)
+        observations = observations[window_indices]
+
         if len(observations) == 0:
+            existing_shm.close()
             return [
                 {
                     "window_id": np.nan,
@@ -630,6 +650,7 @@ class FindabilityMetric(ABC):
 
             findable_dicts.append(findable)
 
+        existing_shm.close()
         return findable_dicts
 
     def run_by_window(
@@ -681,8 +702,7 @@ class FindabilityMetric(ABC):
             split_by_window_indices.append(window_indices)
 
         # Store the observations in a global variable so that the worker functions can access them
-        global __DIFI_ARRAY
-        __DIFI_ARRAY = self._store_as_record_array(objects, obs_ids, times, ra, dec, nights)
+        self._store_as_shared_record_array(objects, obs_ids, times, ra, dec, nights)
 
         findable_lists: List[List[Dict[str, Any]]] = []
         if num_jobs is None or num_jobs > 1:
@@ -701,6 +721,8 @@ class FindabilityMetric(ABC):
                         window_indices, i, discovery_opportunities=discovery_opportunities
                     )
                 )
+
+        self._clear_shared_record_array()
 
         findable_flattened = [item for sublist in findable_lists for item in sublist]
 
