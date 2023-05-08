@@ -382,6 +382,32 @@ class FindabilityMetric(ABC):
 
         return split_by_object_indices
 
+    @staticmethod
+    def _split_by_window(windows: List[Tuple[int, int]], nights: np.ndarray) -> List[np.ndarray]:
+        """
+        Create a list of arrays of indices for each window in the observations.
+
+        Parameters
+        ----------
+        windows : list of tuples
+            List of tuples containing the start and end night of each window.
+        nights : `~numpy.ndarray`
+            Array of nights on which observations occur.
+
+        Returns
+        -------
+        split_by_window_indices : List[`~numpy.ndarray`]
+            List of arrays of indices for each window in the observations.
+        """
+        # Split the observations by window
+        split_by_window_indices = []
+        for window in windows:
+            night_min, night_max = window
+            window_indices = np.where((nights >= night_min) & (nights <= night_max))[0]
+            split_by_window_indices.append(window_indices)
+
+        return split_by_window_indices
+
     def _store_as_shared_record_array(self, object_ids, obs_ids, times, ra, dec, nights):
         """
         Store the observations as a record array in shared memory.
@@ -694,15 +720,11 @@ class FindabilityMetric(ABC):
             observations["night"].values,
         )
 
-        # Split the observations by window
-        split_by_window_indices = []
-        for window in windows:
-            night_min, night_max = window
-            window_indices = np.where((nights >= night_min) & (nights <= night_max))[0]
-            split_by_window_indices.append(window_indices)
-
         # Store the observations in a global variable so that the worker functions can access them
         self._store_as_shared_record_array(objects, obs_ids, times, ra, dec, nights)
+
+        # Find indices that split the observations into windows
+        split_by_window_indices = self._split_by_window(windows, nights)
 
         findable_lists: List[List[Dict[str, Any]]] = []
         if num_jobs is None or num_jobs > 1:
