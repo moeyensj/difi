@@ -221,9 +221,7 @@ def apply_discovery_probability(
 
 class FindabilityMetric(ABC):
     @abstractmethod
-    def determine_object_findable(
-        self, observations: np.ndarray, discovery_opportunities: bool = False
-    ) -> List[List[str]]:
+    def determine_object_findable(self, observations: np.ndarray) -> List[List[str]]:
         pass
 
     @staticmethod
@@ -564,7 +562,8 @@ class FindabilityMetric(ABC):
             A list of tuples containing the start and end nights of each window.
         discovery_opportunities : bool, optional
             If True, then return the combinations of observations that made each object findable.
-            Note that if the window is large, this can greatly increase the computation time.
+            Note, that if True, this can greatly increase the memory consumption.
+            If False, just return the unique observation IDs across all discovery chances.
         discovery_probability : float, optional
             The probability applied to a single discovery opportunity that this object will be discovered.
             Each object will have a random seed generated from its object ID, and for each discovery
@@ -607,21 +606,24 @@ class FindabilityMetric(ABC):
                 (observations["night"] >= night_min) & (observations["night"] <= night_max)
             ]
 
-            discovery_obs_ids = self.determine_object_findable(
-                window_obs, discovery_opportunities=discovery_opportunities
-            )
+            discovery_obs_ids = self.determine_object_findable(window_obs)
             obs_ids_unique, discovery_obs_ids = apply_discovery_probability(
                 discovery_obs_ids, object_id, discovery_probability
             )
-
             num_opportunities = len(discovery_obs_ids)
+
+            if discovery_opportunities:
+                obs_ids = discovery_obs_ids
+            else:
+                obs_ids = [obs_ids_unique]
+
             if num_opportunities > 0:
                 findable = {
                     "window_id": i,
                     "object_id": object_id,
                     "findable": 1,
                     "discovery_opportunities": num_opportunities,
-                    "obs_ids": discovery_obs_ids,
+                    "obs_ids": obs_ids,
                 }
             else:
                 findable = {
@@ -659,7 +661,8 @@ class FindabilityMetric(ABC):
             List of tuples containing the start and end night of each window.
         discovery_opportunities : bool, optional
             If True, then return the combinations of observations that made each object findable.
-            Note that if the window is large, this can greatly increase the computation time.
+            Note, that if True, this can greatly increase the memory consumption.
+            If False, just return the unique observation IDs across all discovery chances.
         discovery_probability : float, optional
             The probability applied to a single discovery opportunity that this object will be discovered.
             Each object will have a random seed generated from its object ID, and for each discovery
@@ -753,7 +756,8 @@ class FindabilityMetric(ABC):
             The ID of this window.
         discovery_opportunities : bool, optional
             If True, then return the combinations of observations that made each object findable.
-            Note that if the window is large, this can greatly increase the computation time.
+            Note, that if True, this can greatly increase the memory consumption.
+            If False, just return the unique observation IDs across all discovery chances.
         discovery_probability : float, optional
             The probability applied to a single discovery opportunity that this object will be discovered.
             Each object will have a random seed generated from its object ID, and for each discovery
@@ -793,20 +797,24 @@ class FindabilityMetric(ABC):
 
             discovery_obs_ids = self.determine_object_findable(
                 observations[np.where(observations["object_id"] == object_id)[0]],
-                discovery_opportunities=discovery_opportunities,
             )
             obs_ids_unique, discovery_obs_ids = apply_discovery_probability(
                 discovery_obs_ids, object_id, discovery_probability
             )
-
             num_opportunities = len(discovery_obs_ids)
+
+            if discovery_opportunities:
+                obs_ids = discovery_obs_ids
+            else:
+                obs_ids = [obs_ids_unique]
+
             if num_opportunities > 0:
                 findable = {
                     "window_id": window_id,
                     "object_id": object_id,
                     "findable": 1,
                     "discovery_opportunities": num_opportunities,
-                    "obs_ids": discovery_obs_ids,
+                    "obs_ids": obs_ids,
                 }
             else:
                 findable = {
@@ -843,7 +851,8 @@ class FindabilityMetric(ABC):
             List of tuples containing the start and end night of each window.
         discovery_opportunities : bool, optional
             If True, then return the combinations of observations that made each object findable.
-            Note that if the window is large, this can greatly increase the computation time.
+            Note, that if True, this can greatly increase the memory consumption.
+            If False, just return the unique observation IDs across all discovery chances.
         discovery_probability : float, optional
             The probability applied to a single discovery opportunity that this object will be discovered.
             Each object will have a random seed generated from its object ID, and for each discovery
@@ -941,7 +950,8 @@ class FindabilityMetric(ABC):
             If None, then the detection_window is the entire range observations.
         discovery_opportunities : bool, optional
             If True, then return the combinations of observations that made each object findable.
-            Note that if the window is large, this can greatly increase the computation time.
+            Note, that if True, this can greatly increase the memory consumption.
+            If False, just return the unique observation IDs across all discovery chances.
         discovery_probability : float, optional
             The probability applied to a single discovery opportunity that this object will be discovered.
             Each object will have a random seed generated from its object ID, and for each discovery
@@ -1027,7 +1037,8 @@ class NightlyLinkagesMetric(FindabilityMetric):
         self.min_obs_angular_separation = min_obs_angular_separation
 
     def determine_object_findable(
-        self, observations: np.ndarray, discovery_opportunities: bool = False
+        self,
+        observations: np.ndarray,
     ) -> List[List[str]]:
         """
         Given observations belonging to one object, finds all observations that are within
@@ -1041,9 +1052,6 @@ class NightlyLinkagesMetric(FindabilityMetric):
         observations : `~numpy.ndarray`
             Numpy record array with at least the following columns:
             `object_id`, `obs_id`, `time`, `night`, `ra`, `dec`.
-        discovery_opportunities : bool, optional
-            If True, return the observation combinations that represent unique discovery
-            opportunites.
 
         Returns
         -------
@@ -1125,12 +1133,9 @@ class NightlyLinkagesMetric(FindabilityMetric):
         if not enough_obs or not enough_nights:
             return []
         else:
-            if discovery_opportunities:
-                obs_indices = select_tracklet_combinations(valid_nights, self.min_linkage_nights)
-                obs_ids = [linkage_obs[ind].tolist() for ind in obs_indices]
-                return obs_ids
-            else:
-                return [linkage_obs.tolist()]
+            obs_indices = select_tracklet_combinations(valid_nights, self.min_linkage_nights)
+            obs_ids = [linkage_obs[ind].tolist() for ind in obs_indices]
+            return obs_ids
 
 
 class MinObsMetric(FindabilityMetric):
@@ -1150,7 +1155,8 @@ class MinObsMetric(FindabilityMetric):
         self.min_obs = min_obs
 
     def determine_object_findable(
-        self, observations: np.ndarray, discovery_opportunities: bool = False
+        self,
+        observations: np.ndarray,
     ) -> List[List[str]]:
         """
         Finds all objects with a minimum of self.min_obs observations and the observations
@@ -1161,9 +1167,6 @@ class MinObsMetric(FindabilityMetric):
         observations : `~numpy.ndarray`
             Numpy record array with at least the following columns:
             `object_id`, `obs_id`, `time`, `night`, `ra`, `dec`.
-        discovery_opportunities : bool, optional
-            If True, return the observation combinations that represent unique discovery
-            opportunites.
 
         Returns
         -------
@@ -1179,11 +1182,7 @@ class MinObsMetric(FindabilityMetric):
         assert len(np.unique(observations["object_id"])) == 1
         if len(observations) >= self.min_obs:
             obs_ids = observations["obs_id"]
-            if discovery_opportunities:
-                obs_ids = list(combinations(obs_ids, self.min_obs))
-                return obs_ids
-            else:
-                obs_ids = [obs_ids.tolist()]
-                return obs_ids
+            obs_ids = list(combinations(obs_ids, self.min_obs))
+            return obs_ids
         else:
             return []
