@@ -408,12 +408,17 @@ class FindabilityMetric(ABC):
         """
         # Split the observations by window
         split_by_window_slices = []
+        empty_slice = slice(0, 0)
         for window in windows:
             night_min, night_max = window
             window_indices = np.where((nights >= night_min) & (nights <= night_max))[0]
-            assert np.all(np.diff(window_indices) == 1)
 
-            window_slice = slice(window_indices[0], window_indices[-1] + 1)
+            if len(window_indices) == 0:
+                window_slice = empty_slice
+            else:
+                assert np.all(np.diff(window_indices) == 1)
+                window_slice = slice(window_indices[0], window_indices[-1] + 1)
+
             split_by_window_slices.append(window_slice)
 
         return split_by_window_slices
@@ -457,6 +462,7 @@ class FindabilityMetric(ABC):
             dtype=dtypes,
         )
         self._num_observations = observations_array.shape[0]
+        self._itemsize = observations_array.itemsize
 
         shared_mem = shared_memory.SharedMemory("DIFI_ARRAY", create=True, size=observations_array.nbytes)
         shared_memory_array = np.ndarray(
@@ -488,7 +494,9 @@ class FindabilityMetric(ABC):
         Parameters
         ----------
         object_slice : slice
-            A slice in the observations array corresponding to the observations of a single object.
+            The slice in the observations array corresponding to the observations of a single object.
+            A slice with start and stop indices will be interpreted as `observations[start:stop]`.
+            If start == stop, then no observations will be used.
         windows : list of tuples
             A list of tuples containing the start and end nights of each window.
         discovery_opportunities : bool, optional
@@ -501,11 +509,28 @@ class FindabilityMetric(ABC):
             A list of dictionaries containing the findable objects and the observations
             that made them findable for each window.
         """
-        findable_dicts = []
-        existing_shm = shared_memory.SharedMemory(name="DIFI_ARRAY")
-        observations = np.ndarray(self._num_observations, dtype=self._dtypes, buffer=existing_shm.buf)
-        observations = observations[object_slice]
+        num_obs = object_slice.stop - object_slice.start
+        if num_obs == 0:
+            return [
+                {
+                    "window_id": np.nan,
+                    "object_id": np.nan,
+                    "findable": np.nan,
+                    "discovery_opportunities": np.nan,
+                    "obs_ids": np.nan,
+                }
+            ]
 
+        # Load the observations from shared memory
+        existing_shared_mem = shared_memory.SharedMemory(name="DIFI_ARRAY")
+        observations = np.ndarray(
+            num_obs,
+            dtype=self._dtypes,
+            buffer=existing_shared_mem.buf,
+            offset=object_slice.start * self._itemsize,
+        )
+
+        findable_dicts = []
         for i, window in enumerate(windows):
             night_min, night_max = window
             window_obs = observations[
@@ -535,7 +560,7 @@ class FindabilityMetric(ABC):
 
             findable_dicts.append(findable)
 
-        existing_shm.close()
+        existing_shared_mem.close()
         return findable_dicts
 
     def run_by_object(
@@ -629,6 +654,8 @@ class FindabilityMetric(ABC):
         ----------
         window_slice: slice
             The slice in the observations array that contains the observations for this window.
+            A slice with start and stop indices will be interpreted as `observations[start:stop]`.
+            If start == stop, then no observations will be used.
         window_id : int
             The ID of this window.
         discovery_opportunities : bool, optional
@@ -641,12 +668,8 @@ class FindabilityMetric(ABC):
             A list of dictionaries containing the findable objects and the observations
             that made them findable for each window.
         """
-        existing_shm = shared_memory.SharedMemory(name="DIFI_ARRAY")
-        observations = np.ndarray(self._num_observations, dtype=self._dtypes, buffer=existing_shm.buf)
-        observations = observations[window_slice]
-
-        if len(observations) == 0:
-            existing_shm.close()
+        num_obs = window_slice.stop - window_slice.start
+        if num_obs == 0:
             return [
                 {
                     "window_id": np.nan,
@@ -656,6 +679,15 @@ class FindabilityMetric(ABC):
                     "obs_ids": np.nan,
                 }
             ]
+
+        # Read observations from shared memory array
+        existing_shared_mem = shared_memory.SharedMemory(name="DIFI_ARRAY")
+        observations = np.ndarray(
+            num_obs,
+            dtype=self._dtypes,
+            buffer=existing_shared_mem.buf,
+            offset=window_slice.start * self._itemsize,
+        )
 
         findable_dicts = []
         for object_id in np.unique(observations["object_id"]):
@@ -684,7 +716,7 @@ class FindabilityMetric(ABC):
 
             findable_dicts.append(findable)
 
-        existing_shm.close()
+        existing_shared_mem.close()
         return findable_dicts
 
     def run_by_window(
