@@ -176,6 +176,49 @@ def calculate_random_seed_from_object_id(object_id: str) -> int:
     return seed
 
 
+def apply_discovery_probability(
+    discovery_obs_ids: List[List[str]], object_id: str, probability: float = 1.0
+) -> Tuple[List[str], List[List[str]]]:
+    """
+    Given a list of lists containing observation IDs, apply a discovery probability to each list.
+
+    Parameters
+    ----------
+    discovery_obs_ids : List[List[str]]
+        List of lists containing observation IDs for each discovery chance.
+    object_id : str
+        Object ID. Used to calculate a random seed.
+    probability : float, optional
+        Probability of a discovery chance being selected, by default 1.0. If less
+        than 1.0, a random number is generated for each discovery chance and if
+        the random number is greater than the probability, the discovery chance
+        is removed.
+
+    Returns
+    -------
+    obs_ids_unique : List[str]
+        List of unique observation IDs remaining in the discovery chances.
+    discovery_obs_ids : List[List[str]]
+        List of lists containing observation IDs for each discovery chance.
+    """
+    if probability < 1.0:
+        random_seed = calculate_random_seed_from_object_id(object_id)
+        rng = np.random.default_rng(random_seed)
+        p_chance = rng.random(len(discovery_obs_ids))
+        del_mask = np.where(p_chance > probability)[0]
+        discovery_obs_ids = [discovery_obs_ids[i] for i in range(len(discovery_obs_ids)) if i not in del_mask]
+    else:
+        discovery_obs_ids = discovery_obs_ids
+
+    # Get the unique observation IDs
+    if len(discovery_obs_ids) > 0:
+        obs_ids_unique = np.unique(np.concatenate(discovery_obs_ids)).tolist()
+    else:
+        obs_ids_unique = []
+
+    return obs_ids_unique, discovery_obs_ids
+
+
 class FindabilityMetric(ABC):
     @abstractmethod
     def determine_object_findable(
@@ -506,6 +549,7 @@ class FindabilityMetric(ABC):
         object_slice: slice,
         windows: List[Tuple[int, int]],
         discovery_opportunities: bool = False,
+        discovery_probability: float = 1.0,
     ) -> List[Dict[str, Any]]:
         """
         Run the metric on a single object.
@@ -521,6 +565,12 @@ class FindabilityMetric(ABC):
         discovery_opportunities : bool, optional
             If True, then return the combinations of observations that made each object findable.
             Note that if the window is large, this can greatly increase the computation time.
+        discovery_probability : float, optional
+            The probability applied to a single discovery opportunity that this object will be discovered.
+            Each object will have a random seed generated from its object ID, and for each discovery
+            opportunity a random number will be drawn between 0 and 1. If the random number is less
+            than the discovery probability, then the object will be discovered. If not, then it will
+            not be discovered.
 
         Returns
         -------
@@ -548,6 +598,7 @@ class FindabilityMetric(ABC):
             buffer=existing_shared_mem.buf,
             offset=object_slice.start * self._itemsize,
         )
+        object_id = observations["object_id"][0]
 
         findable_dicts = []
         for i, window in enumerate(windows):
@@ -556,17 +607,21 @@ class FindabilityMetric(ABC):
                 (observations["night"] >= night_min) & (observations["night"] <= night_max)
             ]
 
-            obs_ids = self.determine_object_findable(
+            discovery_obs_ids = self.determine_object_findable(
                 window_obs, discovery_opportunities=discovery_opportunities
             )
-            chances = len(obs_ids)
-            if chances > 0:
+            obs_ids_unique, discovery_obs_ids = apply_discovery_probability(
+                discovery_obs_ids, object_id, discovery_probability
+            )
+
+            num_opportunities = len(discovery_obs_ids)
+            if num_opportunities > 0:
                 findable = {
                     "window_id": i,
-                    "object_id": observations["object_id"][0],
+                    "object_id": object_id,
                     "findable": 1,
-                    "discovery_opportunities": chances,
-                    "obs_ids": obs_ids,
+                    "discovery_opportunities": num_opportunities,
+                    "obs_ids": discovery_obs_ids,
                 }
             else:
                 findable = {
@@ -587,6 +642,7 @@ class FindabilityMetric(ABC):
         observations: pd.DataFrame,
         windows: List[Tuple[int, int]],
         discovery_opportunities: bool = False,
+        discovery_probability: float = 1.0,
         num_jobs: Optional[int] = 1,
     ) -> List[pd.DataFrame]:
         """
@@ -604,6 +660,12 @@ class FindabilityMetric(ABC):
         discovery_opportunities : bool, optional
             If True, then return the combinations of observations that made each object findable.
             Note that if the window is large, this can greatly increase the computation time.
+        discovery_probability : float, optional
+            The probability applied to a single discovery opportunity that this object will be discovered.
+            Each object will have a random seed generated from its object ID, and for each discovery
+            opportunity a random number will be drawn between 0 and 1. If the random number is less
+            than the discovery probability, then the object will be discovered. If not, then it will
+            not be discovered.
         num_jobs : int, optional
             The number of jobs to run in parallel. If 1, then run in serial. If None, then use the number of
             CPUs on the machine.
@@ -635,7 +697,12 @@ class FindabilityMetric(ABC):
             pool = mp.Pool(num_jobs)
             findable_lists = pool.starmap(
                 self._run_object_worker,
-                zip(split_by_object_slices, repeat(windows), repeat(discovery_opportunities)),
+                zip(
+                    split_by_object_slices,
+                    repeat(windows),
+                    repeat(discovery_opportunities),
+                    repeat(discovery_probability),
+                ),
             )
 
             pool.close()
@@ -645,7 +712,10 @@ class FindabilityMetric(ABC):
             for object_indices in split_by_object_slices:
                 findable_lists.append(
                     self._run_object_worker(
-                        object_indices, windows, discovery_opportunities=discovery_opportunities
+                        object_indices,
+                        windows,
+                        discovery_opportunities=discovery_opportunities,
+                        discovery_probability=discovery_probability,
                     )
                 )
 
@@ -664,7 +734,11 @@ class FindabilityMetric(ABC):
         return findable
 
     def _run_window_worker(
-        self, window_slice: slice, window_id: int, discovery_opportunities: bool = False
+        self,
+        window_slice: slice,
+        window_id: int,
+        discovery_opportunities: bool = False,
+        discovery_probability: float = 1.0,
     ) -> List[Dict[str, Any]]:
         """
         Run the metric on a single window of observations.
@@ -680,6 +754,12 @@ class FindabilityMetric(ABC):
         discovery_opportunities : bool, optional
             If True, then return the combinations of observations that made each object findable.
             Note that if the window is large, this can greatly increase the computation time.
+        discovery_probability : float, optional
+            The probability applied to a single discovery opportunity that this object will be discovered.
+            Each object will have a random seed generated from its object ID, and for each discovery
+            opportunity a random number will be drawn between 0 and 1. If the random number is less
+            than the discovery probability, then the object will be discovered. If not, then it will
+            not be discovered.
 
         Returns
         -------
@@ -711,18 +791,22 @@ class FindabilityMetric(ABC):
         findable_dicts = []
         for object_id in np.unique(observations["object_id"]):
 
-            obs_ids = self.determine_object_findable(
+            discovery_obs_ids = self.determine_object_findable(
                 observations[np.where(observations["object_id"] == object_id)[0]],
                 discovery_opportunities=discovery_opportunities,
             )
-            chances = len(obs_ids)
-            if chances > 0:
+            obs_ids_unique, discovery_obs_ids = apply_discovery_probability(
+                discovery_obs_ids, object_id, discovery_probability
+            )
+
+            num_opportunities = len(discovery_obs_ids)
+            if num_opportunities > 0:
                 findable = {
                     "window_id": window_id,
                     "object_id": object_id,
                     "findable": 1,
-                    "discovery_opportunities": chances,
-                    "obs_ids": obs_ids,
+                    "discovery_opportunities": num_opportunities,
+                    "obs_ids": discovery_obs_ids,
                 }
             else:
                 findable = {
@@ -743,6 +827,7 @@ class FindabilityMetric(ABC):
         observations: pd.DataFrame,
         windows: List[Tuple[int, int]],
         discovery_opportunities: bool = False,
+        discovery_probability: float = 1.0,
         num_jobs: Optional[int] = 1,
     ) -> List[pd.DataFrame]:
         """
@@ -759,6 +844,12 @@ class FindabilityMetric(ABC):
         discovery_opportunities : bool, optional
             If True, then return the combinations of observations that made each object findable.
             Note that if the window is large, this can greatly increase the computation time.
+        discovery_probability : float, optional
+            The probability applied to a single discovery opportunity that this object will be discovered.
+            Each object will have a random seed generated from its object ID, and for each discovery
+            opportunity a random number will be drawn between 0 and 1. If the random number is less
+            than the discovery probability, then the object will be discovered. If not, then it will
+            not be discovered.
         num_jobs : int, optional
             The number of jobs to run in parallel. If 1, then run in serial. If None, then use the number of
             CPUs on the machine.
@@ -790,7 +881,12 @@ class FindabilityMetric(ABC):
             pool = mp.Pool(num_jobs)
             findable_lists = pool.starmap(
                 self._run_window_worker,
-                zip(split_by_window_slices, range(len(windows)), repeat(discovery_opportunities)),
+                zip(
+                    split_by_window_slices,
+                    range(len(windows)),
+                    repeat(discovery_opportunities),
+                    repeat(discovery_probability),
+                ),
             )
             pool.close()
             pool.join()
@@ -798,7 +894,12 @@ class FindabilityMetric(ABC):
         else:
             for i, window_slice in enumerate(split_by_window_slices):
                 findable_lists.append(
-                    self._run_window_worker(window_slice, i, discovery_opportunities=discovery_opportunities)
+                    self._run_window_worker(
+                        window_slice,
+                        i,
+                        discovery_opportunities=discovery_opportunities,
+                        discovery_probability=discovery_probability,
+                    )
                 )
 
         self._clear_shared_record_array()
@@ -820,6 +921,7 @@ class FindabilityMetric(ABC):
         observations: pd.DataFrame,
         detection_window: Optional[int] = None,
         discovery_opportunities: bool = False,
+        discovery_probability: float = 1.0,
         by_object: bool = False,
         num_jobs: Optional[int] = 1,
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -840,6 +942,12 @@ class FindabilityMetric(ABC):
         discovery_opportunities : bool, optional
             If True, then return the combinations of observations that made each object findable.
             Note that if the window is large, this can greatly increase the computation time.
+        discovery_probability : float, optional
+            The probability applied to a single discovery opportunity that this object will be discovered.
+            Each object will have a random seed generated from its object ID, and for each discovery
+            opportunity a random number will be drawn between 0 and 1. If the random number is less
+            than the discovery probability, then the object will be discovered. If not, then it will
+            not be discovered.
         by_object : bool, optional
             If True, run the metric on the observations split by objects. For windows where there are many
             observations, this may be faster than running the metric on each window individually
@@ -866,6 +974,7 @@ class FindabilityMetric(ABC):
                 observations,
                 windows,
                 discovery_opportunities=discovery_opportunities,
+                discovery_probability=discovery_probability,
                 num_jobs=num_jobs,
             )
         else:
@@ -873,6 +982,7 @@ class FindabilityMetric(ABC):
                 observations,
                 windows,
                 discovery_opportunities=discovery_opportunities,
+                discovery_probability=discovery_probability,
                 num_jobs=num_jobs,
             )
 
