@@ -1,3 +1,4 @@
+import hashlib
 import multiprocessing as mp
 from abc import ABC, abstractmethod
 from itertools import combinations, repeat
@@ -155,6 +156,24 @@ def select_tracklet_combinations(nights: np.ndarray, min_nights: int) -> List[np
             linkage_i.append(obs_indices[nights == night])
         linkages.append(np.concatenate(linkage_i))
     return linkages
+
+
+def calculate_random_seed_from_object_id(object_id: str) -> int:
+    """
+    Caculate a random seed from an object ID.
+
+    Parameters
+    ----------
+    object_id : str
+        Object ID.
+
+    Returns
+    -------
+    seed : int
+        Random seed.
+    """
+    seed = int(hashlib.md5(object_id.encode("utf-8")).hexdigest(), base=16) % (10**8)
+    return seed
 
 
 class FindabilityMetric(ABC):
