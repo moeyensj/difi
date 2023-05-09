@@ -363,9 +363,9 @@ class FindabilityMetric(ABC):
         )
 
     @staticmethod
-    def _split_by_object(objects: np.ndarray) -> List[np.ndarray]:
+    def _split_by_object(objects: np.ndarray) -> List[slice]:
         """
-        Create a list of arrays of indices for each object in the observations.
+        Create a list of slices for each object in the observations.
 
         Parameters
         ----------
@@ -374,18 +374,25 @@ class FindabilityMetric(ABC):
 
         Returns
         -------
-        split_by_object_indices : List[`~numpy.ndarray`]
-            List of arrays of indices for each object in the observations.
+        split_by_object_slices : List[slice]
+            List of slices for each object in the observations.
         """
         unique_objects, object_indices = np.unique(objects, return_index=True)
         split_by_object_indices = np.split(np.arange(len(objects)), object_indices[1:])
 
-        return split_by_object_indices
+        split_by_object_slices = []
+        for object_i_indices in split_by_object_indices:
+            assert np.all(np.diff(object_i_indices) == 1)
+
+            object_slice = slice(object_i_indices[0], object_i_indices[-1] + 1)
+            split_by_object_slices.append(object_slice)
+
+        return split_by_object_slices
 
     @staticmethod
-    def _split_by_window(windows: List[Tuple[int, int]], nights: np.ndarray) -> List[np.ndarray]:
+    def _split_by_window(windows: List[Tuple[int, int]], nights: np.ndarray) -> List[slice]:
         """
-        Create a list of arrays of indices for each window in the observations.
+        Create a list of slices for each window in the observations.
 
         Parameters
         ----------
@@ -396,17 +403,20 @@ class FindabilityMetric(ABC):
 
         Returns
         -------
-        split_by_window_indices : List[`~numpy.ndarray`]
-            List of arrays of indices for each window in the observations.
+        split_by_window_slices : List[slice]
+            List of slices for each window in the observations.
         """
         # Split the observations by window
-        split_by_window_indices = []
+        split_by_window_slices = []
         for window in windows:
             night_min, night_max = window
             window_indices = np.where((nights >= night_min) & (nights <= night_max))[0]
-            split_by_window_indices.append(window_indices)
+            assert np.all(np.diff(window_indices) == 1)
 
-        return split_by_window_indices
+            window_slice = slice(window_indices[0], window_indices[-1] + 1)
+            split_by_window_slices.append(window_slice)
+
+        return split_by_window_slices
 
     def _store_as_shared_record_array(self, object_ids, obs_ids, times, ra, dec, nights):
         """
@@ -468,7 +478,7 @@ class FindabilityMetric(ABC):
 
     def _run_object_worker(
         self,
-        object_indices: np.ndarray,
+        object_slice: slice,
         windows: List[Tuple[int, int]],
         discovery_opportunities: bool = False,
     ) -> List[Dict[str, Any]]:
@@ -477,9 +487,8 @@ class FindabilityMetric(ABC):
 
         Parameters
         ----------
-        observations : `~pandas.DataFrame`
-            Observations dataframe containing at least the following columns:
-            `obs_id`, `time`, `night`, `object_id`.
+        object_slice : slice
+            A slice in the observations array corresponding to the observations of a single object.
         windows : list of tuples
             A list of tuples containing the start and end nights of each window.
         discovery_opportunities : bool, optional
@@ -495,7 +504,7 @@ class FindabilityMetric(ABC):
         findable_dicts = []
         existing_shm = shared_memory.SharedMemory(name="DIFI_ARRAY")
         observations = np.ndarray(self._num_observations, dtype=self._dtypes, buffer=existing_shm.buf)
-        observations = observations[object_indices]
+        observations = observations[object_slice]
 
         for i, window in enumerate(windows):
             night_min, night_max = window
@@ -572,7 +581,7 @@ class FindabilityMetric(ABC):
         )
 
         # Split arrays by object
-        split_by_object_indices = self._split_by_object(objects)
+        split_by_object_slices = self._split_by_object(objects)
 
         # Store the observations in a global variable so that the worker functions can access them
         self._store_as_shared_record_array(objects, obs_ids, times, ra, dec, nights)
@@ -582,14 +591,14 @@ class FindabilityMetric(ABC):
             pool = mp.Pool(num_jobs)
             findable_lists = pool.starmap(
                 self._run_object_worker,
-                zip(split_by_object_indices, repeat(windows), repeat(discovery_opportunities)),
+                zip(split_by_object_slices, repeat(windows), repeat(discovery_opportunities)),
             )
 
             pool.close()
             pool.join()
 
         else:
-            for object_indices in split_by_object_indices:
+            for object_indices in split_by_object_slices:
                 findable_lists.append(
                     self._run_object_worker(
                         object_indices, windows, discovery_opportunities=discovery_opportunities
@@ -611,16 +620,15 @@ class FindabilityMetric(ABC):
         return findable
 
     def _run_window_worker(
-        self, window_indices, window_id: int, discovery_opportunities: bool = False
+        self, window_slice: slice, window_id: int, discovery_opportunities: bool = False
     ) -> List[Dict[str, Any]]:
         """
         Run the metric on a single window of observations.
 
         Parameters
         ----------
-        observations : `~pandas.DataFrame`
-            Observations dataframe containing at least the following columns:
-            `obs_id`, `time`, `night`, `object_id`.
+        window_slice: slice
+            The slice in the observations array that contains the observations for this window.
         window_id : int
             The ID of this window.
         discovery_opportunities : bool, optional
@@ -635,7 +643,7 @@ class FindabilityMetric(ABC):
         """
         existing_shm = shared_memory.SharedMemory(name="DIFI_ARRAY")
         observations = np.ndarray(self._num_observations, dtype=self._dtypes, buffer=existing_shm.buf)
-        observations = observations[window_indices]
+        observations = observations[window_slice]
 
         if len(observations) == 0:
             existing_shm.close()
@@ -724,24 +732,22 @@ class FindabilityMetric(ABC):
         self._store_as_shared_record_array(objects, obs_ids, times, ra, dec, nights)
 
         # Find indices that split the observations into windows
-        split_by_window_indices = self._split_by_window(windows, nights)
+        split_by_window_slices = self._split_by_window(windows, nights)
 
         findable_lists: List[List[Dict[str, Any]]] = []
         if num_jobs is None or num_jobs > 1:
             pool = mp.Pool(num_jobs)
             findable_lists = pool.starmap(
                 self._run_window_worker,
-                zip(split_by_window_indices, range(len(windows)), repeat(discovery_opportunities)),
+                zip(split_by_window_slices, range(len(windows)), repeat(discovery_opportunities)),
             )
             pool.close()
             pool.join()
 
         else:
-            for i, window_indices in enumerate(split_by_window_indices):
+            for i, window_slice in enumerate(split_by_window_slices):
                 findable_lists.append(
-                    self._run_window_worker(
-                        window_indices, i, discovery_opportunities=discovery_opportunities
-                    )
+                    self._run_window_worker(window_slice, i, discovery_opportunities=discovery_opportunities)
                 )
 
         self._clear_shared_record_array()
