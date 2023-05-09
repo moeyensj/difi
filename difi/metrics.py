@@ -1,5 +1,6 @@
 import hashlib
 import multiprocessing as mp
+import warnings
 from abc import ABC, abstractmethod
 from itertools import combinations, repeat
 from multiprocessing import shared_memory
@@ -548,6 +549,7 @@ class FindabilityMetric(ABC):
         windows: List[Tuple[int, int]],
         discovery_opportunities: bool = False,
         discovery_probability: float = 1.0,
+        ignore_after_discovery: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Run the metric on a single object.
@@ -570,6 +572,9 @@ class FindabilityMetric(ABC):
             opportunity a random number will be drawn between 0 and 1. If the random number is less
             than the discovery probability, then the object will be discovered. If not, then it will
             not be discovered.
+        ignore_after_discovery : bool, optional
+            If True, then ignore all observations after each object's initial discovery. If False,
+            then each object's observations will continue to be tested for discovery in each window.
 
         Returns
         -------
@@ -635,6 +640,8 @@ class FindabilityMetric(ABC):
                 }
 
             findable_dicts.append(findable)
+            if ignore_after_discovery and num_opportunities > 0:
+                break
 
         existing_shared_mem.close()
         return findable_dicts
@@ -645,6 +652,7 @@ class FindabilityMetric(ABC):
         windows: List[Tuple[int, int]],
         discovery_opportunities: bool = False,
         discovery_probability: float = 1.0,
+        ignore_after_discovery: bool = False,
         num_jobs: Optional[int] = 1,
     ) -> List[pd.DataFrame]:
         """
@@ -669,6 +677,9 @@ class FindabilityMetric(ABC):
             opportunity a random number will be drawn between 0 and 1. If the random number is less
             than the discovery probability, then the object will be discovered. If not, then it will
             not be discovered.
+        ignore_after_discovery : bool, optional
+            If True, then ignore all observations after each object's initial discovery. If False,
+            then each object's observations will continue to be tested for discovery in each window.
         num_jobs : int, optional
             The number of jobs to run in parallel. If 1, then run in serial. If None, then use the number of
             CPUs on the machine.
@@ -705,6 +716,7 @@ class FindabilityMetric(ABC):
                     repeat(windows),
                     repeat(discovery_opportunities),
                     repeat(discovery_probability),
+                    repeat(ignore_after_discovery),
                 ),
             )
 
@@ -719,6 +731,7 @@ class FindabilityMetric(ABC):
                         windows,
                         discovery_opportunities=discovery_opportunities,
                         discovery_probability=discovery_probability,
+                        ignore_after_discovery=ignore_after_discovery,
                     )
                 )
 
@@ -932,6 +945,7 @@ class FindabilityMetric(ABC):
         discovery_opportunities: bool = False,
         discovery_probability: float = 1.0,
         by_object: bool = False,
+        ignore_after_discovery: bool = False,
         num_jobs: Optional[int] = 1,
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
@@ -962,6 +976,9 @@ class FindabilityMetric(ABC):
             If True, run the metric on the observations split by objects. For windows where there are many
             observations, this may be faster than running the metric on each window individually
             (with all objects' observations).
+        ignore_after_discovery : bool, optional
+            If True, then ignore observations that occur after the object has been discovered. Only applies
+            when by_object is True. If False, then the objects will be tested for discovery chances again.
         num_jobs : int, optional
             The number of jobs to run in parallel. If 1, then run in serial. If None, then use the number of
             CPUs on the machine.
@@ -979,12 +996,22 @@ class FindabilityMetric(ABC):
         nights = observations["night"].values
         windows = self._compute_windows(nights, detection_window)
 
+        if not by_object and ignore_after_discovery:
+            warnings.warn(
+                (
+                    "ignore_after_discovery only applies when by_object is True."
+                    "Setting ignore_after_discovery to False."
+                )
+            )
+            ignore_after_discovery = False
+
         if by_object:
             findable = self.run_by_object(
                 observations,
                 windows,
                 discovery_opportunities=discovery_opportunities,
                 discovery_probability=discovery_probability,
+                ignore_after_discovery=ignore_after_discovery,
                 num_jobs=num_jobs,
             )
         else:
