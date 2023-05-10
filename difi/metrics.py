@@ -226,14 +226,19 @@ class FindabilityMetric(ABC):
         pass
 
     @staticmethod
-    def _compute_windows(nights: np.ndarray, detection_window: Optional[int] = None) -> List[Tuple[int, int]]:
+    def _compute_windows(
+        nights: np.ndarray, detection_window: Optional[int] = None, min_nights: Optional[int] = None
+    ) -> List[Tuple[int, int]]:
         """
         Calculate the minimum and maximum night for windows of observations of length
         detection_window. If detection_window is None, then the entire range of nights
         is used.
 
         If the detection_window is larger than the range of the observations, then
-        the entire range of nights is used.
+        the entire range of nights is used. If the detection_window is smaller than
+        the range of the observations, then the windows are calculated such that there
+        is a rolling window of length detection_window that starts at the earliest night
+        and ends at the latest night.
 
         Parameters
         ----------
@@ -242,11 +247,17 @@ class FindabilityMetric(ABC):
         detection_window : int, optional
             The number of nights of observations within a single window. If None, then
             the entire range of nights is used.
+        min_nights : int, optional
+            Minimum length of a detection window measured from the earliest night. If
+            the detection window is set to 15 but min_nights is 3 then the first window
+            will be 3 nights long and the second window will be 4 nights long, etc... Once
+            the detection_window length has been reached then all windows will be of length
+            detection_window.
 
         Returns
         -------
         windows : list of tuples
-            List of tuples containing the start and end night of each window.
+            List of tuples containing the start and end night of each window (inclusive).
         """
         # Calculate the unique number of nights
         min_night = nights.min()
@@ -256,18 +267,36 @@ class FindabilityMetric(ABC):
         # range of nights
         if detection_window is None:
             windows = [(min_night, max_night)]
-        elif detection_window > max_night - min_night:
-            windows = [(min_night, max_night)]
+            return windows
+        elif isinstance(detection_window, int):
+            detection_window_ = detection_window
         else:
-            windows = []
-            for night in range(min_night, max_night):
-                if night + detection_window >= max_night:
-                    window = (night, max_night)
-                    windows.append(window)
+            raise TypeError("detection_window must be an integer or None.")
+
+        if detection_window_ >= (max_night - min_night):
+            detection_window_ = max_night - min_night + 1
+
+        if min_nights is None:
+            min_nights_ = detection_window_
+        elif isinstance(min_nights, int):
+            min_nights_ = min_nights
+        else:
+            raise TypeError("min_nights must be an integer or None.")
+
+        windows = []
+        for night in range(min_night, max_night):
+            night_start = night
+            night_end = night + detection_window_ - 1  # inclusive
+
+            if night_start == min_night:
+                assert min_nights_ <= detection_window_
+                for i in range(min_nights_ - 1, detection_window_):
+                    windows.append((night_start, night_start + i))
+            else:
+                window = (night_start, night_end)
+                if night_end > max_night:
                     break
-                else:
-                    window = (night, night + detection_window)
-                    windows.append(window)
+                windows.append(window)
 
         return windows
 
@@ -942,6 +971,7 @@ class FindabilityMetric(ABC):
         self,
         observations: pd.DataFrame,
         detection_window: Optional[int] = None,
+        min_window_nights: Optional[int] = None,
         discovery_opportunities: bool = False,
         discovery_probability: float = 1.0,
         by_object: bool = False,
@@ -957,11 +987,17 @@ class FindabilityMetric(ABC):
             Observations dataframe containing at least the following columns:
             `obs_id`, `time`, `night`, `object_id`.
         detection_window : int, optional
-            The number of days of observations to consider when
+            The number of nights of observations to consider when
             determining if a object is findable. If the number of consecutive days
             of observations exceeds the detection_window, then a rolling window
             of size detection_window is used to determine if the object is findable.
             If None, then the detection_window is the entire range observations.
+        min_window_nights : int, optional
+            The minimum number of nights that must be in a window starting at the first window.
+            For example, if detection_window is 10 and min_window_nights is 3, then the first
+            window will be nights 1-3, the second window will be nights 1-4, and so on. If None, and
+            detection_window is 10, then the first window will be nights 1-10,
+            the second window will be nights 2-11, and so on.
         discovery_opportunities : bool, optional
             If True, then return the combinations of observations that made each object findable.
             Note, that if True, this can greatly increase the memory consumption.
@@ -994,7 +1030,7 @@ class FindabilityMetric(ABC):
         """
         # Extract arrays
         nights = observations["night"].values
-        windows = self._compute_windows(nights, detection_window)
+        windows = self._compute_windows(nights, detection_window, min_nights=min_window_nights)
 
         if not by_object and ignore_after_discovery:
             warnings.warn(
