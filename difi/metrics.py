@@ -222,7 +222,9 @@ def apply_discovery_probability(
 
 class FindabilityMetric(ABC):
     @abstractmethod
-    def determine_object_findable(self, observations: np.ndarray) -> List[List[str]]:
+    def determine_object_findable(
+        self, observations: np.ndarray, windows: Optional[List[Tuple[int, int]]] = None
+    ) -> Dict[int, List[List[str]]]:
         pass
 
     @staticmethod
@@ -634,22 +636,26 @@ class FindabilityMetric(ABC):
         object_id = observations["object_id"][0]
 
         findable_dicts = []
+        discovery_obs_ids = self.determine_object_findable(observations, windows=windows)
+
         for i, window in enumerate(windows):
-            night_min, night_max = window
-            window_obs = observations[
-                (observations["night"] >= night_min) & (observations["night"] <= night_max)
-            ]
 
-            discovery_obs_ids = self.determine_object_findable(window_obs)
-            obs_ids_unique, discovery_obs_ids = apply_discovery_probability(
-                discovery_obs_ids, object_id, discovery_probability
-            )
-            num_opportunities = len(discovery_obs_ids)
+            discovery_obs_ids_window = discovery_obs_ids[i]
 
-            if discovery_opportunities:
-                obs_ids = discovery_obs_ids
+            if len(discovery_obs_ids_window) > 0:
+
+                obs_ids_unique, discovery_obs_ids_window = apply_discovery_probability(
+                    discovery_obs_ids_window, object_id, discovery_probability
+                )
+                num_opportunities = len(discovery_obs_ids_window)
+
+                if discovery_opportunities:
+                    obs_ids = discovery_obs_ids_window
+                else:
+                    obs_ids = [obs_ids_unique]
+
             else:
-                obs_ids = [obs_ids_unique]
+                num_opportunities = 0
 
             if num_opportunities > 0:
                 findable = {
@@ -839,16 +845,28 @@ class FindabilityMetric(ABC):
 
             discovery_obs_ids = self.determine_object_findable(
                 observations[np.where(observations["object_id"] == object_id)[0]],
+                # We are running on a single window so don't need to pass in windows
+                windows=None,
             )
-            obs_ids_unique, discovery_obs_ids = apply_discovery_probability(
-                discovery_obs_ids, object_id, discovery_probability
-            )
-            num_opportunities = len(discovery_obs_ids)
+            # self.determine_object_findable returns a list of lists, with one element (also a list)
+            # per window, so lets just grab the first element representing the current window
+            discovery_obs_ids_window = discovery_obs_ids[0]
 
-            if discovery_opportunities:
-                obs_ids = discovery_obs_ids
+            # If there are discovery opportunities, then apply the discovery probability
+            if len(discovery_obs_ids_window) > 0:
+
+                obs_ids_unique, discovery_obs_ids_window = apply_discovery_probability(
+                    discovery_obs_ids_window, object_id, discovery_probability
+                )
+                num_opportunities = len(discovery_obs_ids_window)
+
+                if discovery_opportunities:
+                    obs_ids = discovery_obs_ids_window
+                else:
+                    obs_ids = [obs_ids_unique]
+
             else:
-                obs_ids = [obs_ids_unique]
+                num_opportunities = 0
 
             if num_opportunities > 0:
                 findable = {
@@ -1102,7 +1120,8 @@ class NightlyLinkagesMetric(FindabilityMetric):
     def determine_object_findable(
         self,
         observations: np.ndarray,
-    ) -> List[List[str]]:
+        windows: Optional[List[Tuple[int, int]]] = None,
+    ) -> Dict[int, List[List[str]]]:
         """
         Given observations belonging to one object, finds all observations that are within
         max_obs_separation of each other.
@@ -1115,90 +1134,101 @@ class NightlyLinkagesMetric(FindabilityMetric):
         observations : `~numpy.ndarray`
             Numpy record array with at least the following columns:
             `object_id`, `obs_id`, `time`, `night`, `ra`, `dec`.
+        windows: List[Tuple[int, int]], optional
+            List of windows of time (in MJD) during which to consider observations.
 
         Returns
         -------
-        obs_ids : List[List[str]]
-            List of lists containing observation IDs for each discovery opportunity.
+        obs_ids : dict[int, List[List[str]]]
+            Dictionary keyed on window IDs, with values of lists containining observation IDs
+            for each discovery opportunity (if discovery_opportunities is True).
+            If no discovery opportunities are found, then the list will be empty.
             If discovery_opportunities is False, then the list will contain a single
             list of all valid observation IDs.
         """
-        # If the len of observations is 0 then the object is not findable
-        if len(observations) == 0:
-            return []
-
         assert len(np.unique(observations["object_id"])) == 1
+        if windows is None:
+            windows = [(np.min(observations["night"]), np.max(observations["night"]))]
 
-        # Exit early if there are not enough observations
-        total_required_obs = self.linkage_min_obs * self.min_linkage_nights
-        if len(observations) < total_required_obs:
-            return []
+        obs_ids_window: Dict[int, List[List[str]]] = {}
+        for i, window in enumerate(windows):
+            mask = (observations["night"] >= window[0]) & (observations["night"] <= window[1])
+            observations_window = observations[mask]
 
-        # Grab times and observation IDs from grouped observations
-        times = observations["time"]
-        obs_ids = observations["obs_id"]
-        nights = observations["night"]
-        ra = observations["ra"]
-        dec = observations["dec"]
+            # Exit early if there are not enough observations
+            total_required_obs = self.linkage_min_obs * self.min_linkage_nights
+            if len(observations_window) < total_required_obs:
+                obs_ids_window[i] = []
+                continue
 
-        if self.linkage_min_obs > 1:
+            # Grab times and observation IDs from grouped observations
+            times = observations_window["time"]
+            obs_ids = observations_window["obs_id"]
+            nights = observations_window["night"]
+            ra = observations_window["ra"]
+            dec = observations_window["dec"]
 
-            linkage_obs = obs_ids[
-                find_observations_within_max_time_separation(
-                    times,
-                    self.max_obs_separation * (60.0 * 24),
-                )
-            ]
+            if self.linkage_min_obs > 1:
 
-            # Find the number of observations on each night
-            linkage_nights, night_counts = np.unique(
-                nights[np.isin(obs_ids, linkage_obs)], return_counts=True
-            )
-
-            # Make sure that there are enough observations on each night to make a linkage
-            valid_unique_nights = linkage_nights[night_counts >= self.linkage_min_obs]
-            valid_mask = np.isin(nights, valid_unique_nights)
-            valid_nights = nights[valid_mask]
-            linkage_obs = obs_ids[valid_mask]
-
-            if self.min_obs_angular_separation > 0:
-
-                linkage_obs = linkage_obs[
-                    find_observations_beyond_angular_separation(
-                        valid_nights,
-                        ra[valid_mask],
-                        dec[valid_mask],
-                        self.min_obs_angular_separation,
+                linkage_obs = obs_ids[
+                    find_observations_within_max_time_separation(
+                        times,
+                        self.max_obs_separation * (60.0 * 24),
                     )
                 ]
-                # If there are no valid observations then the object is not findable
-                if len(linkage_obs) == 0:
-                    return []
 
-                # Update the valid nights
-                valid_nights = nights[np.isin(obs_ids, linkage_obs)]
+                # Find the number of observations on each night
+                linkage_nights, night_counts = np.unique(
+                    nights[np.isin(obs_ids, linkage_obs)], return_counts=True
+                )
+
+                # Make sure that there are enough observations on each night to make a linkage
+                valid_unique_nights = linkage_nights[night_counts >= self.linkage_min_obs]
+                valid_mask = np.isin(nights, valid_unique_nights)
+                valid_nights = nights[valid_mask]
+                linkage_obs = obs_ids[valid_mask]
+
+                if self.min_obs_angular_separation > 0:
+
+                    linkage_obs = linkage_obs[
+                        find_observations_beyond_angular_separation(
+                            valid_nights,
+                            ra[valid_mask],
+                            dec[valid_mask],
+                            self.min_obs_angular_separation,
+                        )
+                    ]
+                    # If there are no valid observations then the object is not findable
+                    if len(linkage_obs) == 0:
+                        obs_ids = []
+
+                    # Update the valid nights
+                    valid_nights = nights[np.isin(obs_ids, linkage_obs)]
+                    valid_unique_nights = np.unique(valid_nights)
+
+            else:
+                # If linkage_min_obs is 1, then we don't need to check for time separation
+                # All nights with at least one observation are valid
+                valid_nights = nights
                 valid_unique_nights = np.unique(valid_nights)
+                linkage_obs = obs_ids
 
-        else:
-            # If linkage_min_obs is 1, then we don't need to check for time separation
-            # All nights with at least one observation are valid
-            valid_nights = nights
-            valid_unique_nights = np.unique(valid_nights)
-            linkage_obs = obs_ids
+            # Make sure that the number of observations is still linkage_min_obs * min_linkage_nights
+            enough_obs = len(linkage_obs) >= total_required_obs
 
-        # Make sure that the number of observations is still linkage_min_obs * min_linkage_nights
-        enough_obs = len(linkage_obs) >= total_required_obs
+            # Make sure that the number of unique nights on which a linkage is made
+            # is still equal to or greater than the minimum number of nights.
+            enough_nights = len(valid_unique_nights) >= self.min_linkage_nights
 
-        # Make sure that the number of unique nights on which a linkage is made
-        # is still equal to or greater than the minimum number of nights.
-        enough_nights = len(valid_unique_nights) >= self.min_linkage_nights
+            if not enough_obs or not enough_nights:
+                obs_ids = []
+            else:
+                obs_indices = select_tracklet_combinations(valid_nights, self.min_linkage_nights)
+                obs_ids = [linkage_obs[ind].tolist() for ind in obs_indices]
 
-        if not enough_obs or not enough_nights:
-            return []
-        else:
-            obs_indices = select_tracklet_combinations(valid_nights, self.min_linkage_nights)
-            obs_ids = [linkage_obs[ind].tolist() for ind in obs_indices]
-            return obs_ids
+            obs_ids_window[i] = obs_ids
+
+        return obs_ids_window
 
 
 class MinObsMetric(FindabilityMetric):
@@ -1218,9 +1248,8 @@ class MinObsMetric(FindabilityMetric):
         self.min_obs = min_obs
 
     def determine_object_findable(
-        self,
-        observations: np.ndarray,
-    ) -> List[List[str]]:
+        self, observations: np.ndarray, windows: Optional[List[Tuple[int, int]]] = None
+    ) -> Dict[int, List[List[str]]]:
         """
         Finds all objects with a minimum of self.min_obs observations and the observations
         that makes them findable.
@@ -1230,22 +1259,36 @@ class MinObsMetric(FindabilityMetric):
         observations : `~numpy.ndarray`
             Numpy record array with at least the following columns:
             `object_id`, `obs_id`, `time`, `night`, `ra`, `dec`.
+        windows: List[Tuple[int, int]], optional
+            List of windows of time (in MJD) during which to consider observations.
 
         Returns
         -------
-        obs_ids : List[List[str]]
-            List of lists containing observation IDs for each discovery opportunity.
+        obs_ids : dict[int, List[List[str]]]
+            Dictionary keyed on window IDs, with values of lists containining observation IDs
+            for each discovery opportunity (if discovery_opportunities is True).
+            If no discovery opportunities are found, then the list will be empty.
             If discovery_opportunities is False, then the list will contain a single
             list of all valid observation IDs.
         """
         # If the len of observations is 0 then the object is not findable
-        if len(observations) == 0:
-            return []
-
         assert len(np.unique(observations["object_id"])) == 1
-        if len(observations) >= self.min_obs:
-            obs_ids = observations["obs_id"]
-            obs_ids = list(combinations(obs_ids, self.min_obs))
-            return obs_ids
-        else:
-            return []
+
+        if windows is None:
+            windows = [(np.min(observations["night"]), np.max(observations["night"]))]
+
+        obs_ids_window = {}
+        for i, window in enumerate(windows):
+            mask = (observations["night"] >= window[0]) & (observations["night"] <= window[1])
+            observations_window = observations[mask]
+
+            if len(observations_window) >= self.min_obs:
+                obs_ids = observations_window["obs_id"]
+                obs_ids = list(combinations(obs_ids, self.min_obs))
+
+            else:
+                obs_ids = []
+
+            obs_ids_window[i] = obs_ids
+
+        return obs_ids_window
