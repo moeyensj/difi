@@ -7,23 +7,23 @@ from ..cifi import analyzeObservations
 def test_analyzeObservations_noClasses(test_observations, num_jobs):
     # Test analyzeObservations when no truth classes are given
 
-    all_truths, findable_observations, summary = analyzeObservations(
+    all_objects, findable_observations, summary = analyzeObservations(
         test_observations,
         min_obs=5,
         classes=None,
         detection_window=None,
     )
 
-    # Check that all three objects are in the all_truths data frame
-    assert all_truths["truth"].nunique() == 3
+    # Check that all three objects are in the all_objects data frame
+    assert all_objects["object_id"].nunique() == 3
     for object_id in ["23636", "58177", "82134"]:
-        assert object_id in all_truths["truth"].values
+        assert object_id in all_objects["object_id"].values
 
     # Check that the number of observations is correct
-    assert all_truths["num_obs"].sum() == 30
+    assert all_objects["num_obs"].sum() == 30
 
     # Check that the objects have been correctly marked as findable
-    assert all_truths["findable"].sum() == 3
+    assert all_objects["findable"].sum() == 3
 
     # Check that the summary data frame is correct, no classes
     # were passed so the length should be one
@@ -33,7 +33,7 @@ def test_analyzeObservations_noClasses(test_observations, num_jobs):
     assert summary["num_obs"].sum() == 30
     assert summary["class"].values[0] == "All"
 
-    all_truths, findable_observations, summary = analyzeObservations(
+    all_objects, findable_observations, summary = analyzeObservations(
         test_observations,
         min_obs=10,
         classes=None,
@@ -41,18 +41,18 @@ def test_analyzeObservations_noClasses(test_observations, num_jobs):
         num_jobs=num_jobs,
     )
 
-    # Check that all three objects are in the all_truths data frame
-    assert all_truths["truth"].nunique() == 3
+    # Check that all three objects are in the all_objects data frame
+    assert all_objects["object_id"].nunique() == 3
     for object_id in ["23636", "58177", "82134"]:
-        assert object_id in all_truths["truth"].values
+        assert object_id in all_objects["object_id"].values
 
     # Check that the number of observations is correct
-    assert all_truths["num_obs"].sum() == 30
+    assert all_objects["num_obs"].sum() == 30
 
     # Check that the objects have been correctly marked as findable
     # Only two objects are now findable
-    assert all_truths["findable"].sum() == 2
-    assert all_truths[all_truths["truth"].isin(["58177", "82134"])]["findable"].sum() == 2
+    assert all_objects["findable"].sum() == 2
+    assert all_objects[all_objects["object_id"].isin(["58177", "82134"])]["findable"].sum() == 2
 
     # Check that the summary data frame is correct, no classes
     # were passed so the length should be one
@@ -71,9 +71,9 @@ def test_analyzeObservations_withClassesColumn(test_observations, num_jobs):
 
     # Add class column to test observations
     for i, object_id in enumerate(["23636", "58177", "82134"]):
-        test_observations.loc[test_observations["truth"] == object_id, "class"] = "Class_{}".format(i)
+        test_observations.loc[test_observations["object_id"] == object_id, "class"] = "Class_{}".format(i)
 
-    all_truths, findable_observations, summary = analyzeObservations(
+    all_objects, findable_observations, summary = analyzeObservations(
         test_observations,
         min_obs=5,
         classes="class",
@@ -82,16 +82,16 @@ def test_analyzeObservations_withClassesColumn(test_observations, num_jobs):
         num_jobs=num_jobs,
     )
 
-    # Check that all three objects are in the all_truths data frame
-    assert all_truths["truth"].nunique() == 3
+    # Check that all three objects are in the all_objects data frame
+    assert all_objects["object_id"].nunique() == 3
     for object_id in ["23636", "58177", "82134"]:
-        assert object_id in all_truths["truth"].values
+        assert object_id in all_objects["object_id"].values
 
     # Check that the number of observations is correct
-    assert all_truths["num_obs"].sum() == 30
+    assert all_objects["num_obs"].sum() == 30
 
     # Check that the objects have been correctly marked as findable
-    assert all_truths["findable"].sum() == 3
+    assert all_objects["findable"].sum() == 3
 
     # Check that the summary data frame is correct, there should
     # be a row for each class and a row for the "All" class
@@ -128,7 +128,7 @@ def test_analyzeObservations_withClassesDictionary(test_observations, num_jobs):
         "Class_2": ["82134"],
     }
 
-    all_truths, findable_observations, summary = analyzeObservations(
+    all_objects, findable_observations, summary = analyzeObservations(
         test_observations,
         min_obs=5,
         classes=classes_dict,
@@ -137,16 +137,16 @@ def test_analyzeObservations_withClassesDictionary(test_observations, num_jobs):
         num_jobs=num_jobs,
     )
 
-    # Check that all three objects are in the all_truths data frame
-    assert all_truths["truth"].nunique() == 3
+    # Check that all three objects are in the all_objects data frame
+    assert all_objects["object_id"].nunique() == 3
     for object_id in ["23636", "58177", "82134"]:
-        assert object_id in all_truths["truth"].values
+        assert object_id in all_objects["object_id"].values
 
     # Check that the number of observations is correct
-    assert all_truths["num_obs"].sum() == 30
+    assert all_objects["num_obs"].sum() == 30
 
     # Check that the objects have been correctly marked as findable
-    assert all_truths["findable"].sum() == 3
+    assert all_objects["findable"].sum() == 3
 
     # Check that the summary data frame is correct, there should
     # be a row for each class and a row for the "All" class
@@ -177,8 +177,8 @@ def test_analyzeObservations_noObservations(test_observations):
     test_observations = test_observations.drop(test_observations.index)
 
     with pytest.raises(ValueError):
-        # Build the all_truths and summary data frames
-        all_truths, findable_observations, summary = analyzeObservations(
+        # Build the all_objects and summary data frames
+        all_objects, findable_observations, summary = analyzeObservations(
             test_observations, min_obs=5, classes=None, discovery_opportunities=False
         )
 
@@ -188,8 +188,8 @@ def test_analyzeObservations_noObservations(test_observations):
 def test_analyzeObservations_errors(test_observations):
     # Test analyzeObservations the metric is incorrectly defined
     with pytest.raises(ValueError):
-        # Build the all_truths and summary data frames
-        all_truths, findable_observations, summary = analyzeObservations(
+        # Build the all_objects and summary data frames
+        all_objects, findable_observations, summary = analyzeObservations(
             test_observations, min_obs=5, metric="wrong_metric", classes=None, discovery_opportunities=False
         )
 

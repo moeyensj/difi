@@ -24,7 +24,7 @@ def test_benchmark_analyze_observations_classes_column(benchmark, test_observati
 
     # Add class column to test observations
     for i, object_id in enumerate(["23636", "58177", "82134"]):
-        test_observations.loc[test_observations["truth"] == object_id, "class"] = "Class_{}".format(i)
+        test_observations.loc[test_observations["object_id"] == object_id, "class"] = "Class_{}".format(i)
 
     all_truths, findable_observations, summary = benchmark(
         analyzeObservations,

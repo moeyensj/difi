@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 import pytest
 
 from ..metrics import (
@@ -14,27 +13,40 @@ from ..metrics import (
 
 def test_FindabilityMetric__compute_windows():
     # Test that the function returns the correct windows when detection_window is None
-    test_observations = pd.DataFrame(
-        {"night": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]},
-    )
-    windows = FindabilityMetric._compute_windows(test_observations, detection_window=None)
+    nights = np.arange(1, 11)
+    windows = FindabilityMetric._compute_windows(nights, detection_window=None)
     assert windows == [(1, 10)]
 
     # Test that the function returns the correct windows when detection_window is 2
-    windows = FindabilityMetric._compute_windows(test_observations, detection_window=2)
-    assert windows == [(1, 3), (2, 4), (3, 5), (4, 6), (5, 7), (6, 8), (7, 9), (8, 10)]
+    windows = FindabilityMetric._compute_windows(nights, detection_window=2)
+    assert windows == [(1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8), (8, 9), (9, 10)]
 
     # Test that the function returns the correct windows when detection_window is 3
-    windows = FindabilityMetric._compute_windows(test_observations, detection_window=3)
-    assert windows == [(1, 4), (2, 5), (3, 6), (4, 7), (5, 8), (6, 9), (7, 10)]
+    windows = FindabilityMetric._compute_windows(nights, detection_window=3)
+    assert windows == [(1, 3), (2, 4), (3, 5), (4, 6), (5, 7), (6, 8), (7, 9), (8, 10)]
 
     # Test that the function returns the correct windows when detection_window is 6
-    windows = FindabilityMetric._compute_windows(test_observations, detection_window=6)
-    assert windows == [(1, 7), (2, 8), (3, 9), (4, 10)]
+    windows = FindabilityMetric._compute_windows(nights, detection_window=6)
+    assert windows == [(1, 6), (2, 7), (3, 8), (4, 9), (5, 10)]
 
     # Test that the function returns the correct windows when detection_window is 15
-    windows = FindabilityMetric._compute_windows(test_observations, detection_window=15)
+    windows = FindabilityMetric._compute_windows(nights, detection_window=15)
     assert windows == [(1, 10)]
+
+    # Test that the function returns the correct windows when detection_window is 3
+    # and min_nights is 2
+    windows = FindabilityMetric._compute_windows(nights, detection_window=3, min_nights=2)
+    assert windows == [(1, 2), (1, 3), (2, 4), (3, 5), (4, 6), (5, 7), (6, 8), (7, 9), (8, 10)]
+
+    # Test that the function returns the correct windows when detection_window is 5
+    # and min_nights is 2
+    windows = FindabilityMetric._compute_windows(nights, detection_window=5, min_nights=3)
+    assert windows == [(1, 3), (1, 4), (1, 5), (2, 6), (3, 7), (4, 8), (5, 9), (6, 10)]
+
+    # Test that the function returns the correct windows when detection_window is 5
+    # and min_nights is 5
+    windows = FindabilityMetric._compute_windows(nights, detection_window=5, min_nights=5)
+    assert windows == [(1, 5), (2, 6), (3, 7), (4, 8), (5, 9), (6, 10)]
 
 
 def test_find_observations_within_max_time_separation():
@@ -162,12 +174,12 @@ def test_calcFindableMinObs(test_observations, by_object, num_jobs):
     )
     assert len(findable_observations) == 3
 
-    findable_ids = {k for k in findable_observations["truth"].values}
+    findable_ids = {k for k in findable_observations["object_id"].values}
     for object_id in ["23636", "58177", "82134"]:
         assert object_id in findable_ids
         np.testing.assert_equal(
-            findable_observations[findable_observations["truth"] == object_id]["obs_ids"].values[0][0],
-            test_observations[test_observations["truth"] == object_id]["obs_id"].values,
+            findable_observations[findable_observations["object_id"] == object_id]["obs_ids"].values[0][0],
+            test_observations[test_observations["object_id"] == object_id]["obs_id"].values,
         )
 
     # Only two objects should be findable
@@ -178,10 +190,10 @@ def test_calcFindableMinObs(test_observations, by_object, num_jobs):
 
     assert len(findable_observations) == 2
     for object_id in ["58177", "82134"]:
-        assert object_id in findable_observations["truth"].values
+        assert object_id in findable_observations["object_id"].values
         np.testing.assert_equal(
-            findable_observations[findable_observations["truth"] == object_id]["obs_ids"].values[0][0],
-            test_observations[test_observations["truth"] == object_id]["obs_id"].values,
+            findable_observations[findable_observations["object_id"] == object_id]["obs_ids"].values[0][0],
+            test_observations[test_observations["object_id"] == object_id]["obs_id"].values,
         )
 
     # No objects should be findable
@@ -201,26 +213,35 @@ def test_calcFindableMinObs(test_observations, by_object, num_jobs):
     assert window_summary["start_night"].values[0] == 612
     assert window_summary["end_night"].values[0] == 624
 
-    # Set the detection window to 10 days, there should now be 3 windows
+    # Set the detection window to 10 days, there should now be 4 windows
+    # 612 - 621
+    # 613 - 622
+    # 614 - 623
+    # 615 - 624
     metric = MinObsMetric(min_obs=5)
     findable_observations, window_summary = metric.run(
         test_observations, by_object=by_object, num_jobs=num_jobs, detection_window=10
     )
-    assert len(window_summary) == 3
+    assert len(window_summary) == 4
     assert window_summary["start_night"].values[0] == 612
-    assert window_summary["end_night"].values[0] == 622
+    assert window_summary["end_night"].values[0] == 621
     assert window_summary["num_findable"].values[0] == 3
     assert window_summary["num_obs"].values[0] == 26
 
     assert window_summary["start_night"].values[1] == 613
-    assert window_summary["end_night"].values[1] == 623
+    assert window_summary["end_night"].values[1] == 622
     assert window_summary["num_findable"].values[1] == 3
     assert window_summary["num_obs"].values[1] == 19
 
     assert window_summary["start_night"].values[2] == 614
-    assert window_summary["end_night"].values[2] == 624
+    assert window_summary["end_night"].values[2] == 623
     assert window_summary["num_findable"].values[2] == 3
-    assert window_summary["num_obs"].values[2] == 23
+    assert window_summary["num_obs"].values[2] == 19
+
+    assert window_summary["start_night"].values[3] == 615
+    assert window_summary["end_night"].values[3] == 624
+    assert window_summary["num_findable"].values[3] == 2
+    assert window_summary["num_obs"].values[3] == 20
     return
 
 
@@ -245,13 +266,13 @@ def test_calcFindableNightlyLinkages(test_observations, by_object, num_jobs):
     )
     assert len(findable_observations) == 3
 
-    findable_ids = {k for k in findable_observations["truth"].values}
+    findable_ids = {k for k in findable_observations["object_id"].values}
     for object_id in ["23636", "58177", "82134"]:
         assert object_id in findable_ids
 
     # Object 23636 has two tracklets (no more than 2 hours long)
     np.testing.assert_equal(
-        findable_observations[findable_observations["truth"] == "23636"]["obs_ids"].values[0][0],
+        findable_observations[findable_observations["object_id"] == "23636"]["obs_ids"].values[0][0],
         np.array(
             [
                 "obs_000001",  # tracklet 1
@@ -264,13 +285,13 @@ def test_calcFindableNightlyLinkages(test_observations, by_object, num_jobs):
 
     # Object 58177 has 5 tracklets no more than 2 hours long (all of its observations)
     np.testing.assert_equal(
-        findable_observations[findable_observations["truth"] == "58177"]["obs_ids"].values[0][0],
-        test_observations[test_observations["truth"] == "58177"]["obs_id"].values,
+        findable_observations[findable_observations["object_id"] == "58177"]["obs_ids"].values[0][0],
+        test_observations[test_observations["object_id"] == "58177"]["obs_id"].values,
     )
 
     # Object 82134 has 3 tracklets no more than 2 hours long
     np.testing.assert_equal(
-        findable_observations[findable_observations["truth"] == "82134"]["obs_ids"].values[0][0],
+        findable_observations[findable_observations["object_id"] == "82134"]["obs_ids"].values[0][0],
         np.array(
             [
                 "obs_000016",  # tracklet 1
@@ -300,20 +321,20 @@ def test_calcFindableNightlyLinkages(test_observations, by_object, num_jobs):
     )
     assert len(findable_observations) == 2
 
-    findable_ids = {k for k in findable_observations["truth"].values}
+    findable_ids = {k for k in findable_observations["object_id"].values}
     for object_id in ["58177", "82134"]:
         assert object_id in findable_ids
 
     # Object 58177 has 5 tracklets no more than 2 hours long (all of its observations)
     np.testing.assert_equal(
-        findable_observations[findable_observations["truth"] == "58177"]["obs_ids"].values[0][0],
-        test_observations[test_observations["truth"] == "58177"]["obs_id"].values,
+        findable_observations[findable_observations["object_id"] == "58177"]["obs_ids"].values[0][0],
+        test_observations[test_observations["object_id"] == "58177"]["obs_id"].values,
     )
 
     # Object 82134 has 3 tracklets no more than 2 hours long (but several observations that
     # could form tracklets are too close together)
     np.testing.assert_equal(
-        findable_observations[findable_observations["truth"] == "82134"]["obs_ids"].values[0][0],
+        findable_observations[findable_observations["object_id"] == "82134"]["obs_ids"].values[0][0],
         np.array(
             [
                 # "obs_000016",  # tracklet 1
@@ -343,13 +364,13 @@ def test_calcFindableNightlyLinkages(test_observations, by_object, num_jobs):
     )
     assert len(findable_observations) == 1
 
-    findable_ids = {k for k in findable_observations["truth"].values}
+    findable_ids = {k for k in findable_observations["object_id"].values}
     for object_id in ["82134"]:
         assert object_id in findable_ids
 
     # Object 82134 has 3 tracklets no more than 2 hours long
     np.testing.assert_equal(
-        findable_observations[findable_observations["truth"] == "82134"]["obs_ids"].values[0][0],
+        findable_observations[findable_observations["object_id"] == "82134"]["obs_ids"].values[0][0],
         np.array(
             [
                 "obs_000016",  # tracklet 1
@@ -387,28 +408,37 @@ def test_calcFindableNightlyLinkages(test_observations, by_object, num_jobs):
     assert window_summary["end_night"].values[0] == 624
 
     # Set the detection window to 10 days and set the min_linkage nights to 3
-    # There should be 3 windows and object one will never be findable
+    # There should now be 4 windows
+    # 612 - 621
+    # 613 - 622
+    # 614 - 623
+    # 615 - 624
     metric = NightlyLinkagesMetric(
         linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=3, min_obs_angular_separation=0
     )
     findable_observations, window_summary = metric.run(
         test_observations, by_object=by_object, num_jobs=num_jobs, detection_window=10
     )
-    assert len(window_summary) == 3
+    assert len(window_summary) == 4
     assert window_summary["start_night"].values[0] == 612
-    assert window_summary["end_night"].values[0] == 622
+    assert window_summary["end_night"].values[0] == 621
     assert window_summary["num_findable"].values[0] == 2
     assert window_summary["num_obs"].values[0] == 26
 
     assert window_summary["start_night"].values[1] == 613
-    assert window_summary["end_night"].values[1] == 623
+    assert window_summary["end_night"].values[1] == 622
     assert window_summary["num_findable"].values[1] == 2
     assert window_summary["num_obs"].values[1] == 19
 
     assert window_summary["start_night"].values[2] == 614
-    assert window_summary["end_night"].values[2] == 624
+    assert window_summary["end_night"].values[2] == 623
     assert window_summary["num_findable"].values[2] == 2
-    assert window_summary["num_obs"].values[2] == 23
+    assert window_summary["num_obs"].values[2] == 19
+
+    assert window_summary["start_night"].values[3] == 615
+    assert window_summary["end_night"].values[3] == 624
+    assert window_summary["num_findable"].values[3] == 2
+    assert window_summary["num_obs"].values[3] == 20
     return
 
 
@@ -419,12 +449,12 @@ def test_calcFindableNightlyLinkages_edge_cases(test_observations):
     findable_observations, window_summary = metric.run(test_observations)
     assert len(findable_observations) == 3
 
-    findable_ids = {k for k in findable_observations["truth"].values}
+    findable_ids = {k for k in findable_observations["object_id"].values}
     for object_id in ["23636", "58177", "82134"]:
         assert object_id in findable_ids
         np.testing.assert_equal(
-            findable_observations[findable_observations["truth"] == object_id]["obs_ids"].values[0][0],
-            test_observations[test_observations["truth"] == object_id]["obs_id"].values,
+            findable_observations[findable_observations["object_id"] == object_id]["obs_ids"].values[0][0],
+            test_observations[test_observations["object_id"] == object_id]["obs_id"].values,
         )
 
     # Only two objects should be findable if we require at least 1 observation on each night of
@@ -433,12 +463,12 @@ def test_calcFindableNightlyLinkages_edge_cases(test_observations):
     findable_observations, window_summary = metric.run(test_observations)
     assert len(findable_observations) == 2
 
-    findable_ids = {k for k in findable_observations["truth"].values}
+    findable_ids = {k for k in findable_observations["object_id"].values}
     for object_id in ["58177", "82134"]:
         assert object_id in findable_ids
         np.testing.assert_equal(
-            findable_observations[findable_observations["truth"] == object_id]["obs_ids"].values[0][0],
-            test_observations[test_observations["truth"] == object_id]["obs_id"].values,
+            findable_observations[findable_observations["object_id"] == object_id]["obs_ids"].values[0][0],
+            test_observations[test_observations["object_id"] == object_id]["obs_id"].values,
         )
 
 
