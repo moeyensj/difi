@@ -159,7 +159,7 @@ def analyzeObservations(
     metric: Union[str, Metrics] = "min_obs",
     detection_window: Optional[int] = None,
     discovery_opportunities: bool = False,
-    ignore_after_detected: bool = True,
+    ignore_after_discovery: bool = True,
     num_jobs: Optional[int] = 1,
     **metric_kwargs,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
@@ -203,7 +203,7 @@ def analyzeObservations(
         of observations exceeds the detection_window, then a rolling window
         of size detection_window is used to determine if the truth is findable.
         If None, then the detection_window is the entire range observations.
-    ignore_after_detected : bool, optional
+    ignore_after_discovery : bool, optional
         For use with `detection_window` - Whether to ignore an object in subsequent windows after it has been
         detected in an earlier window.
     num_jobs : int, optional
@@ -277,6 +277,7 @@ def analyzeObservations(
         observations,
         detection_window=detection_window,
         discovery_opportunities=discovery_opportunities,
+        ignore_after_discovery=ignore_after_discovery,
         num_jobs=num_jobs,
     )
     # Create the all objects dataframe
