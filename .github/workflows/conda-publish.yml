@@ -19,7 +19,7 @@ jobs:
         conda install -y setuptools setuptools_scm
     - name: Update recipe with version variable
       run: |
-        VERSION=$(python setup.py --version)
+        VERSION=$(python -m setuptools_scm)
         LINE_STR='{% set version = "'${VERSION}'" %}'
         RECIPE_PATH='recipe/meta.yaml'
         echo $LINE_STR | cat - $RECIPE_PATH > temp && mv temp $RECIPE_PATH
