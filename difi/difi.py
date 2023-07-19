@@ -22,13 +22,13 @@ def analyzeLinkages(
 
     Given a data frame of observations and a data frame defining possible linkages made from those
     observations this function identifies each linkage as one of three possible types:
-    - pure: a linkage where all constituent observations belong to a single truth
+    - pure: a linkage where all constituent observations belong to a single object
     - partial: a linkage that contains observations belonging to multiple objects but
-        equal to or more than min_obs observations of one truth and no more than the contamination
+        equal to or more than min_obs observations of one object and no more than the contamination
         threshold of observations of other objects. For example, a linkage with ten observations,
-        eight of which belong to a single unique truth and two of which belong to other objects
+        eight of which belong to a single unique object and two of which belong to other objects
         has contamination percentage 20%. If the threshold is set to 20% or greater, and min_obs
-        is less than or equal to eight then the truth with the eight observations
+        is less than or equal to eight then the object with the eight observations
         is considered found and the linkage is considered a partial linkage.
     - mixed: all linkages that are neither pure nor partial.
 
@@ -36,7 +36,7 @@ def analyzeLinkages(
     Parameters
     ----------
     observations : `~pandas.DataFrame`
-        Pandas DataFrame with at least two columns: observation IDs and the truth values
+        Pandas DataFrame with at least two columns: observation IDs and the object IDs
         (the object to which the observation belongs to).
     linkage_members : `~pandas.DataFrame`
         Pandas DataFrame with at least two columns: linkage IDs and the observation
@@ -45,7 +45,7 @@ def analyzeLinkages(
         If None, all_linkages will be created.
         [Default = None]
     all_objects : {`~pandas.DataFrame`, None}, optional
-        Pandas DataFrame with one row per unique truth with at least one column: object_id.
+        Pandas DataFrame with one row per unique object with at least one column: object_id.
         If None, all_objects will be created.
         [Default = None]
     min_obs : int, optional
@@ -62,7 +62,7 @@ def analyzeLinkages(
     classes : {dict, str, None}
         Analyze observations for objects grouped in different classes.
         str : Name of the column in the observations dataframe which identifies
-            the class of each truth.
+            the class of each object.
         dict : A dictionary with class names as keys and a list of unique
             objects belonging to each class as values.
         None : If there are no classes of objects.
@@ -86,32 +86,32 @@ def analyzeLinkages(
             "partial" : int
                 1 if this linkage is partial, 0 otherwise.
             "contamination_percentage" : float
-                Percent of observations that do not belong to the linked truth. For pure
+                Percent of observations that do not belong to the linked object. For pure
                 linkages this number is always 0, for partial linkages it will never exceed
                 the contaminationPercentage, for mixed linkages it is always NaN.
             "found_pure" : int
-                1 if the pure linkage has equal to or more than min_obs observations (the linked truth
+                1 if the pure linkage has equal to or more than min_obs observations (the linked object
                 is then considered found), 0 otherwise. A linkage can be pure but not condisered found
                 and pure if it does not have enough observations.
             "found_partial" : int
                 1 if the partial linkage has equal to or more than min_obs observations of the linked
-                truth (the linked truth is then considered found), 0 otherwise. A linkage can be
+                object (the linked object is then considered found), 0 otherwise. A linkage can be
                 partial but not considered found if it does not have enough observations of the linked
-                truth.
+                object.
             "found" : int
                 1 if either found_partial or found_pure is 1, 0 otherwise.
             "linked_object_id" : str
-                The truth linked in the linkage if the linkage is pure or partial, NaN otherwise.
+                The object linked in the linkage if the linkage is pure or partial, NaN otherwise.
 
     all_objects: `~pandas.DataFrame`
-        A per-truth summary.
+        A per-object summary.
 
         Columns:
             "object_id" : str
                 Truth
             "num_obs" : int
                 Number of observations in the observations dataframe
-                for each truth
+                for each object
             "findable" : int
                 1 if the object is findable, 0 if the object is not findable.
                 (NaN if no findable column is found in the all_objects dataframe)
@@ -124,25 +124,25 @@ def analyzeLinkages(
             "found" : int
                 Sum of found_pure and found_partial.
             "pure" : int
-                Number of pure linkages that observations belonging to this truth
+                Number of pure linkages that observations belonging to this object
                 are found in.
             "pure_complete" : int
-                Number of pure linkage that contain all of this truth's observations (this number is
+                Number of pure linkage that contain all of this object's observations (this number is
                 a subset of the the number of pure linkages).
             "partial" : int
                 Number of partial linkages.
             "partial_contaminant" : int
                 Number of partial linkages that are contaminated by observations belonging to
-                this truth.
+                this object.
             "mixed" : int
-                Number of mixed linkages that observations belonging to this truth are
+                Number of mixed linkages that observations belonging to this object are
                 found in.
             "obs_in_pure" : int
                 Total number of observations (not-unique) that are contained in pure linkages.
             "obs_in_partial" : int
                 Total number of observations (not-unique) that are contained in partial linkages.
             "obs_in_partial_contaminant" : int
-                Total number of observations (not-unique) that contaminate other truth's partial
+                Total number of observations (not-unique) that contaminate other object's partial
                 linkages.
             "obs_in_mixed" : int
                 Total number of observations (not-unique) that are contained in mixed linkages.
@@ -218,10 +218,11 @@ def analyzeLinkages(
 
     Raises
     ------
-    TypeError : If the truth column in observations does not have type "Object",
+    TypeError : If the object ID column in observations does not have type "Object",
         or if the obs_id columns in observations and linkage_members do not have the same type,
         or if the linkage_id columns in all_linkages (if passed) and linkage_members do not have the same
-        type, or if the truth columns in all_objects (if passed) and observations do not have the same type.
+        type, or if the object ID columns in all_objects (if passed)
+        and observations do not have the same type.
     """
     # Raise error if there are no observations
     if len(observations) == 0:
@@ -242,10 +243,10 @@ def analyzeLinkages(
         )
         all_objects["object_id"] = all_objects["object_id"].astype(str)
 
-        num_obs_per_truth = observations["object_id"].value_counts()
+        num_obs_per_object = observations["object_id"].value_counts()
         all_objects.loc[
-            all_objects["object_id"].isin(num_obs_per_truth.index.values), "num_obs"
-        ] = num_obs_per_truth.values
+            all_objects["object_id"].isin(num_obs_per_object.index.values), "num_obs"
+        ] = num_obs_per_object.values
 
         all_objects.sort_values(
             by=["num_obs", "object_id"], ascending=[False, True], inplace=True, ignore_index=True
@@ -308,14 +309,14 @@ def analyzeLinkages(
     summary: dict = {c: [] for c in summary_cols}
 
     if len(linkage_members) > 0:
-        # Grab only observation IDs and truth from observations
+        # Grab only observation IDs and object IDs from observations
         all_linkages = observations[["obs_id", "object_id"]].copy()
 
-        # Merge truth from observations with linkage_members on observation IDs
+        # Merge object ID from observations with linkage_members on observation IDs
         all_linkages = all_linkages.merge(linkage_members[["linkage_id", "obs_id"]], on="obs_id")
 
         # Group the data frame of objects, linkage_ids and
-        # observation IDs by truth and linkage ID
+        # observation IDs by object ID and linkage ID
         # then count the number of occurences
         all_linkages = all_linkages.groupby(by=["object_id", "linkage_id"]).count().reset_index()
         all_linkages.rename(columns={"obs_id": "num_obs"}, inplace=True)
@@ -361,8 +362,8 @@ def analyzeLinkages(
             suffixes=("", "_"),
         )
 
-        # For each truth calculate the percent of observations
-        # in a linkage that belong to that truth
+        # For each object calculate the percent of observations
+        # in a linkage that belong to that object
         all_linkages["percentage_in_linkage"] = (
             100.0 * all_linkages["num_obs"] / all_linkages["num_obs_in_linkage"]
         )
@@ -386,10 +387,10 @@ def analyzeLinkages(
         all_linkages.loc[:, "partial_contaminant"] = 0
         all_linkages.loc[:, "mixed"] = 0
 
-        # Pure linkages: any linkage where each observation belongs to the same truth
+        # Pure linkages: any linkage where each observation belongs to the same object
         all_linkages.loc[(all_linkages["num_obs"] == all_linkages["num_obs_in_linkage"]), "pure"] = 1
 
-        # Complete pure linkages: any linkage where all observations of a truth are linked
+        # Complete pure linkages: any linkage where all observations of a object are linked
         all_linkages.loc[
             (all_linkages["num_obs"] == all_linkages["num_obs_in_observations"])
             & (all_linkages["pure"] == 1),
@@ -450,7 +451,7 @@ def analyzeLinkages(
             "found",
         ] = 1
 
-        # Calculate number of observations in pure linkages for each truth
+        # Calculate number of observations in pure linkages for each object
         pure_obs = (
             all_linkages[all_linkages["pure"] == 1]
             .groupby(by="object_id")["num_obs"]
@@ -459,7 +460,7 @@ def analyzeLinkages(
         )
         pure_obs.reset_index(inplace=True)
 
-        # Calculate number of observations in pure complete linkages for each truth
+        # Calculate number of observations in pure complete linkages for each object
         pure_complete_obs = (
             all_linkages[all_linkages["pure_complete"] == 1]
             .groupby(by="object_id")["num_obs"]
@@ -468,7 +469,7 @@ def analyzeLinkages(
         )
         pure_complete_obs.reset_index(inplace=True)
 
-        # Calculate number of observations in partial linkages for each truth
+        # Calculate number of observations in partial linkages for each object
         partial_obs = (
             all_linkages[all_linkages["partial"] == 1]
             .groupby(by="object_id")["num_obs"]
@@ -477,7 +478,7 @@ def analyzeLinkages(
         )
         partial_obs.reset_index(inplace=True)
 
-        # Calculate number of observations in partial linkages for each truth
+        # Calculate number of observations in partial linkages for each object
         partial_contaminant_obs = (
             all_linkages[(all_linkages["partial_contaminant"] == 1)]
             .groupby(by="object_id")["num_obs"]
@@ -486,7 +487,7 @@ def analyzeLinkages(
         )
         partial_contaminant_obs.reset_index(inplace=True)
 
-        # Calculate number of observations in mixed linkages for each truth
+        # Calculate number of observations in mixed linkages for each object
         mixed_obs = (
             all_linkages[all_linkages["mixed"] == 1]
             .groupby(by="object_id")["num_obs"]
@@ -582,12 +583,12 @@ def analyzeLinkages(
     all_objects[all_objects_int_cols] = all_objects[all_objects_int_cols].fillna(0)
     all_objects[all_objects_int_cols] = all_objects[all_objects_int_cols].astype(int)
 
-    class_list, truths_list = _classHandler(classes, observations)
+    class_list, objects_list = _classHandler(classes, observations)
 
     # Loop through the classes and summarize the results
-    for c, v in zip(class_list, truths_list):
+    for c, v in zip(class_list, objects_list):
         # Create masks for the class of objects
-        all_truths_class = all_objects[all_objects["object_id"].isin(v)]
+        all_objects_class = all_objects[all_objects["object_id"].isin(v)]
         all_linkages_class = all_linkages[all_linkages["object_id"].isin(v)]
         observations_class = observations[observations["object_id"].isin(v)]
 
@@ -597,17 +598,17 @@ def analyzeLinkages(
         summary["num_obs"].append(len(observations_class))
 
         # Number of objects found
-        found = len((all_truths_class[all_truths_class["found"] >= 1]))
+        found = len((all_objects_class[all_objects_class["found"] >= 1]))
         summary["found"].append(found)
 
         if findable_present:
             # Number of objects findable
-            findable = len(all_truths_class[all_truths_class["findable"] == 1])
+            findable = len(all_objects_class[all_objects_class["findable"] == 1])
             summary["findable"].append(findable)
 
             # Number of findable objects found
             findable_found = len(
-                all_truths_class[(all_truths_class["findable"] == 1) & (all_truths_class["found"] >= 1)]
+                all_objects_class[(all_objects_class["findable"] == 1) & (all_objects_class["found"] >= 1)]
             )
             summary["findable_found"].append(findable_found)
 
@@ -620,19 +621,19 @@ def analyzeLinkages(
 
             # Number of findable objects missed
             findable_missed = len(
-                all_truths_class[(all_truths_class["findable"] == 1) & (all_truths_class["found"] == 0)]
+                all_objects_class[(all_objects_class["findable"] == 1) & (all_objects_class["found"] == 0)]
             )
             summary["findable_missed"].append(findable_missed)
 
             # Number of not findable objects found
             not_findable_found = len(
-                all_truths_class[(all_truths_class["findable"] == 0) & (all_truths_class["found"] >= 1)]
+                all_objects_class[(all_objects_class["findable"] == 0) & (all_objects_class["found"] >= 1)]
             )
             summary["not_findable_found"].append(not_findable_found)
 
             # Number of not findable objects missed
             not_findable_missed = len(
-                all_truths_class[(all_truths_class["findable"] == 0) & (all_truths_class["found"] == 0)]
+                all_objects_class[(all_objects_class["findable"] == 0) & (all_objects_class["found"] == 0)]
             )
             summary["not_findable_missed"].append(not_findable_missed)
 
@@ -680,23 +681,23 @@ def analyzeLinkages(
             "mixed",
         ]:
             summary["obs_in_{}_linkages".format(linkage_type)].append(
-                all_truths_class["obs_in_{}".format(linkage_type)].sum()
+                all_objects_class["obs_in_{}".format(linkage_type)].sum()
             )
 
         summary["unique_in_pure_and_partial_linkages"].append(
-            all_truths_class[(all_truths_class["pure"] >= 1) & (all_truths_class["partial"] >= 1)][
+            all_objects_class[(all_objects_class["pure"] >= 1) & (all_objects_class["partial"] >= 1)][
                 "object_id"
             ].nunique()
         )
 
         summary["unique_in_partial_linkages_only"].append(
-            all_truths_class[(all_truths_class["pure"] == 0) & (all_truths_class["partial"] >= 1)][
+            all_objects_class[(all_objects_class["pure"] == 0) & (all_objects_class["partial"] >= 1)][
                 "object_id"
             ].nunique()
         )
 
         summary["unique_in_pure_linkages_only"].append(
-            all_truths_class[(all_truths_class["pure"] >= 1) & (all_truths_class["partial"] == 0)][
+            all_objects_class[(all_objects_class["pure"] >= 1) & (all_objects_class["partial"] == 0)][
                 "object_id"
             ].nunique()
         )

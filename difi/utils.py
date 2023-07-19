@@ -93,7 +93,7 @@ def _classHandler(classes: Union[str, dict, None], dataframe: pd.DataFrame):
     Tests that the `classes` keyword argument is defined correctly.
     `classes` should one of the following:
         str : Name of the column in the dataframe which identifies
-            the class of each truth.
+            the class of each object.
         dict : A dictionary with class names as keys and a list of unique
             objects belonging to each class as values.
         None : If there are no classes of objects.
@@ -158,7 +158,7 @@ def _classHandler(classes: Union[str, dict, None], dataframe: pd.DataFrame):
         err = (
             "Classes should be one of:\n"
             "  str : Name of the column in the dataframe which\n"
-            "        identifies the class of each truth.\n"
+            "        identifies the class of each object.\n"
             "  dict : A dictionary with class names as keys\n"
             "        and a list of unique objects belonging to each class\n"
             "        as values.\n"
@@ -226,7 +226,7 @@ def _firstFindableNightMinObs(
     observations : `DataFrame`
         Observations table
     min_obs : int, optional
-        The minimum number of observations required for a truth to be
+        The minimum number of observations required for an object to be
         considered findable.
 
     Returns
@@ -290,13 +290,13 @@ def calcFirstFindableNight(
     findable_obs: pd.DataFrame, observations: pd.DataFrame, metric: str = "min_obs", **metric_kwargs
 ) -> pd.Series:
     """
-    Calculate the first night on which a truth becomes findable based
+    Calculate the first night on which an object becomes findable based
     on the `findable_obs` table returned by `analyzeObservations`.
 
     Parameters
     ----------
     observations : `~pandas.DataFrame`
-        Pandas DataFrame with at least two columns: observation IDs and the truth values
+        Pandas DataFrame with at least two columns: observation IDs and the object IDs
         (the object to which the observation belongs to).
     metric : {'min_obs', 'nightly_linkages'}
         The desired findability metric that calculates which objects are actually findable.
@@ -316,11 +316,7 @@ def calcFirstFindableNight(
     -------
     first_findable_night : `pandas Series`
         New column for `findable_obs` representing the first night
-        on which a truth becomes findable
-
-    Raises
-    ------
-    TypeError : If the truth column in observations does not have type "Object"
+        on which an object becomes findable
     """
     if metric == "min_obs":
         first_findable_night = findable_obs["obs_ids"].apply(

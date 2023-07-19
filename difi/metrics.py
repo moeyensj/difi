@@ -1271,7 +1271,6 @@ class MinObsMetric(FindabilityMetric):
             If discovery_opportunities is False, then the list will contain a single
             list of all valid observation IDs.
         """
-        # If the len of observations is 0 then the object is not findable
         assert len(np.unique(observations["object_id"])) == 1
 
         if windows is None:
