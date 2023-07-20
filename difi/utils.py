@@ -1,5 +1,5 @@
 import warnings
-from typing import Union
+from typing import List, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -16,7 +16,7 @@ __all__ = [
 ]
 
 
-def _checkColumnTypes(df: pd.DataFrame, cols: list):
+def _checkColumnTypes(df: pd.DataFrame, cols: List[str]):
     """
     Checks that each dataframe column listed in cols has Pandas dtype "Object".
 
@@ -51,7 +51,7 @@ def _checkColumnTypes(df: pd.DataFrame, cols: list):
     return
 
 
-def _checkColumnTypesEqual(df1: pd.DataFrame, df2: pd.DataFrame, cols: list):
+def _checkColumnTypesEqual(df1: pd.DataFrame, df2: pd.DataFrame, cols: List[str]):
     """
     Checks that each column listed in cols have the same Pandas dtype in df1 and df2.
 
@@ -88,7 +88,9 @@ def _checkColumnTypesEqual(df1: pd.DataFrame, df2: pd.DataFrame, cols: list):
     return
 
 
-def _classHandler(classes: Union[str, dict, None], dataframe: pd.DataFrame):
+def _classHandler(
+    classes: Union[str, dict, None], dataframe: pd.DataFrame
+) -> Tuple[List[str], List[List[str]]]:
     """
     Tests that the `classes` keyword argument is defined correctly.
     `classes` should one of the following:
@@ -212,11 +214,12 @@ def _percentHandler(number: float, number_total: float) -> float:
 
 
 def _firstFindableNightMinObs(
-    obs_ids: list[str],
+    obs_ids: List[str],
     observations: pd.DataFrame,
     min_obs: int = 6,
 ) -> int:
-    """For a particular findable object, find the first night on which it
+    """
+    For a particular findable object, find the first night on which it
     becomes findable when requiring a minimum of `min_obs` observations.
 
     Parameters
@@ -238,12 +241,13 @@ def _firstFindableNightMinObs(
 
 
 def _firstFindableNightNightlyLinkages(
-    obs_ids: list[str],
+    obs_ids: List[str],
     observations: pd.DataFrame,
     min_linkage_nights: int = 3,
     detection_window: int = 15,
 ) -> int:
-    """For a particular findable object, find the first night on which it
+    """
+    For a particular findable object, find the first night on which it
     becomes findable when requiring a minimum of `min_linkage_nights`
     nights of linkages within a `detection_window` night range.
 
