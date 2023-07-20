@@ -9,13 +9,13 @@ source:
 
 requirements:
   host:
-    - python >=3.7.1
+    - python >=3.8
     - pip
     - setuptools >=45
     - wheel
     - setuptools_scm >=6.0
   run:
-    - python >=3.7.1
+    - python >=3.8
     - numba
     - numpy
     - pandas
