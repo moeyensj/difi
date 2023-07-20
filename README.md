@@ -1,7 +1,7 @@
 # difi
 Did I Find It?  
 
-[![Python 3.7+](https://img.shields.io/badge/Python-3.7%2B-blue)](https://img.shields.io/badge/Python-3.7%2B-blue)
+[![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-blue)](https://img.shields.io/badge/Python-3.8%2B-blue)
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 [![DOI](https://zenodo.org/badge/152989392.svg)](https://zenodo.org/badge/latestdoi/152989392)  
 [![docker - Build, Lint, and Test](https://github.com/moeyensj/difi/actions/workflows/docker-build-lint-test.yml/badge.svg)](https://github.com/moeyensj/difi/actions/workflows/docker-build-lint-test.yml)
