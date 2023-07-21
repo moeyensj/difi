@@ -1,5 +1,6 @@
 import hashlib
 import multiprocessing as mp
+import os
 import warnings
 from abc import ABC, abstractmethod
 from itertools import combinations, repeat
@@ -556,7 +557,10 @@ class FindabilityMetric(ABC):
         self._num_observations = observations_array.shape[0]
         self._itemsize = observations_array.itemsize
 
-        shared_mem = shared_memory.SharedMemory("DIFI_ARRAY", create=True, size=observations_array.nbytes)
+        self._shared_memory_name = f"DIFI_ARRAY_{os.getpid()}"
+        shared_mem = shared_memory.SharedMemory(
+            self._shared_memory_name, create=True, size=observations_array.nbytes
+        )
         shared_memory_array = np.ndarray(
             observations_array.shape, dtype=observations_array.dtype, buffer=shared_mem.buf
         )
@@ -569,9 +573,8 @@ class FindabilityMetric(ABC):
         shared_mem.close()
         return
 
-    @staticmethod
-    def _clear_shared_record_array():
-        shared_mem = shared_memory.SharedMemory("DIFI_ARRAY")
+    def _clear_shared_record_array(self):
+        shared_mem = shared_memory.SharedMemory(self._shared_memory_name)
         shared_mem.unlink()
 
     def _run_object_worker(
@@ -626,7 +629,7 @@ class FindabilityMetric(ABC):
             ]
 
         # Load the observations from shared memory
-        existing_shared_mem = shared_memory.SharedMemory(name="DIFI_ARRAY")
+        existing_shared_mem = shared_memory.SharedMemory(name=self._shared_memory_name)
         observations = np.ndarray(
             num_obs,
             dtype=self._dtypes,
@@ -832,7 +835,7 @@ class FindabilityMetric(ABC):
             ]
 
         # Read observations from shared memory array
-        existing_shared_mem = shared_memory.SharedMemory(name="DIFI_ARRAY")
+        existing_shared_mem = shared_memory.SharedMemory(name=self._shared_memory_name)
         observations = np.ndarray(
             num_obs,
             dtype=self._dtypes,
