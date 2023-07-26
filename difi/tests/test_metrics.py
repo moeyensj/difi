@@ -1,6 +1,7 @@
 import os
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from ..metrics import (
@@ -522,3 +523,14 @@ def test_FindabilityMetrics_shared_memory(test_observations):
     assert metric._shared_memory_name is None
     assert metric._num_observations == 0
     assert metric._dtypes is None
+
+
+def test_FindabilityMetrics_run_return_summary(test_observations):
+    # Check that the function returns the summary dataframe when desired
+    metric = MinObsMetric()
+
+    findable, window_summary = metric.run(test_observations, return_summary=True)
+    assert isinstance(window_summary, pd.DataFrame)
+
+    findable, window_summary = metric.run(test_observations, return_summary=False)
+    assert window_summary is None
