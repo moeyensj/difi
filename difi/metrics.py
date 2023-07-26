@@ -1,5 +1,6 @@
 import hashlib
 import multiprocessing as mp
+import os
 import warnings
 from abc import ABC, abstractmethod
 from itertools import combinations, repeat
@@ -556,7 +557,10 @@ class FindabilityMetric(ABC):
         self._num_observations = observations_array.shape[0]
         self._itemsize = observations_array.itemsize
 
-        shared_mem = shared_memory.SharedMemory("DIFI_ARRAY", create=True, size=observations_array.nbytes)
+        self._shared_memory_name = f"DIFI_ARRAY_{os.getpid()}"
+        shared_mem = shared_memory.SharedMemory(
+            self._shared_memory_name, create=True, size=observations_array.nbytes
+        )
         shared_memory_array = np.ndarray(
             observations_array.shape, dtype=observations_array.dtype, buffer=shared_mem.buf
         )
@@ -569,10 +573,19 @@ class FindabilityMetric(ABC):
         shared_mem.close()
         return
 
-    @staticmethod
-    def _clear_shared_record_array():
-        shared_mem = shared_memory.SharedMemory("DIFI_ARRAY")
+    def _clear_shared_record_array(self):
+        """
+        Clears the shared memory array for this instance of the metric.
+
+        Returns
+        -------
+        None
+        """
+        shared_mem = shared_memory.SharedMemory(self._shared_memory_name)
         shared_mem.unlink()
+        self._shared_memory_name = None
+        self._num_observations = 0
+        self._dtypes = None
 
     def _run_object_worker(
         self,
@@ -626,7 +639,7 @@ class FindabilityMetric(ABC):
             ]
 
         # Load the observations from shared memory
-        existing_shared_mem = shared_memory.SharedMemory(name="DIFI_ARRAY")
+        existing_shared_mem = shared_memory.SharedMemory(name=self._shared_memory_name)
         observations = np.ndarray(
             num_obs,
             dtype=self._dtypes,
@@ -689,6 +702,7 @@ class FindabilityMetric(ABC):
         discovery_probability: float = 1.0,
         ignore_after_discovery: bool = False,
         num_jobs: Optional[int] = 1,
+        clear_on_failure: bool = True,
     ) -> List[pd.DataFrame]:
         """
         Run the findability metric on the observations split by objects. For windows where there are many
@@ -718,6 +732,9 @@ class FindabilityMetric(ABC):
         num_jobs : int, optional
             The number of jobs to run in parallel. If 1, then run in serial. If None, then use the number of
             CPUs on the machine.
+        clear_on_failure : bool, optional
+            If a failure occurs and this is False, then the shared memory array will not be cleared.
+            If True, then the shared memory array will be cleared.
 
         Returns
         -------
@@ -738,39 +755,45 @@ class FindabilityMetric(ABC):
         # Split arrays by object
         split_by_object_slices = self._split_by_object(objects)
 
-        # Store the observations in a global variable so that the worker functions can access them
-        self._store_as_shared_record_array(objects, obs_ids, times, ra, dec, nights)
+        try:
+            # Store the observations in a global variable so that the worker functions can access them
+            self._store_as_shared_record_array(objects, obs_ids, times, ra, dec, nights)
 
-        findable_lists: List[List[Dict[str, Any]]] = []
-        if num_jobs is None or num_jobs > 1:
-            pool = mp.Pool(num_jobs)
-            findable_lists = pool.starmap(
-                self._run_object_worker,
-                zip(
-                    split_by_object_slices,
-                    repeat(windows),
-                    repeat(discovery_opportunities),
-                    repeat(discovery_probability),
-                    repeat(ignore_after_discovery),
-                ),
-            )
-
-            pool.close()
-            pool.join()
-
-        else:
-            for object_indices in split_by_object_slices:
-                findable_lists.append(
-                    self._run_object_worker(
-                        object_indices,
-                        windows,
-                        discovery_opportunities=discovery_opportunities,
-                        discovery_probability=discovery_probability,
-                        ignore_after_discovery=ignore_after_discovery,
-                    )
+            findable_lists: List[List[Dict[str, Any]]] = []
+            if num_jobs is None or num_jobs > 1:
+                pool = mp.Pool(num_jobs)
+                findable_lists = pool.starmap(
+                    self._run_object_worker,
+                    zip(
+                        split_by_object_slices,
+                        repeat(windows),
+                        repeat(discovery_opportunities),
+                        repeat(discovery_probability),
+                        repeat(ignore_after_discovery),
+                    ),
                 )
 
-        self._clear_shared_record_array()
+                pool.close()
+                pool.join()
+
+            else:
+                for object_indices in split_by_object_slices:
+                    findable_lists.append(
+                        self._run_object_worker(
+                            object_indices,
+                            windows,
+                            discovery_opportunities=discovery_opportunities,
+                            discovery_probability=discovery_probability,
+                            ignore_after_discovery=ignore_after_discovery,
+                        )
+                    )
+
+            self._clear_shared_record_array()
+
+        except Exception as e:
+            if clear_on_failure:
+                self._clear_shared_record_array()
+            raise e
 
         findable_flattened = [item for sublist in findable_lists for item in sublist]
 
@@ -832,7 +855,7 @@ class FindabilityMetric(ABC):
             ]
 
         # Read observations from shared memory array
-        existing_shared_mem = shared_memory.SharedMemory(name="DIFI_ARRAY")
+        existing_shared_mem = shared_memory.SharedMemory(name=self._shared_memory_name)
         observations = np.ndarray(
             num_obs,
             dtype=self._dtypes,
@@ -897,6 +920,7 @@ class FindabilityMetric(ABC):
         discovery_opportunities: bool = False,
         discovery_probability: float = 1.0,
         num_jobs: Optional[int] = 1,
+        clear_on_failure: bool = True,
     ) -> List[pd.DataFrame]:
         """
         Run the findability metric on the observations split by windows where each window will
@@ -922,6 +946,9 @@ class FindabilityMetric(ABC):
         num_jobs : int, optional
             The number of jobs to run in parallel. If 1, then run in serial. If None, then use the number of
             CPUs on the machine.
+        clear_on_failure : bool, optional
+            If a failure occurs and this is False, then the shared memory array will not be cleared.
+            If True, then the shared memory array will be cleared.
 
         Returns
         -------
@@ -939,39 +966,45 @@ class FindabilityMetric(ABC):
             observations["night"].values,
         )
 
-        # Store the observations in a global variable so that the worker functions can access them
-        self._store_as_shared_record_array(objects, obs_ids, times, ra, dec, nights)
+        try:
+            # Store the observations in a global variable so that the worker functions can access them
+            self._store_as_shared_record_array(objects, obs_ids, times, ra, dec, nights)
 
-        # Find indices that split the observations into windows
-        split_by_window_slices = self._split_by_window(windows, nights)
+            # Find indices that split the observations into windows
+            split_by_window_slices = self._split_by_window(windows, nights)
 
-        findable_lists: List[List[Dict[str, Any]]] = []
-        if num_jobs is None or num_jobs > 1:
-            pool = mp.Pool(num_jobs)
-            findable_lists = pool.starmap(
-                self._run_window_worker,
-                zip(
-                    split_by_window_slices,
-                    range(len(windows)),
-                    repeat(discovery_opportunities),
-                    repeat(discovery_probability),
-                ),
-            )
-            pool.close()
-            pool.join()
-
-        else:
-            for i, window_slice in enumerate(split_by_window_slices):
-                findable_lists.append(
-                    self._run_window_worker(
-                        window_slice,
-                        i,
-                        discovery_opportunities=discovery_opportunities,
-                        discovery_probability=discovery_probability,
-                    )
+            findable_lists: List[List[Dict[str, Any]]] = []
+            if num_jobs is None or num_jobs > 1:
+                pool = mp.Pool(num_jobs)
+                findable_lists = pool.starmap(
+                    self._run_window_worker,
+                    zip(
+                        split_by_window_slices,
+                        range(len(windows)),
+                        repeat(discovery_opportunities),
+                        repeat(discovery_probability),
+                    ),
                 )
+                pool.close()
+                pool.join()
 
-        self._clear_shared_record_array()
+            else:
+                for i, window_slice in enumerate(split_by_window_slices):
+                    findable_lists.append(
+                        self._run_window_worker(
+                            window_slice,
+                            i,
+                            discovery_opportunities=discovery_opportunities,
+                            discovery_probability=discovery_probability,
+                        )
+                    )
+
+            self._clear_shared_record_array()
+
+        except Exception as e:
+            if clear_on_failure:
+                self._clear_shared_record_array()
+            raise e
 
         findable_flattened = [item for sublist in findable_lists for item in sublist]
 
@@ -995,6 +1028,7 @@ class FindabilityMetric(ABC):
         by_object: bool = False,
         ignore_after_discovery: bool = False,
         num_jobs: Optional[int] = 1,
+        clear_on_failure: bool = True,
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Run the findability metric on the observations.
@@ -1036,6 +1070,9 @@ class FindabilityMetric(ABC):
         num_jobs : int, optional
             The number of jobs to run in parallel. If 1, then run in serial. If None, then use the number of
             CPUs on the machine.
+        clear_on_failure : bool, optional
+            If a failure occurs and this is False, then the shared memory array will not be cleared.
+            If True, then the shared memory array will be cleared.
 
         Returns
         -------
@@ -1067,6 +1104,7 @@ class FindabilityMetric(ABC):
                 discovery_probability=discovery_probability,
                 ignore_after_discovery=ignore_after_discovery,
                 num_jobs=num_jobs,
+                clear_on_failure=clear_on_failure,
             )
         else:
             findable = self.run_by_window(
@@ -1075,6 +1113,7 @@ class FindabilityMetric(ABC):
                 discovery_opportunities=discovery_opportunities,
                 discovery_probability=discovery_probability,
                 num_jobs=num_jobs,
+                clear_on_failure=clear_on_failure,
             )
 
         window_summary = self._create_window_summary(observations, windows, findable)
