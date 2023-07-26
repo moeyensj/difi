@@ -1028,8 +1028,9 @@ class FindabilityMetric(ABC):
         by_object: bool = False,
         ignore_after_discovery: bool = False,
         num_jobs: Optional[int] = 1,
+        return_summary: bool = True,
         clear_on_failure: bool = True,
-    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    ) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
         """
         Run the findability metric on the observations.
 
@@ -1070,6 +1071,9 @@ class FindabilityMetric(ABC):
         num_jobs : int, optional
             The number of jobs to run in parallel. If 1, then run in serial. If None, then use the number of
             CPUs on the machine.
+        return_summary : bool, optional
+            If True, then return a summary of the number of observations, number of findable
+            objects and the start and end night of each window.
         clear_on_failure : bool, optional
             If a failure occurs and this is False, then the shared memory array will not be cleared.
             If True, then the shared memory array will be cleared.
@@ -1116,7 +1120,10 @@ class FindabilityMetric(ABC):
                 clear_on_failure=clear_on_failure,
             )
 
-        window_summary = self._create_window_summary(observations, windows, findable)
+        if return_summary:
+            window_summary = self._create_window_summary(observations, windows, findable)
+        else:
+            window_summary = None
         return findable, window_summary
 
 
