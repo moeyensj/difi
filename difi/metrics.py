@@ -574,8 +574,18 @@ class FindabilityMetric(ABC):
         return
 
     def _clear_shared_record_array(self):
+        """
+        Clears the shared memory array for this instance of the metric.
+
+        Returns
+        -------
+        None
+        """
         shared_mem = shared_memory.SharedMemory(self._shared_memory_name)
         shared_mem.unlink()
+        self._shared_memory_name = None
+        self._num_observations = 0
+        self._dtypes = None
 
     def _run_object_worker(
         self,

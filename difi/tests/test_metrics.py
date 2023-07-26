@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import pytest
 
@@ -486,3 +488,37 @@ def test_calcFindableMinObs_assertion(test_observations):
     with pytest.raises(AssertionError):
         metric = MinObsMetric()
         metric.determine_object_findable(test_observations)
+
+
+def test_FindabilityMetrics_shared_memory(test_observations):
+    # Check that the function stores the observations in shared memory under
+    # the correct name
+    metric = MinObsMetric()
+
+    # Extract the data from the test observations
+    object_ids = test_observations["object_id"].values
+    obs_ids = test_observations["obs_id"].values
+    time = test_observations["time"].values
+    ra = test_observations["ra"].values
+    dec = test_observations["dec"].values
+    night = test_observations["night"].values
+
+    # Store the observations in shared memory
+    metric._store_as_shared_record_array(object_ids, obs_ids, time, ra, dec, night)
+
+    # Check that the shared memory array has the correct name
+    assert metric._shared_memory_name == f"DIFI_ARRAY_{os.getpid()}"
+    assert metric._num_observations == len(test_observations)
+    assert metric._dtypes == [
+        ("object_id", object_ids.dtype),
+        ("obs_id", obs_ids.dtype),
+        ("time", np.float64),
+        ("ra", np.float64),
+        ("dec", np.float64),
+        ("night", np.int64),
+    ]
+
+    metric._clear_shared_record_array()
+    assert metric._shared_memory_name is None
+    assert metric._num_observations == 0
+    assert metric._dtypes is None
