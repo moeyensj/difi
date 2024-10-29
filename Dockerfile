@@ -1,25 +1,16 @@
-FROM ubuntu:latest
+FROM python:3.11
+
+# Set shell to bash
+SHELL ["/bin/bash", "-c"]
+CMD ["/bin/bash"]
 
 # Update system dependencies
 RUN apt-get update \
-	&& apt-get upgrade -y
-
-# Install system dependencies
-RUN apt-get install -y git python3 python3-pip python3-dev
-
-# Upgrade pip to the latest version and install pre-commit
-RUN pip install --upgrade pip pre-commit
-
-# Install pre-commit hooks (before difi is installed to cache this step)
-# Remove the .git directory after pre-commit is installed as difi's .git
-# will be added to the container
-RUN mkdir /code/
-COPY .pre-commit-config.yaml /code/
-WORKDIR /code/
-RUN git init . \
-	&& pre-commit install-hooks \
-	&& rm -rf .git
+    && apt-get upgrade -y \
+    && apt-get install -y pip git 
 
 # Install difi
+RUN mkdir -p /code/
+WORKDIR /code/
 ADD . /code/
-RUN pip install -e .[tests]
+RUN pip install -e .[dev]

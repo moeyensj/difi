@@ -680,11 +680,11 @@ class FindabilityMetric(ABC):
                 }
             else:
                 findable = {
-                    "window_id": np.NaN,
-                    "object_id": np.NaN,
-                    "findable": np.NaN,
-                    "discovery_opportunities": np.NaN,
-                    "obs_ids": np.NaN,
+                    "window_id": np.nan,
+                    "object_id": np.nan,
+                    "findable": np.nan,
+                    "discovery_opportunities": np.nan,
+                    "obs_ids": np.nan,
                 }
 
             findable_dicts.append(findable)

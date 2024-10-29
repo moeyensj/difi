@@ -287,7 +287,7 @@ def test_linkages(test_observations):
         all_linkages_expected["pure_complete"].append(False)
         all_linkages_expected["partial"].append(False)
         all_linkages_expected["mixed"].append(True)
-        all_linkages_expected["contamination_percentage"].append(np.NaN)
+        all_linkages_expected["contamination_percentage"].append(np.nan)
         all_linkages_expected["found_pure"].append(False)
         all_linkages_expected["found_partial"].append(False)
         all_linkages_expected["found"].append(False)

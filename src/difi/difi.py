@@ -238,15 +238,15 @@ def analyzeLinkages(
                 "object_id": objects.index.values,
                 # "class" : ["None" for i in range(len(objects))],
                 "num_obs": np.zeros(len(objects), dtype=int),
-                "findable": [np.NaN for i in range(len(objects))],
+                "findable": [np.nan for i in range(len(objects))],
             }
         )
         all_objects["object_id"] = all_objects["object_id"].astype(str)
 
         num_obs_per_object = observations["object_id"].value_counts()
-        all_objects.loc[
-            all_objects["object_id"].isin(num_obs_per_object.index.values), "num_obs"
-        ] = num_obs_per_object.values
+        all_objects.loc[all_objects["object_id"].isin(num_obs_per_object.index.values), "num_obs"] = (
+            num_obs_per_object.values
+        )
 
         all_objects.sort_values(
             by=["num_obs", "object_id"], ascending=[False, True], inplace=True, ignore_index=True
@@ -262,7 +262,7 @@ def analyzeLinkages(
                 "No findable column found in all_objects. Completeness\n" "statistics can not be calculated."
             )
             warnings.warn(warn, UserWarning)
-            all_objects.loc[:, "findable"] = np.NaN
+            all_objects.loc[:, "findable"] = np.nan
             findable_present = False
         _checkColumnTypesEqual(all_objects, observations, ["object_id"])
 
@@ -614,7 +614,7 @@ def analyzeLinkages(
 
             # Calculate completeness
             if findable == 0:
-                completeness = np.NaN
+                completeness = np.nan
             else:
                 completeness = 100.0 * findable_found / findable
             summary["completeness"].append(completeness)
@@ -638,12 +638,12 @@ def analyzeLinkages(
             summary["not_findable_missed"].append(not_findable_missed)
 
         else:
-            summary["completeness"].append(np.NaN)
-            summary["findable"].append(np.NaN)
-            summary["findable_found"].append(np.NaN)
-            summary["findable_missed"].append(np.NaN)
-            summary["not_findable_found"].append(np.NaN)
-            summary["not_findable_missed"].append(np.NaN)
+            summary["completeness"].append(np.nan)
+            summary["findable"].append(np.nan)
+            summary["findable_found"].append(np.nan)
+            summary["findable_missed"].append(np.nan)
+            summary["not_findable_found"].append(np.nan)
+            summary["not_findable_missed"].append(np.nan)
 
         # Calculate number of linkage types that contain observations of this class
         for linkage_type in [
@@ -702,8 +702,8 @@ def analyzeLinkages(
             ].nunique()
         )
 
-    all_linkages.loc[all_linkages["mixed"] == 1, "object_id"] = np.NaN
-    all_linkages.loc[all_linkages["mixed"] == 1, "contamination_percentage_in_linkages"] = np.NaN
+    all_linkages.loc[all_linkages["mixed"] == 1, "object_id"] = np.nan
+    all_linkages.loc[all_linkages["mixed"] == 1, "contamination_percentage_in_linkages"] = np.nan
     all_linkages["object_id"] = all_linkages["object_id"].astype(str)
 
     # Drop all duplicate linkage_id entries which has the effect of

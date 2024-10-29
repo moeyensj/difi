@@ -1,13 +1,6 @@
-[build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.0"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools_scm]
-write_to = "difi/version.py"
-write_to_template = "__version__ = '{version}'"
-
 [project]
 name = "difi"
+dynamic = ["version"]
 authors = [
     {name = "Joachim Moeyens", email = "moeyensj@uw.edu"},
 ]
@@ -17,6 +10,19 @@ maintainers = [
 description = "Did I Find It?"
 readme = "README.md"
 license = {file = "LICENSE.md"}
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Topic :: Scientific/Engineering :: Physics",
+]
 keywords = [
     "astronomy",
     "astrophysics",
@@ -26,53 +32,71 @@ keywords = [
     "comets",
     "solar system"
 ]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: BSD License",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Topic :: Scientific/Engineering :: Astronomy",
-    "Topic :: Scientific/Engineering :: Physics",
-]
-requires-python = ">=3.8"
+
 dependencies = [
     "numba",
     "numpy",
     "pandas",
 ]
-dynamic = ["version"]
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+[tool.pdm.build]
+includes = ["src/difi/"]
+
+[tool.pdm.version]
+source = "scm"
+write_to = "difi/_version.py"
+write_template = "__version__ = '{}'"
+
+[tool.pdm.scripts]
+check = { composite = ["lint", "typecheck", "test"] }
+format = { composite = ["black ./src/difi", "isort ./src/difi"] }
+lint = { composite = [
+  "ruff check ./src/difi",
+  "black --check ./src/difi",
+  "isort --check-only ./src/difi",
+] }
+fix = "ruff ./src/difi --fix"
+typecheck = "mypy --strict ./src/difi"
+
+test = "pytest --benchmark-disable {args}"
+doctest = "pytest --doctest-plus --doctest-only"
+benchmark = "pytest --benchmark-only"
+coverage = "pytest --cov=difi --cov-report=xml"
 
 [project.urls]
-homepage = "https://github.com/moeyensj/difi"
-repository = "https://github.com/moeyensj/difi"
+"Documentation" = "https://github.com/moeyensj/difi#README.md"
+"Issues" = "https://github.com/moeyensj/difi/issues"
+"Source" = "https://github.com/moeyensj/difi"
 
 [project.optional-dependencies]
-tests = [
-    "pytest",
-    "pytest-cov",
-    "pytest-benchmark",
-    "pre-commit",
+dev = [
+  "black",
+  "ipython",
+  "isort",
+  "mypy",
+  "pdm",
+  "pytest-benchmark",
+  "pytest-cov",
+  "pytest-doctestplus",
+  "pytest-mock",
+  "pytest",
+  "ruff",
 ]
-
-[tool.pytest.ini_options]
-addopts = ["--benchmark-skip"]
-
-[tool.setuptools]
-include-package-data = true
-
-[tool.setuptools.packages.find]
-include = ['difi*']
-
-[tool.setuptools.package-data]
-difi = ["tests/*.txt"]
 
 [tool.black]
 line-length = 110
 
 [tool.isort]
 profile = "black"
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+lint.ignore = []
+exclude = ["build"]
+
+[tool.mypy]
+ignore_missing_imports = true

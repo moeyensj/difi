@@ -1,4 +1,4 @@
-include difi/*.py
+include src/*.py
 include *.md
 include *.toml
 exclude Dockerfile
