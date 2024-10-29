@@ -192,7 +192,7 @@ def _classHandler(
 def _percentHandler(number: float, number_total: float) -> float:
     """
     Returns a percentage value of number / number_total. Returns
-    np.NaN is number total is zero.
+    np.nan is number total is zero.
 
     Parameters
     ----------
@@ -206,7 +206,7 @@ def _percentHandler(number: float, number_total: float) -> float:
     percent : float
     """
     if number_total == 0:
-        percent_total = np.NaN
+        percent_total = np.nan
     else:
         percent_total = 100.0 * number / number_total
 

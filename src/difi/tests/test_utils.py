@@ -79,7 +79,7 @@ def test__checkColumnTypesEqual():
 
 
 def test__percentHandler():
-    # If the denominator is 0, then _percentHandler should return np.NaN
+    # If the denominator is 0, then _percentHandler should return np.nan
     number = np.random.choice(np.arange(0, 10000))
     total_number = 0
     assert np.isnan(_percentHandler(number, total_number))
@@ -228,7 +228,7 @@ def test__classHandler_warnings():
     # Remove the orange class from classes dict
     classes_dict_ = copy.deepcopy(classes_dict)
     classes_dict_.pop("orange")
-    observations.loc[observations["class"].isin(["orange"]), "class"] = np.NaN
+    observations.loc[observations["class"].isin(["orange"]), "class"] = np.nan
 
     # Test for UserWarning when not all truths have an assigned class
     with pytest.warns(UserWarning):
