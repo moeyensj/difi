@@ -244,9 +244,9 @@ def analyzeLinkages(
         all_objects["object_id"] = all_objects["object_id"].astype(str)
 
         num_obs_per_object = observations["object_id"].value_counts()
-        all_objects.loc[
-            all_objects["object_id"].isin(num_obs_per_object.index.values), "num_obs"
-        ] = num_obs_per_object.values
+        all_objects.loc[all_objects["object_id"].isin(num_obs_per_object.index.values), "num_obs"] = (
+            num_obs_per_object.values
+        )
 
         all_objects.sort_values(
             by=["num_obs", "object_id"], ascending=[False, True], inplace=True, ignore_index=True

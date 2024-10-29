@@ -127,7 +127,7 @@ def _classHandler(
         object_ids_list = [dataframe["object_id"].unique()]
         unique_objects = [object_ids_list[0]]
 
-    elif type(classes) == str:
+    elif isinstance(classes, str):
         if classes not in dataframe.columns:
             err = "Could not find class column ({}) in observations."
             raise ValueError(err.format(classes))
@@ -140,7 +140,7 @@ def _classHandler(
 
         object_ids_list[0] = dataframe["object_id"].unique()
 
-    elif type(classes) == dict:
+    elif isinstance(classes, dict):
         for c, t in classes.items():
             if len(np.unique(t)) != len(t):
                 err = "Truths for class {} are not unique."

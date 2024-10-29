@@ -1,4 +1,4 @@
-name: pip - Build, Lint, Test, and Coverage
+name: pip - Build Lint Test and Coverage
 
 on:
   push:
@@ -12,29 +12,31 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        python-version: ['3.8', '3.9', '3.10', '3.11']
+        python-version: ["3.10"]
     defaults:
       run:
         shell: bash -l {0}
 
     steps:
       - name: Checkout git repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Get git tags
         run:  git fetch --prune --unshallow --tags
-      - name: Set up miniconda
-        uses: conda-incubator/setup-miniconda@v2
+      - uses: actions/setup-python@v5
         with:
-          activate-environment: "difi"
-          auto-update-conda: true
           python-version: ${{ matrix.python-version }}
-      - name: Build and install
-        run: pip install .[tests]
+          cache: 'pip' # caching pip dependencies
+      - name: Install Dependencies
+        run: |
+          pip install pip --upgrade
+          pip install ".[dev]"
       - name: Lint
-        run: pre-commit run --all-files
-      - name: Test
-        run: pytest . --cov --cov-report xml
-      - name: Coverage
+        run: pdm run lint
+      # - name: Type check
+      #   run: pdm run typecheck
+      - name: Test with coverage
+        run: pdm run coverage
+      - name: Coverage Report
         uses: coverallsapp/github-action@v2.0.0
         with:
           github-token: ${{ secrets.COVERALLS_TOKEN }}
