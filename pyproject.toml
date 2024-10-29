@@ -37,6 +37,8 @@ dependencies = [
     "numba",
     "numpy",
     "pandas",
+    "pyarrow",
+    "quivr==0.7.4a2",
 ]
 
 [build-system]
