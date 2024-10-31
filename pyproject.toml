@@ -34,11 +34,12 @@ keywords = [
 ]
 
 dependencies = [
+    "adam_core",
     "numba",
     "numpy",
     "pandas",
     "pyarrow",
-    "quivr==0.7.4a2",
+    "quivr",
 ]
 
 [build-system]
