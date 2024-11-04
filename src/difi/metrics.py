@@ -1,19 +1,30 @@
 import hashlib
 import multiprocessing as mp
-import os
 import warnings
 from abc import ABC, abstractmethod
-from itertools import combinations, repeat
-from multiprocessing import shared_memory
-from typing import Any, Dict, List, Optional, Tuple, TypeVar
+from itertools import combinations
+from typing import Dict, List, Optional, Tuple, TypeVar
 
 import numpy as np
 import pandas as pd
+import quivr as qv
+import ray
+from adam_core.ray_cluster import initialize_use_ray
 from numba import njit
+
+from .observations import Observations
+from .partitions import Partitions
 
 __all__ = ["FindabilityMetric", "NightlyLinkagesMetric", "MinObsMetric"]
 
 Metrics = TypeVar("Metrics", bound="FindabilityMetric")
+
+
+class FindableObservations(qv.Table):
+    partition_id = qv.LargeStringColumn()
+    object_id = qv.LargeStringColumn()
+    discovery_opportunities = qv.Int64Column()
+    obs_ids = qv.ListColumn(qv.ListColumn(qv.LargeStringColumn()), nullable=True)
 
 
 @njit(cache=True)
@@ -221,501 +232,222 @@ def apply_discovery_probability(
     return obs_ids_unique, discovery_obs_ids
 
 
+def partition_worker(
+    metric: "FindabilityMetric",
+    partition: Partitions,
+    observations: Observations,
+    discovery_opportunities: bool = False,
+    discovery_probability: float = 1.0,
+) -> FindableObservations:
+    """
+    Run the metric on a single window of observations.
+
+    Parameters
+    ----------
+    metric : FindabilityMetric
+        Findability metric that defines how an object is considered findable.
+    partition : Partitions
+        Partition defining the start and end night (both inclusive) of the observations to include.
+    observations : Observations
+        Observations to run the metric on.
+    discovery_opportunities : bool, optional
+        If True, then return the combinations of observations that made each object findable.
+        Note, that if True, this can greatly increase the memory consumption.
+        If False, just return the unique observation IDs across all discovery chances.
+    discovery_probability : float, optional
+        The probability applied to a single discovery opportunity that this object will be discovered.
+        Each object will have a random seed generated from its object ID, and for each discovery
+        opportunity a random number will be drawn between 0 and 1. If the random number is less
+        than the discovery probability, then the object will be discovered. If not, then it will
+        not be discovered.
+
+
+    Returns
+    -------
+    findable : FindableObservations
+        Findable observations for this window.
+    """
+    assert len(partition) == 1
+    partition_id = partition.id[0].as_py()
+    observations_in_partition = observations.filter_partition(partition)
+    if len(observations_in_partition) == 0:
+        return FindableObservations.empty()
+
+    findable_observations = FindableObservations.empty()
+    for object_id in observations_in_partition.object_id.unique():
+
+        discovery_obs_ids = metric.determine_object_findable(
+            observations_in_partition.select("object_id", object_id),
+            # We are running on a single partition so don't need to pass in partitions
+            partitions=None,
+        )
+        # self.determine_object_findable returns a list of lists, with one element (also a list)
+        # per partition, so lets just grab the first element representing the current partition
+        discovery_obs_ids_partition = discovery_obs_ids[0]
+
+        # If there are discovery opportunities, then apply the discovery probability
+        if len(discovery_obs_ids_partition) > 0:
+
+            obs_ids_unique, discovery_obs_ids_partition = apply_discovery_probability(
+                discovery_obs_ids_partition, object_id, discovery_probability
+            )
+            num_opportunities = len(discovery_obs_ids_partition)
+
+            if discovery_opportunities:
+                obs_ids = discovery_obs_ids_partition
+            else:
+                obs_ids = [obs_ids_unique]
+
+        else:
+            num_opportunities = 0
+
+        if num_opportunities > 0:
+            findable = FindableObservations.from_kwargs(
+                partition_id=[partition_id],
+                object_id=[object_id],
+                discovery_opportunities=[num_opportunities],
+                obs_ids=[obs_ids],
+            )
+
+            findable_observations = qv.concatenate([findable_observations, findable])
+            if findable_observations.fragmented():
+                findable_observations = qv.defragment(findable_observations)
+
+    findable_observations = findable_observations.sort_by(
+        [
+            ("partition_id", "ascending"),
+            ("object_id", "ascending"),
+        ]
+    )
+    return findable_observations
+
+
+partition_worker_remote = ray.remote(partition_worker)
+partition_worker_remote.options(num_cpus=1)
+
+
+def object_worker(
+    metric: "FindabilityMetric",
+    object_id: str,
+    partitions: Partitions,
+    observations: Observations,
+    discovery_opportunities: bool = False,
+    discovery_probability: float = 1.0,
+    ignore_after_discovery: bool = False,
+) -> FindableObservations:
+    """
+    Run the metric on a single object.
+
+    Parameters
+    ----------
+    metric : FindabilityMetric
+        Findability metric that defines how an object is considered findable.
+    object_id : str
+        Object ID to run the metric on.
+    partitions : Partitions
+        Partitions defining the start and end night (both inclusive) of the observations to include.
+        These partitions are used to filter the observations to only include those within the given partition.
+    observations : Observations
+        Observations to run the metric on.
+    discovery_opportunities : bool, optional
+        If True, then return the combinations of observations that made each object findable.
+        Note, that if True, this can greatly increase the memory consumption.
+        If False, just return the unique observation IDs across all discovery chances.
+    discovery_probability : float, optional
+        The probability applied to a single discovery opportunity that this object will be discovered.
+        Each object will have a random seed generated from its object ID, and for each discovery
+        opportunity a random number will be drawn between 0 and 1. If the random number is less
+        than the discovery probability, then the object will be discovered. If not, then it will
+        not be discovered.
+
+    Returns
+    -------
+    findable : FindableObservations
+        Findable observations for this object.
+    """
+    object_observations = observations.select("object_id", object_id)
+
+    num_obs = len(object_observations)
+    if num_obs == 0:
+        return FindableObservations.empty()
+
+    discovery_obs_ids = metric.determine_object_findable(object_observations, partitions=partitions)
+
+    findable_observations = FindableObservations.empty()
+    for partition in partitions:
+        partition_id = partition.id[0].as_py()
+
+        discovery_obs_ids_partition = discovery_obs_ids[partition_id]
+
+        if len(discovery_obs_ids_partition) > 0:
+
+            obs_ids_unique, discovery_obs_ids_partition = apply_discovery_probability(
+                discovery_obs_ids_partition, object_id, discovery_probability
+            )
+            num_opportunities = len(discovery_obs_ids_partition)
+
+            if discovery_opportunities:
+                obs_ids = discovery_obs_ids_partition
+            else:
+                obs_ids = [obs_ids_unique]
+
+        else:
+            num_opportunities = 0
+
+        if num_opportunities > 0:
+            findable = FindableObservations.from_kwargs(
+                partition_id=partition.id,
+                object_id=[object_id],
+                discovery_opportunities=[num_opportunities],
+                obs_ids=[obs_ids],
+            )
+
+            findable_observations = qv.concatenate([findable_observations, findable])
+            if findable_observations.fragmented():
+                findable_observations = qv.defragment(findable_observations)
+
+        if ignore_after_discovery and num_opportunities > 0:
+            break
+
+    findable_observations = findable_observations.sort_by(
+        [
+            ("partition_id", "ascending"),
+            ("object_id", "ascending"),
+        ]
+    )
+    return findable_observations
+
+
+object_worker_remote = ray.remote(object_worker)
+object_worker_remote.options(num_cpus=1)
+
+
 class FindabilityMetric(ABC):
     @abstractmethod
     def determine_object_findable(
-        self, observations: np.ndarray, windows: Optional[List[Tuple[int, int]]] = None
-    ) -> Dict[int, List[List[str]]]:
+        self, observations: Observations, partitions: Optional[Partitions] = None
+    ) -> Dict[str, List[List[str]]]:
         pass
-
-    @staticmethod
-    def _compute_windows(
-        nights: np.ndarray, detection_window: Optional[int] = None, min_nights: Optional[int] = None
-    ) -> List[Tuple[int, int]]:
-        """
-        Calculate the minimum and maximum night for windows of observations of length
-        detection_window. If detection_window is None, then the entire range of nights
-        is used.
-
-        If the detection_window is larger than the range of the observations, then
-        the entire range of nights is used. If the detection_window is smaller than
-        the range of the observations, then the windows are calculated such that there
-        is a rolling window of length detection_window that starts at the earliest night
-        and ends at the latest night.
-
-        Parameters
-        ----------
-        nights : `~numpy.ndarray`
-            Array of nights on which observations occur.
-        detection_window : int, optional
-            The number of nights of observations within a single window. If None, then
-            the entire range of nights is used.
-        min_nights : int, optional
-            Minimum length of a detection window measured from the earliest night. If
-            the detection window is set to 15 but min_nights is 3 then the first window
-            will be 3 nights long and the second window will be 4 nights long, etc... Once
-            the detection_window length has been reached then all windows will be of length
-            detection_window.
-
-        Returns
-        -------
-        windows : list of tuples
-            List of tuples containing the start and end night of each window (inclusive).
-        """
-        # Calculate the unique number of nights
-        min_night = nights.min()
-        max_night = nights.max()
-
-        # If the detection window is not specified, then use the entire
-        # range of nights
-        if detection_window is None:
-            windows = [(min_night, max_night)]
-            return windows
-        elif isinstance(detection_window, int):
-            detection_window_ = detection_window
-        else:
-            raise TypeError("detection_window must be an integer or None.")
-
-        if detection_window_ >= (max_night - min_night):
-            detection_window_ = max_night - min_night + 1
-
-        if min_nights is None:
-            min_nights_ = detection_window_
-        elif isinstance(min_nights, int):
-            min_nights_ = min_nights
-        else:
-            raise TypeError("min_nights must be an integer or None.")
-
-        windows = []
-        for night in range(min_night, max_night):
-            night_start = night
-            night_end = night + detection_window_ - 1  # inclusive
-
-            if night_start == min_night:
-                assert min_nights_ <= detection_window_
-                for i in range(min_nights_ - 1, detection_window_):
-                    windows.append((night_start, night_start + i))
-            else:
-                window = (night_start, night_end)
-                if night_end > max_night:
-                    break
-                windows.append(window)
-
-        return windows
-
-    @staticmethod
-    def _create_window_summary(
-        observations: pd.DataFrame, windows: List[Tuple[int, int]], findable: pd.DataFrame
-    ) -> pd.DataFrame:
-        """
-        Create a summary dataframe of the windows, their start and end nights, the number of observations
-        and findable objects in each window.
-
-        Parameters
-        ----------
-        observations : `~pandas.DataFrame`
-            Observations dataframe containing at least the following columns:
-            `obs_id`, `time`, `night`, `object_id`.
-        windows : List[tuples]
-            List of tuples containing the start and end night of each window.
-        findable : ~pandas.DataFrame`
-            Dataframes containing the findable objects for each window.
-
-        Returns
-        -------
-        window_summary : `~pandas.DataFrame`
-            Dataframe containing the window summary.
-        """
-        windows_dict: Dict[str, List[Any]] = {
-            "window_id": [],
-            "start_night": [],
-            "end_night": [],
-            "num_obs": [],
-            "num_findable": [],
-        }
-
-        # Extract the counts of observations in each night
-        nights = observations["night"].values
-        nights, night_counts = np.unique(nights, return_counts=True)
-
-        # Sort the nights and night counts
-        night_counts = night_counts[np.argsort(nights)]
-        nights = np.sort(nights)
-
-        for i, window in enumerate(windows):
-            night_min, night_max = window
-
-            observations_in_window = night_counts[
-                np.where((nights >= night_min) & (nights <= night_max))
-            ].sum()
-
-            findable_i = findable[findable["window_id"] == i]
-
-            windows_dict["window_id"].append(i)
-            windows_dict["start_night"].append(night_min)
-            windows_dict["end_night"].append(night_max)
-            windows_dict["num_obs"].append(observations_in_window)
-            windows_dict["num_findable"].append(findable_i["findable"].sum().astype(int))
-
-        return pd.DataFrame(windows_dict)
-
-    @staticmethod
-    def _sort_by_object_times(objects, obs_ids, times, ra, dec, nights):
-        """
-        Sort the observations by object and then by time. This is optimal for
-        computing the findability metrics by object.
-
-        Parameters
-        ----------
-        objects : `~numpy.ndarray`
-            Array of object values for each observation.
-        obs_ids : `~numpy.ndarray`
-            Array of observation IDs.
-        times : `~numpy.ndarray`
-            Array of times of each observation.
-        ra : `~numpy.ndarray`
-            Array of right ascensions of each observation.
-        dec : `~numpy.ndarray`
-            Array of declinations of each observation.
-        nights : `~numpy.ndarray`
-            Array of nights on which observations occur.
-
-        Returns
-        -------
-        objects : `~numpy.ndarray`
-            Sorted array of object values for each observation.
-        obs_ids : `~numpy.ndarray`
-            Sorted array of observation IDs.
-        times : `~numpy.ndarray`
-            Sorted array of times of each observation.
-        ra : `~numpy.ndarray`
-            Sorted array of right ascensions of each observation.
-        dec : `~numpy.ndarray`
-            Sorted array of declinations of each observation.
-        nights : `~numpy.ndarray`
-            Sorted array of nights on which observations occur.
-        """
-        # Sort order is declared in reverse order
-        sorted_indices = np.lexsort((times, objects))
-
-        return (
-            objects[sorted_indices],
-            obs_ids[sorted_indices],
-            times[sorted_indices],
-            ra[sorted_indices],
-            dec[sorted_indices],
-            nights[sorted_indices],
-        )
-
-    @staticmethod
-    def _sort_by_times_object(objects, obs_ids, times, ra, dec, nights):
-        """
-        Sort the observations by time and then by object. This is optimal for
-        computing the findability metrics by windows of time.
-
-        Parameters
-        ----------
-        objects : `~numpy.ndarray`
-            Array of object values for each observation.
-        obs_ids : `~numpy.ndarray`
-            Array of observation IDs.
-        times : `~numpy.ndarray`
-            Array of times of each observation.
-        ra : `~numpy.ndarray`
-            Array of right ascensions of each observation.
-        dec : `~numpy.ndarray`
-            Array of declinations of each observation.
-        nights : `~numpy.ndarray`
-            Array of nights on which observations occur.
-
-        Returns
-        -------
-        objects : `~numpy.ndarray`
-            Sorted array of object values for each observation.
-        obs_ids : `~numpy.ndarray`
-            Sorted array of observation IDs.
-        times : `~numpy.ndarray`
-            Sorted array of times of each observation.
-        ra : `~numpy.ndarray`
-            Sorted array of right ascensions of each observation.
-        dec : `~numpy.ndarray`
-            Sorted array of declinations of each observation.
-        nights : `~numpy.ndarray`
-            Sorted array of nights on which observations occur.
-        """
-        # Sort order is declared in reverse order
-        sorted_indices = np.lexsort((objects, times))
-
-        return (
-            objects[sorted_indices],
-            obs_ids[sorted_indices],
-            times[sorted_indices],
-            ra[sorted_indices],
-            dec[sorted_indices],
-            nights[sorted_indices],
-        )
-
-    @staticmethod
-    def _split_by_object(objects: np.ndarray) -> List[slice]:
-        """
-        Create a list of slices for each object in the observations.
-
-        Parameters
-        ----------
-        objects : `~numpy.ndarray`
-            Array of object values for each observation.
-
-        Returns
-        -------
-        split_by_object_slices : List[slice]
-            List of slices for each object in the observations.
-        """
-        unique_objects, object_indices = np.unique(objects, return_index=True)
-        split_by_object_indices = np.split(np.arange(len(objects)), object_indices[1:])
-
-        split_by_object_slices = []
-        for object_i_indices in split_by_object_indices:
-            assert np.all(np.diff(object_i_indices) == 1)
-
-            object_slice = slice(object_i_indices[0], object_i_indices[-1] + 1)
-            split_by_object_slices.append(object_slice)
-
-        return split_by_object_slices
-
-    @staticmethod
-    def _split_by_window(windows: List[Tuple[int, int]], nights: np.ndarray) -> List[slice]:
-        """
-        Create a list of slices for each window in the observations.
-
-        Parameters
-        ----------
-        windows : list of tuples
-            List of tuples containing the start and end night of each window.
-        nights : `~numpy.ndarray`
-            Array of nights on which observations occur.
-
-        Returns
-        -------
-        split_by_window_slices : List[slice]
-            List of slices for each window in the observations.
-        """
-        # Split the observations by window
-        split_by_window_slices = []
-        empty_slice = slice(0, 0)
-        for window in windows:
-            night_min, night_max = window
-            window_indices = np.where((nights >= night_min) & (nights <= night_max))[0]
-
-            if len(window_indices) == 0:
-                window_slice = empty_slice
-            else:
-                assert np.all(np.diff(window_indices) == 1)
-                window_slice = slice(window_indices[0], window_indices[-1] + 1)
-
-            split_by_window_slices.append(window_slice)
-
-        return split_by_window_slices
-
-    def _store_as_shared_record_array(self, object_ids, obs_ids, times, ra, dec, nights):
-        """
-        Store the observations as a record array in shared memory.
-
-        Parameters
-        ----------
-        object_ids : `~numpy.ndarray`
-            Array of object IDs for each observation.
-        obs_ids : `~numpy.ndarray`
-            Array of observation IDs.
-        times : `~numpy.ndarray`
-            Array of times of each observation.
-        ra : `~numpy.ndarray`
-            Array of right ascensions of each observation.
-        dec : `~numpy.ndarray`
-            Array of declinations of each observation.
-        nights : `~numpy.ndarray`
-            Array of nights on which observations occur.
-
-        Returns
-        -------
-        observations_array : `~numpy.ndarray`
-            Record array of observations.
-        """
-        # Store arrays as global variables
-        dtypes = [
-            ("object_id", object_ids.dtype),
-            ("obs_id", obs_ids.dtype),
-            ("time", np.float64),
-            ("ra", np.float64),
-            ("dec", np.float64),
-            ("night", np.int64),
-        ]
-        self._dtypes = dtypes
-        observations_array = np.empty(
-            len(object_ids),
-            dtype=dtypes,
-        )
-        self._num_observations = observations_array.shape[0]
-        self._itemsize = observations_array.itemsize
-
-        self._shared_memory_name = f"DIFI_ARRAY_{os.getpid()}"
-        shared_mem = shared_memory.SharedMemory(
-            self._shared_memory_name, create=True, size=observations_array.nbytes
-        )
-        shared_memory_array = np.ndarray(
-            observations_array.shape, dtype=observations_array.dtype, buffer=shared_mem.buf
-        )
-        shared_memory_array["object_id"] = object_ids
-        shared_memory_array["obs_id"] = obs_ids
-        shared_memory_array["time"] = times
-        shared_memory_array["ra"] = ra
-        shared_memory_array["dec"] = dec
-        shared_memory_array["night"] = nights
-        shared_mem.close()
-        return
-
-    def _clear_shared_record_array(self):
-        """
-        Clears the shared memory array for this instance of the metric.
-
-        Returns
-        -------
-        None
-        """
-        shared_mem = shared_memory.SharedMemory(self._shared_memory_name)
-        shared_mem.unlink()
-        self._shared_memory_name = None
-        self._num_observations = 0
-        self._dtypes = None
-
-    def _run_object_worker(
-        self,
-        object_slice: slice,
-        windows: List[Tuple[int, int]],
-        discovery_opportunities: bool = False,
-        discovery_probability: float = 1.0,
-        ignore_after_discovery: bool = False,
-    ) -> List[Dict[str, Any]]:
-        """
-        Run the metric on a single object.
-
-        Parameters
-        ----------
-        object_slice : slice
-            The slice in the observations array corresponding to the observations of a single object.
-            A slice with start and stop indices will be interpreted as `observations[start:stop]`.
-            If start == stop, then no observations will be used.
-        windows : list of tuples
-            A list of tuples containing the start and end nights of each window.
-        discovery_opportunities : bool, optional
-            If True, then return the combinations of observations that made each object findable.
-            Note, that if True, this can greatly increase the memory consumption.
-            If False, just return the unique observation IDs across all discovery chances.
-        discovery_probability : float, optional
-            The probability applied to a single discovery opportunity that this object will be discovered.
-            Each object will have a random seed generated from its object ID, and for each discovery
-            opportunity a random number will be drawn between 0 and 1. If the random number is less
-            than the discovery probability, then the object will be discovered. If not, then it will
-            not be discovered.
-        ignore_after_discovery : bool, optional
-            If True, then ignore all observations after each object's initial discovery. If False,
-            then each object's observations will continue to be tested for discovery in each window.
-
-        Returns
-        -------
-        findable : List[Dict[str, Any]]]
-            A list of dictionaries containing the findable objects and the observations
-            that made them findable for each window.
-        """
-        num_obs = object_slice.stop - object_slice.start
-        if num_obs == 0:
-            return [
-                {
-                    "window_id": np.nan,
-                    "object_id": np.nan,
-                    "findable": np.nan,
-                    "discovery_opportunities": np.nan,
-                    "obs_ids": np.nan,
-                }
-            ]
-
-        # Load the observations from shared memory
-        existing_shared_mem = shared_memory.SharedMemory(name=self._shared_memory_name)
-        observations = np.ndarray(
-            num_obs,
-            dtype=self._dtypes,
-            buffer=existing_shared_mem.buf,
-            offset=object_slice.start * self._itemsize,
-        )
-        object_id = observations["object_id"][0]
-
-        findable_dicts = []
-        discovery_obs_ids = self.determine_object_findable(observations, windows=windows)
-
-        for i, window in enumerate(windows):
-
-            discovery_obs_ids_window = discovery_obs_ids[i]
-
-            if len(discovery_obs_ids_window) > 0:
-
-                obs_ids_unique, discovery_obs_ids_window = apply_discovery_probability(
-                    discovery_obs_ids_window, object_id, discovery_probability
-                )
-                num_opportunities = len(discovery_obs_ids_window)
-
-                if discovery_opportunities:
-                    obs_ids = discovery_obs_ids_window
-                else:
-                    obs_ids = [obs_ids_unique]
-
-            else:
-                num_opportunities = 0
-
-            if num_opportunities > 0:
-                findable = {
-                    "window_id": i,
-                    "object_id": object_id,
-                    "findable": 1,
-                    "discovery_opportunities": num_opportunities,
-                    "obs_ids": obs_ids,
-                }
-            else:
-                findable = {
-                    "window_id": np.nan,
-                    "object_id": np.nan,
-                    "findable": np.nan,
-                    "discovery_opportunities": np.nan,
-                    "obs_ids": np.nan,
-                }
-
-            findable_dicts.append(findable)
-            if ignore_after_discovery and num_opportunities > 0:
-                break
-
-        existing_shared_mem.close()
-        return findable_dicts
 
     def run_by_object(
         self,
-        observations: pd.DataFrame,
-        windows: List[Tuple[int, int]],
+        observations: Observations,
+        partitions: Partitions,
         discovery_opportunities: bool = False,
         discovery_probability: float = 1.0,
         ignore_after_discovery: bool = False,
-        num_jobs: Optional[int] = 1,
-        clear_on_failure: bool = True,
-    ) -> List[pd.DataFrame]:
+        max_processes: Optional[int] = 1,
+    ) -> FindableObservations:
         """
-        Run the findability metric on the observations split by objects. For windows where there are many
-        observations, this may be faster than running the metric on each window individually
-        (with all objects' observations).
+        Run the metric on the observations split by objects.
 
         Parameters
         ----------
-        observations : `~pandas.DataFrame`
-            Observations dataframe containing at least the following columns:
-            `obs_id`, `time`, `night`, `object_id`.
-        windows : List[tuples]
-            List of tuples containing the start and end night of each window.
+        observations : Observations
+            Observations to run the metric on.
+        partitions : Partitions
+            Partitions defining the start and end night (both inclusive) of the observations to include.
+            These partitions are used to filter the observations to only include those within the given partition.
         discovery_opportunities : bool, optional
             If True, then return the combinations of observations that made each object findable.
             Note, that if True, this can greatly increase the memory consumption.
@@ -727,104 +459,94 @@ class FindabilityMetric(ABC):
             than the discovery probability, then the object will be discovered. If not, then it will
             not be discovered.
         ignore_after_discovery : bool, optional
-            If True, then ignore all observations after each object's initial discovery. If False,
-            then each object's observations will continue to be tested for discovery in each window.
-        num_jobs : int, optional
-            The number of jobs to run in parallel. If 1, then run in serial. If None, then use the number of
-            CPUs on the machine.
-        clear_on_failure : bool, optional
-            If a failure occurs and this is False, then the shared memory array will not be cleared.
-            If True, then the shared memory array will be cleared.
+            If True, then ignore observations that occur after the object has been discovered. Only applies
+            when by_object is True. If False, then the objects will be tested for discovery chances again.
+        max_processes : int, optional
+            The maximum number of processes to run in parallel. If None, then use the number of CPUs on the machine.
 
         Returns
         -------
-        findable : List[`~pandas.DataFrame`]
-            Dataframe containing the findable objects and the observations
-            that made them findable for each window.
+        findable_observations : FindableObservations
+            Findable objects and their observations.
         """
-        # Sort arrays by object and then by times
-        objects, obs_ids, times, ra, dec, nights = self._sort_by_object_times(
-            observations["object_id"].values.astype(str),
-            observations["obs_id"].values.astype(str),
-            observations["time"].values,
-            observations["ra"].values,
-            observations["dec"].values,
-            observations["night"].values,
-        )
+        if max_processes is None:
+            max_processes = mp.cpu_count()
 
-        # Split arrays by object
-        split_by_object_slices = self._split_by_object(objects)
+        use_ray = initialize_use_ray(num_cpus=max_processes)
+        if use_ray:
 
-        try:
-            # Store the observations in a global variable so that the worker functions can access them
-            self._store_as_shared_record_array(objects, obs_ids, times, ra, dec, nights)
+            observations_ref = ray.put(observations)
 
-            findable_lists: List[List[Dict[str, Any]]] = []
-            if num_jobs is None or num_jobs > 1:
-                pool = mp.Pool(num_jobs)
-                findable_lists = pool.starmap(
-                    self._run_object_worker,
-                    zip(
-                        split_by_object_slices,
-                        repeat(windows),
-                        repeat(discovery_opportunities),
-                        repeat(discovery_probability),
-                        repeat(ignore_after_discovery),
-                    ),
+            object_ids = observations.object_id.unique()
+            findable_observations = FindableObservations.empty()
+            futures = []
+            for object_id in object_ids:
+                futures.append(
+                    object_worker_remote.remote(
+                        self,
+                        object_id,
+                        partitions,
+                        observations_ref,
+                        discovery_opportunities=discovery_opportunities,
+                        discovery_probability=discovery_probability,
+                        ignore_after_discovery=ignore_after_discovery,
+                    )
                 )
 
-                pool.close()
-                pool.join()
+                if len(futures) >= max_processes * 1.5:
+                    finished, futures = ray.wait(futures, num_returns=1)
+                    findable_observations = qv.concatenate([findable_observations, ray.get(finished[0])])
+                    if findable_observations.fragmented():
+                        findable_observations = qv.defragment(findable_observations)
 
-            else:
-                for object_indices in split_by_object_slices:
-                    findable_lists.append(
-                        self._run_object_worker(
-                            object_indices,
-                            windows,
-                            discovery_opportunities=discovery_opportunities,
-                            discovery_probability=discovery_probability,
-                            ignore_after_discovery=ignore_after_discovery,
-                        )
-                    )
+            while futures:
+                finished, futures = ray.wait(futures, num_returns=1)
+                findable_observations = qv.concatenate([findable_observations, ray.get(finished[0])])
+                if findable_observations.fragmented():
+                    findable_observations = qv.defragment(findable_observations)
 
-            self._clear_shared_record_array()
+            ray.internal.free(observations_ref)
 
-        except Exception as e:
-            if clear_on_failure:
-                self._clear_shared_record_array()
-            raise e
+        else:
 
-        findable_flattened = [item for sublist in findable_lists for item in sublist]
+            object_ids = observations.object_id.unique()
+            findable_observations = FindableObservations.empty()
 
-        findable = pd.DataFrame(findable_flattened)
-        findable.dropna(subset=["window_id"], inplace=True)
-        if len(findable) > 0:
-            findable.loc[:, "window_id"] = findable["window_id"].astype(int)
-            findable.loc[:, "findable"] = findable["findable"].astype(int)
-            findable.loc[:, "discovery_opportunities"] = findable["discovery_opportunities"].astype(int)
-            findable.sort_values(by=["window_id", "object_id"], inplace=True, ignore_index=True)
+            for object_id in object_ids:
+                findable_observations_i = object_worker(
+                    self,
+                    object_id,
+                    partitions,
+                    observations,
+                    discovery_opportunities=discovery_opportunities,
+                    discovery_probability=discovery_probability,
+                    ignore_after_discovery=ignore_after_discovery,
+                )
 
-        return findable
+                findable_observations = qv.concatenate([findable_observations, findable_observations_i])
+                if findable_observations.fragmented():
+                    findable_observations = qv.defragment(findable_observations)
 
-    def _run_window_worker(
+        return findable_observations
+
+    def run_by_partition(
         self,
-        window_slice: slice,
-        window_id: int,
+        observations: Observations,
+        partitions: Partitions,
         discovery_opportunities: bool = False,
         discovery_probability: float = 1.0,
-    ) -> List[Dict[str, Any]]:
+        max_processes: Optional[int] = 1,
+    ) -> FindableObservations:
         """
-        Run the metric on a single window of observations.
+        Run the metric on the observations split by partition.
 
         Parameters
         ----------
-        window_slice: slice
-            The slice in the observations array that contains the observations for this window.
-            A slice with start and stop indices will be interpreted as `observations[start:stop]`.
-            If start == stop, then no observations will be used.
-        window_id : int
-            The ID of this window.
+        observations : Observations
+            Observations to run the metric on.
+        partitions : Partitions
+            Partitions defining the start and end night (both inclusive) of the observations to include.
+            These partitions are used to filter the observations to only include those within the given partition.
         discovery_opportunities : bool, optional
             If True, then return the combinations of observations that made each object findable.
             Note, that if True, this can greatly increase the memory consumption.
@@ -835,188 +557,66 @@ class FindabilityMetric(ABC):
             opportunity a random number will be drawn between 0 and 1. If the random number is less
             than the discovery probability, then the object will be discovered. If not, then it will
             not be discovered.
+        max_processes : int, optional
+            The maximum number of processes to run in parallel. If None, then use the number of CPUs on the machine.
 
         Returns
         -------
-        findable : List[Dict[str, Any]]]
-            A list of dictionaries containing the findable objects and the observations
-            that made them findable for each window.
+        findable_observations : FindableObservations
+            Findable objects and their observations.
         """
-        num_obs = window_slice.stop - window_slice.start
-        if num_obs == 0:
-            return [
-                {
-                    "window_id": np.nan,
-                    "object_id": np.nan,
-                    "findable": np.nan,
-                    "discovery_opportunities": np.nan,
-                    "obs_ids": np.nan,
-                }
-            ]
+        if max_processes is None:
+            max_processes = mp.cpu_count()
 
-        # Read observations from shared memory array
-        existing_shared_mem = shared_memory.SharedMemory(name=self._shared_memory_name)
-        observations = np.ndarray(
-            num_obs,
-            dtype=self._dtypes,
-            buffer=existing_shared_mem.buf,
-            offset=window_slice.start * self._itemsize,
-        )
+        use_ray = initialize_use_ray(num_cpus=max_processes)
+        if use_ray:
 
-        findable_dicts = []
-        for object_id in np.unique(observations["object_id"]):
+            observations_ref = ray.put(observations)
 
-            discovery_obs_ids = self.determine_object_findable(
-                observations[np.where(observations["object_id"] == object_id)[0]],
-                # We are running on a single window so don't need to pass in windows
-                windows=None,
-            )
-            # self.determine_object_findable returns a list of lists, with one element (also a list)
-            # per window, so lets just grab the first element representing the current window
-            discovery_obs_ids_window = discovery_obs_ids[0]
-
-            # If there are discovery opportunities, then apply the discovery probability
-            if len(discovery_obs_ids_window) > 0:
-
-                obs_ids_unique, discovery_obs_ids_window = apply_discovery_probability(
-                    discovery_obs_ids_window, object_id, discovery_probability
-                )
-                num_opportunities = len(discovery_obs_ids_window)
-
-                if discovery_opportunities:
-                    obs_ids = discovery_obs_ids_window
-                else:
-                    obs_ids = [obs_ids_unique]
-
-            else:
-                num_opportunities = 0
-
-            if num_opportunities > 0:
-                findable = {
-                    "window_id": window_id,
-                    "object_id": object_id,
-                    "findable": 1,
-                    "discovery_opportunities": num_opportunities,
-                    "obs_ids": obs_ids,
-                }
-            else:
-                findable = {
-                    "window_id": np.nan,
-                    "object_id": np.nan,
-                    "findable": np.nan,
-                    "discovery_opportunities": np.nan,
-                    "obs_ids": np.nan,
-                }
-
-            findable_dicts.append(findable)
-
-        existing_shared_mem.close()
-        return findable_dicts
-
-    def run_by_window(
-        self,
-        observations: pd.DataFrame,
-        windows: List[Tuple[int, int]],
-        discovery_opportunities: bool = False,
-        discovery_probability: float = 1.0,
-        num_jobs: Optional[int] = 1,
-        clear_on_failure: bool = True,
-    ) -> List[pd.DataFrame]:
-        """
-        Run the findability metric on the observations split by windows where each window will
-        contain all of the observations within a span of detection_window nights.
-
-        Parameters
-        ----------
-        observations : `~pandas.DataFrame`
-            Observations dataframe containing at least the following columns:
-            `obs_id`, `time`, `night`, `object_id`.
-        windows : List[tuples]
-            List of tuples containing the start and end night of each window.
-        discovery_opportunities : bool, optional
-            If True, then return the combinations of observations that made each object findable.
-            Note, that if True, this can greatly increase the memory consumption.
-            If False, just return the unique observation IDs across all discovery chances.
-        discovery_probability : float, optional
-            The probability applied to a single discovery opportunity that this object will be discovered.
-            Each object will have a random seed generated from its object ID, and for each discovery
-            opportunity a random number will be drawn between 0 and 1. If the random number is less
-            than the discovery probability, then the object will be discovered. If not, then it will
-            not be discovered.
-        num_jobs : int, optional
-            The number of jobs to run in parallel. If 1, then run in serial. If None, then use the number of
-            CPUs on the machine.
-        clear_on_failure : bool, optional
-            If a failure occurs and this is False, then the shared memory array will not be cleared.
-            If True, then the shared memory array will be cleared.
-
-        Returns
-        -------
-        findable : List[`~pandas.DataFrame`]
-            Dataframe containing the findable objects and the observations
-            that made them findable for each window.
-        """
-        # Sort arrays by times then objects
-        objects, obs_ids, times, ra, dec, nights = self._sort_by_times_object(
-            observations["object_id"].values.astype(str),
-            observations["obs_id"].values.astype(str),
-            observations["time"].values,
-            observations["ra"].values,
-            observations["dec"].values,
-            observations["night"].values,
-        )
-
-        try:
-            # Store the observations in a global variable so that the worker functions can access them
-            self._store_as_shared_record_array(objects, obs_ids, times, ra, dec, nights)
-
-            # Find indices that split the observations into windows
-            split_by_window_slices = self._split_by_window(windows, nights)
-
-            findable_lists: List[List[Dict[str, Any]]] = []
-            if num_jobs is None or num_jobs > 1:
-                pool = mp.Pool(num_jobs)
-                findable_lists = pool.starmap(
-                    self._run_window_worker,
-                    zip(
-                        split_by_window_slices,
-                        range(len(windows)),
-                        repeat(discovery_opportunities),
-                        repeat(discovery_probability),
-                    ),
-                )
-                pool.close()
-                pool.join()
-
-            else:
-                for i, window_slice in enumerate(split_by_window_slices):
-                    findable_lists.append(
-                        self._run_window_worker(
-                            window_slice,
-                            i,
-                            discovery_opportunities=discovery_opportunities,
-                            discovery_probability=discovery_probability,
-                        )
+            findable_observations = FindableObservations.empty()
+            futures = []
+            for partition in partitions:
+                futures.append(
+                    partition_worker_remote.remote(
+                        self,
+                        partition,
+                        observations_ref,
+                        discovery_opportunities=discovery_opportunities,
+                        discovery_probability=discovery_probability,
                     )
+                )
 
-            self._clear_shared_record_array()
+                if len(futures) >= max_processes * 1.5:
+                    finished, futures = ray.wait(futures, num_returns=1)
+                    findable_observations = qv.concatenate([findable_observations, ray.get(finished[0])])
+                    if findable_observations.fragmented():
+                        findable_observations = qv.defragment(findable_observations)
 
-        except Exception as e:
-            if clear_on_failure:
-                self._clear_shared_record_array()
-            raise e
+            while futures:
 
-        findable_flattened = [item for sublist in findable_lists for item in sublist]
+                finished, futures = ray.wait(futures, num_returns=1)
+                findable_observations = qv.concatenate([findable_observations, ray.get(finished[0])])
+                if findable_observations.fragmented():
+                    findable_observations = qv.defragment(findable_observations)
 
-        findable = pd.DataFrame(findable_flattened)
-        findable.dropna(subset=["window_id"], inplace=True)
-        if len(findable) > 0:
-            findable.loc[:, "window_id"] = findable["window_id"].astype(int)
-            findable.loc[:, "findable"] = findable["findable"].astype(int)
-            findable.loc[:, "discovery_opportunities"] = findable["discovery_opportunities"].astype(int)
-            findable.sort_values(by=["window_id", "object_id"], inplace=True, ignore_index=True)
+            ray.internal.free(observations_ref)
 
-        return findable
+        else:
+
+            findable_observations = FindableObservations.empty()
+            for partition in partitions:
+                findable_observations_i = partition_worker(
+                    self,
+                    partition,
+                    observations,
+                    discovery_opportunities=discovery_opportunities,
+                    discovery_probability=discovery_probability,
+                )
+                findable_observations = qv.concatenate([findable_observations, findable_observations_i])
+                if findable_observations.fragmented():
+                    findable_observations = qv.defragment(findable_observations)
+
+        return findable_observations
 
     def run(
         self,

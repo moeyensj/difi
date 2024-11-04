@@ -40,6 +40,7 @@ dependencies = [
     "pandas",
     "pyarrow",
     "quivr",
+    "ray[default]",
 ]
 
 [build-system]
