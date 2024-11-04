@@ -283,7 +283,7 @@ def partition_worker(
         )
         # self.determine_object_findable returns a list of lists, with one element (also a list)
         # per partition, so lets just grab the first element representing the current partition
-        discovery_obs_ids_partition = discovery_obs_ids[0]
+        discovery_obs_ids_partition = discovery_obs_ids[partition_id]
 
         # If there are discovery opportunities, then apply the discovery probability
         if len(discovery_obs_ids_partition) > 0:
@@ -765,9 +765,9 @@ class NightlyLinkagesMetric(FindabilityMetric):
 
     def determine_object_findable(
         self,
-        observations: np.ndarray,
-        windows: Optional[List[Tuple[int, int]]] = None,
-    ) -> Dict[int, List[List[str]]]:
+        observations: Observations,
+        partitions: Optional[Partitions] = None,
+    ) -> Dict[str, List[List[str]]]:
         """
         Given observations belonging to one object, finds all observations that are within
         max_obs_separation of each other.
@@ -777,42 +777,44 @@ class NightlyLinkagesMetric(FindabilityMetric):
 
         Parameters
         ----------
-        observations : `~numpy.ndarray`
-            Numpy record array with at least the following columns:
-            `object_id`, `obs_id`, `time`, `night`, `ra`, `dec`.
-        windows: List[Tuple[int, int]], optional
-            List of windows of time (in MJD) during which to consider observations.
+        observations : Observations
+            Observations to run the metric on.
+        partitions : Partitions, optional
+            Partitions defining the start and end night (both inclusive) of the observations to include.
+            These partitions are used to filter the observations to only include those within the given partition.
+            If None, then the observations are partitioned into a single partition spanning the full range of nights.
 
         Returns
         -------
-        obs_ids : dict[int, List[List[str]]]
-            Dictionary keyed on window IDs, with values of lists containining observation IDs
+        obs_ids : dict[str, List[List[str]]]
+            Dictionary keyed on partition IDs, with values of lists containining observation IDs
             for each discovery opportunity (if discovery_opportunities is True).
             If no discovery opportunities are found, then the list will be empty.
             If discovery_opportunities is False, then the list will contain a single
             list of all valid observation IDs.
         """
-        assert len(np.unique(observations["object_id"])) == 1
-        if windows is None:
-            windows = [(np.min(observations["night"]), np.max(observations["night"]))]
+        assert len(observations.object_id.unique()) == 1
+        if partitions is None:
+            partitions = Partitions.create_single(observations.night)
 
-        obs_ids_window: Dict[int, List[List[str]]] = {}
-        for i, window in enumerate(windows):
-            mask = (observations["night"] >= window[0]) & (observations["night"] <= window[1])
-            observations_window = observations[mask]
+        obs_ids_partition: Dict[int, List[List[str]]] = {}
+        for partition in partitions:
+
+            partition_id = partition.id[0].as_py()
+            observations_in_window = observations.filter_partition(partition)
 
             # Exit early if there are not enough observations
             total_required_obs = self.linkage_min_obs * self.min_linkage_nights
-            if len(observations_window) < total_required_obs:
-                obs_ids_window[i] = []
+            if len(observations_in_window) < total_required_obs:
+                obs_ids_partition[partition_id] = []
                 continue
 
             # Grab times and observation IDs from grouped observations
-            times = observations_window["time"]
-            obs_ids = observations_window["obs_id"]
-            nights = observations_window["night"]
-            ra = observations_window["ra"]
-            dec = observations_window["dec"]
+            times = observations_in_window.time.mjd().to_numpy(zero_copy_only=False)
+            obs_ids = observations_in_window.id.to_numpy(zero_copy_only=False)
+            nights = observations_in_window.night.to_numpy(zero_copy_only=False)
+            ra = observations_in_window.ra.to_numpy(zero_copy_only=False)
+            dec = observations_in_window.dec.to_numpy(zero_copy_only=False)
 
             if self.linkage_min_obs > 1:
 
@@ -872,9 +874,9 @@ class NightlyLinkagesMetric(FindabilityMetric):
                 obs_indices = select_tracklet_combinations(valid_nights, self.min_linkage_nights)
                 obs_ids = [linkage_obs[ind].tolist() for ind in obs_indices]
 
-            obs_ids_window[i] = obs_ids
+            obs_ids_partition[partition_id] = obs_ids
 
-        return obs_ids_window
+        return obs_ids_partition
 
 
 class MinObsMetric(FindabilityMetric):
@@ -894,46 +896,48 @@ class MinObsMetric(FindabilityMetric):
         self.min_obs = min_obs
 
     def determine_object_findable(
-        self, observations: np.ndarray, windows: Optional[List[Tuple[int, int]]] = None
-    ) -> Dict[int, List[List[str]]]:
+        self, observations: Observations, partitions: Optional[Partitions] = None
+    ) -> FindableObservations:
         """
         Finds all objects with a minimum of self.min_obs observations and the observations
         that makes them findable.
 
         Parameters
         ----------
-        observations : `~numpy.ndarray`
-            Numpy record array with at least the following columns:
-            `object_id`, `obs_id`, `time`, `night`, `ra`, `dec`.
-        windows: List[Tuple[int, int]], optional
-            List of windows of time (in MJD) during which to consider observations.
+        observations : Observations
+            Observations to run the metric on.
+        partitions : Partitions, optional
+            Partitions defining the start and end night (both inclusive) of the observations to include.
+            These partitions are used to filter the observations to only include those within the given partition.
+            If None, then the observations are partitioned into a single partition spanning the full range of nights.
 
         Returns
         -------
-        obs_ids : dict[int, List[List[str]]]
-            Dictionary keyed on window IDs, with values of lists containining observation IDs
+        obs_ids : dict[str, List[List[str]]]
+            Dictionary keyed on partition IDs, with values of lists containining observation IDs
             for each discovery opportunity (if discovery_opportunities is True).
             If no discovery opportunities are found, then the list will be empty.
             If discovery_opportunities is False, then the list will contain a single
             list of all valid observation IDs.
         """
-        assert len(np.unique(observations["object_id"])) == 1
+        assert len(observations.object_id.unique()) == 1
+        if partitions is None:
+            partitions = Partitions.create_single(observations.night)
 
-        if windows is None:
-            windows = [(np.min(observations["night"]), np.max(observations["night"]))]
+        obs_ids_partition = {}
+        for partition in partitions:
 
-        obs_ids_window = {}
-        for i, window in enumerate(windows):
-            mask = (observations["night"] >= window[0]) & (observations["night"] <= window[1])
-            observations_window = observations[mask]
+            partition_id = partition.id[0].as_py()
 
-            if len(observations_window) >= self.min_obs:
-                obs_ids = observations_window["obs_id"]
+            observations_in_partition = observations.filter_partition(partition)
+
+            if len(observations_in_partition) >= self.min_obs:
+                obs_ids = observations_in_partition.id.to_numpy(zero_copy_only=False).tolist()
                 obs_ids = list(combinations(obs_ids, self.min_obs))
 
             else:
                 obs_ids = []
 
-            obs_ids_window[i] = obs_ids
+            obs_ids_partition[partition_id] = obs_ids
 
-        return obs_ids_window
+        return obs_ids_partition
