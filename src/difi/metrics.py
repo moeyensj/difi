@@ -620,37 +620,25 @@ class FindabilityMetric(ABC):
 
     def run(
         self,
-        observations: pd.DataFrame,
-        detection_window: Optional[int] = None,
-        min_window_nights: Optional[int] = None,
+        observations: Observations,
+        partitions: Optional[Partitions] = None,
         discovery_opportunities: bool = False,
         discovery_probability: float = 1.0,
         by_object: bool = False,
         ignore_after_discovery: bool = False,
-        num_jobs: Optional[int] = 1,
-        return_summary: bool = True,
-        clear_on_failure: bool = True,
-    ) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
+        max_processes: Optional[int] = None,
+    ) -> Tuple[FindableObservations, Partitions]:
         """
         Run the findability metric on the observations.
 
         Parameters
         ----------
-        observations : `~pandas.DataFrame`
-            Observations dataframe containing at least the following columns:
-            `obs_id`, `time`, `night`, `object_id`.
-        detection_window : int, optional
-            The number of nights of observations to consider when
-            determining if a object is findable. If the number of consecutive days
-            of observations exceeds the detection_window, then a rolling window
-            of size detection_window is used to determine if the object is findable.
-            If None, then the detection_window is the entire range observations.
-        min_window_nights : int, optional
-            The minimum number of nights that must be in a window starting at the first window.
-            For example, if detection_window is 10 and min_window_nights is 3, then the first
-            window will be nights 1-3, the second window will be nights 1-4, and so on. If None, and
-            detection_window is 10, then the first window will be nights 1-10,
-            the second window will be nights 2-11, and so on.
+        observations : Observations
+            Observations to run the metric on.
+        partitions : Partitions, optional
+            Partitions defining the start and end night (both inclusive) of the observations to include.
+            These partitions are used to filter the observations to only include those within the given partition.
+            If None, then the observations are partitioned into a single partition spanning the full range of nights.
         discovery_opportunities : bool, optional
             If True, then return the combinations of observations that made each object findable.
             Note, that if True, this can greatly increase the memory consumption.
@@ -662,34 +650,22 @@ class FindabilityMetric(ABC):
             than the discovery probability, then the object will be discovered. If not, then it will
             not be discovered.
         by_object : bool, optional
-            If True, run the metric on the observations split by objects. For windows where there are many
-            observations, this may be faster than running the metric on each window individually
-            (with all objects' observations).
+            If True, then run the metric by object. If False, then run the metric by partition.
         ignore_after_discovery : bool, optional
             If True, then ignore observations that occur after the object has been discovered. Only applies
             when by_object is True. If False, then the objects will be tested for discovery chances again.
-        num_jobs : int, optional
-            The number of jobs to run in parallel. If 1, then run in serial. If None, then use the number of
-            CPUs on the machine.
-        return_summary : bool, optional
-            If True, then return a summary of the number of observations, number of findable
-            objects and the start and end night of each window.
-        clear_on_failure : bool, optional
-            If a failure occurs and this is False, then the shared memory array will not be cleared.
-            If True, then the shared memory array will be cleared.
+        max_processes : int, optional
+            The maximum number of processes to run in parallel. If None, then use the number of CPUs on the machine.
 
         Returns
         -------
-        findable : `~pandas.DataFrame`
-            A dataframe containing the object IDs that are findable and a column
-            with a list of the observation IDs that made the object findable.
-        window_summary : `~pandas.DataFrame`
-            A dataframe containing the number of observations, number of findable
-            objects and the start and end night of each window.
+        findable : FindableObservations
+            Findable objects and their observations.
+        partitions : Partitions
+            Partitions defining the start and end night (both inclusive) of the observations to include.
         """
-        # Extract arrays
-        nights = observations["night"].values
-        windows = self._compute_windows(nights, detection_window, min_nights=min_window_nights)
+        if partitions is None:
+            partitions = Partitions.create_single(observations.night)
 
         if not by_object and ignore_after_discovery:
             warnings.warn(
@@ -703,28 +679,22 @@ class FindabilityMetric(ABC):
         if by_object:
             findable = self.run_by_object(
                 observations,
-                windows,
+                partitions,
                 discovery_opportunities=discovery_opportunities,
                 discovery_probability=discovery_probability,
                 ignore_after_discovery=ignore_after_discovery,
-                num_jobs=num_jobs,
-                clear_on_failure=clear_on_failure,
+                max_processes=max_processes,
             )
         else:
-            findable = self.run_by_window(
+            findable = self.run_by_partition(
                 observations,
-                windows,
+                partitions,
                 discovery_opportunities=discovery_opportunities,
                 discovery_probability=discovery_probability,
-                num_jobs=num_jobs,
-                clear_on_failure=clear_on_failure,
+                max_processes=max_processes,
             )
 
-        if return_summary:
-            window_summary = self._create_window_summary(observations, windows, findable)
-        else:
-            window_summary = None
-        return findable, window_summary
+        return findable, partitions
 
 
 class NightlyLinkagesMetric(FindabilityMetric):
