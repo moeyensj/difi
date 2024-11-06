@@ -4,7 +4,7 @@ from ..observations import Observations
 from ..partitions import Partitions
 
 
-def test_Observations_filter_partition():
+def test_Observations_filter_partition() -> None:
     # Test filtering observations by partition
     observations = Observations.from_kwargs(
         id=["1", "2", "3", "4", "5"],

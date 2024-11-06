@@ -153,3 +153,74 @@ class PartitionSummary(qv.Table):
     contaminated = qv.Int64Column(nullable=True)
     #: Number of mixed linkages.
     mixed = qv.Int64Column(nullable=True)
+
+    @classmethod
+    def create(cls, observations: "Observations", partitions: Partitions) -> "PartitionSummary":
+        """
+        Create a summary of the observations within each partition. The summary includes
+        the number of observations.
+
+        Parameters
+        ----------
+        observations : Observations
+            Table of observations.
+        partitions : Partitions
+            Table of partitions defining the start and end nights (both inclusive) of the
+            partitions.
+
+        Returns
+        -------
+        partition_summaries : PartitionSummary
+            Summary of the observations within each partition.
+        """
+        partition_summaries = cls.empty()
+        for partition in partitions:
+
+            observations_in_partition = observations.filter_partition(partition)
+            num_obs = len(observations_in_partition)
+
+            partition_summary = cls.from_kwargs(
+                id=partition.id,
+                start_night=partition.start_night,
+                end_night=partition.end_night,
+                observations=[num_obs],
+            )
+
+            partition_summaries = qv.concatenate([partition_summaries, partition_summary])
+            if partition_summaries.fragmented():
+                partition_summaries = qv.defragment(partition_summaries)
+
+        return partition_summaries
+
+    def update_findable(self, findable_observations: "FindableObservations") -> "PartitionSummary":
+        """
+        Update the summary with the number of findable objects in each partition.
+
+        This returns a copy of the table.
+
+        Parameters
+        ----------
+        findable_observations : FindableObservations
+            Table of findable observations per partition.
+
+        Returns
+        -------
+        partition_summaries : PartitionSummary
+            Summary of the observations within each partition.
+        """
+        if not pc.all(pc.is_in(findable_observations.partition_id, self.id)).as_py():
+            raise ValueError("Not all partition ID in findable observations are present in the summary.")
+
+        findable = []
+        for partition in self:
+            partition_id = partition.id[0].as_py()
+            findable_observations_partition = findable_observations.select("partition_id", partition_id)
+            findable.append(len(findable_observations_partition.object_id.unique()))
+
+        return self.from_kwargs(
+            id=self.id,
+            start_night=self.start_night,
+            end_night=self.end_night,
+            observations=self.observations,
+            findable=findable,
+        )
