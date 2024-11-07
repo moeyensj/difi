@@ -620,13 +620,13 @@ class FindabilityMetric(ABC):
     def run(
         self,
         observations: Observations,
-        partitions: Optional[Partitions] = None,
+        partitions: Partitions,
         discovery_opportunities: bool = False,
         discovery_probability: float = 1.0,
         by_object: bool = False,
         ignore_after_discovery: bool = False,
         max_processes: Optional[int] = None,
-    ) -> Tuple[FindableObservations, Partitions]:
+    ) -> FindableObservations:
         """
         Run the findability metric on the observations.
 
@@ -663,9 +663,6 @@ class FindabilityMetric(ABC):
         partitions : Partitions
             Partitions defining the start and end night (both inclusive) of the observations to include.
         """
-        if partitions is None:
-            partitions = Partitions.create_single(observations.night)
-
         if not by_object and ignore_after_discovery:
             warnings.warn(
                 (
@@ -693,7 +690,7 @@ class FindabilityMetric(ABC):
                 max_processes=max_processes,
             )
 
-        return findable, partitions
+        return findable
 
 
 class NightlyLinkagesMetric(FindabilityMetric):
