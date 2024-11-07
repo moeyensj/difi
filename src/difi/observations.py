@@ -1,9 +1,11 @@
+from typing import Union
+
 import pyarrow.compute as pc
 import quivr as qv
 from adam_core.time import Timestamp
 from quivr.validators import and_, ge, le
 
-from .partitions import Partitions
+from .partitions import Partitions, PartitionSummary
 
 
 class Observations(qv.Table):
@@ -21,13 +23,13 @@ class Observations(qv.Table):
     object_id = qv.LargeStringColumn(nullable=True)
     night = qv.Int64Column()
 
-    def filter_partition(self, partition: Partitions) -> "Observations":
+    def filter_partition(self, partition: Union[Partitions, PartitionSummary]) -> "Observations":
         """
         Filter the observations to only include those within the given partition.
 
         Parameters
         ----------
-        partition : Partitions
+        partition : Union[Partition, PartitionSummary]
             Partition defining the start and end night (both inclusive) of the observations to include.
 
         Returns

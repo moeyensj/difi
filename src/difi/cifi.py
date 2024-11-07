@@ -1,79 +1,114 @@
 from typing import Dict, List, Optional, Tuple, TypeVar, Union
 
-import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.compute as pc
+import quivr as qv
 
-from .metrics import FindabilityMetric, MinObsMetric, NightlyLinkagesMetric
+from .metrics import (
+    FindabilityMetric,
+    FindableObservations,
+    MinObsMetric,
+    NightlyLinkagesMetric,
+)
+from .observations import Observations
+from .partitions import PartitionSummary
 from .utils import _classHandler
 
 __all__ = ["analyzeObservations"]
 
+
 Metrics = TypeVar("Metrics", bound=FindabilityMetric)
 
 
-def _create_all_objects(
-    observations: pd.DataFrame, findable: pd.DataFrame, window_summary: pd.DataFrame
-) -> pd.DataFrame:
-    """
-    Create a dataframe containing all objects, the number of observations, and whether or
-    not they are findable per window.
+class AllObjects(qv.Table):
+    object_id = qv.LargeStringColumn()
+    partition_id = qv.LargeStringColumn()
+    mjd_min = qv.Float64Column()
+    mjd_max = qv.Float64Column()
+    arc_length = qv.Float64Column()
+    num_obs = qv.Int64Column()
+    num_observatories = qv.Int64Column()
+    findable = qv.Int64Column(nullable=True)
+    found = qv.Int64Column(nullable=True)
+    found_pure = qv.Int64Column(nullable=True)
+    found_partial = qv.Int64Column(nullable=True)
+    pure = qv.Int64Column(nullable=True)
+    pure_complete = qv.Int64Column(nullable=True)
+    partial = qv.Int64Column(nullable=True)
+    partial_contaminant = qv.Int64Column(nullable=True)
+    mixed = qv.Int64Column(nullable=True)
+    obs_in_pure = qv.Int64Column(nullable=True)
+    obs_in_pure_complete = qv.Int64Column(nullable=True)
+    obs_in_partial = qv.Int64Column(nullable=True)
+    obs_in_partial_contaminant = qv.Int64Column(nullable=True)
+    obs_in_mixed = qv.Int64Column(nullable=True)
 
-    Parameters
-    ----------
-    observations : `~pandas.DataFrame`
-        Observations dataframe containing at least the following columns:
-        `obs_id`, `time`, `night`, `object_id`.
-    findable : `~pandas.DataFrame`
-        Findable dataframe containing at least the following columns:
-        `object_id`, `window_id`.
-    window_summary : `~pandas.DataFrame`
-        Window summary dataframe containing at least the following columns:
-        `window_id`, `start_night`, `end_night`.
+    @classmethod
+    def create(
+        cls,
+        observations: Observations,
+        findable: FindableObservations,
+        partition_summary: PartitionSummary,
+    ) -> "AllObjects":
+        """
+        Create a summary of all objects in the observations subdivided by partitions.
+        For each unique object in a partition, the number of observations, number of observatories,
+        and the arc length of the observations are calculated.
 
-    Returns
-    -------
-    all_objects : `~pandas.DataFrame`
-        Dataframe containing all objects, the number of observations, and whether or not they are findable
-        per window.
-    """
-    all_objects_dfs = []
-    window_ids = window_summary["window_id"].unique()
-    for window_id in window_ids:
-        # Create masks for the dataframes
-        window_i = window_summary[window_summary["window_id"] == window_id]
 
-        # Get the findable objects for this window
-        findable_i = findable[findable["window_id"] == window_id]
+        Parameters
+        ----------
+        observations : Observations
+            Table of observations.
+        findable : FindableObservations
+            Table of findable observations per partition.
+        partition_summary : PartitionSummary
+            Table of partition summaries that defines the start and end nights of the partitions.
 
-        # Get the observations for this window
-        night_min = window_i["start_night"].values[0]
-        night_max = window_i["end_night"].values[0]
-        observations_in_window = observations[
-            observations["night"].between(night_min, night_max, inclusive="both")
-        ]
+        Returns
+        -------
+        all_objects : AllObjects
+            Summary of all objects in the observations.
+        """
+        all_objects = cls.empty()
 
-        num_obs_per_object = observations_in_window["object_id"].value_counts().values
-        objects_by_num_obs_descending = observations_in_window["object_id"].value_counts().index.values
+        for partition in partition_summary:
+            partition_id = partition.id[0].as_py()
 
-        all_objects_i = pd.DataFrame(
-            {
-                "window_id": [window_id for _ in range(len(objects_by_num_obs_descending))],
-                "object_id": objects_by_num_obs_descending,
-                "num_obs": num_obs_per_object,
-                "findable": np.zeros(len(objects_by_num_obs_descending), dtype=int),
-            }
-        )
+            # Get the findable objects for this window
+            findable_i = findable.select("partition_id", partition_id)
 
-        all_objects_i.loc[all_objects_i["object_id"].isin(findable_i["object_id"].values), "findable"] = 1
-        all_objects_dfs.append(all_objects_i)
+            observations_in_window = observations.filter_partition(partition)
+            observations_in_window_table = observations_in_window.flattened_table().append_column(
+                "mjd_utc", observations_in_window.time.rescale("utc").mjd()
+            )
 
-    all_objects = pd.concat(all_objects_dfs, ignore_index=True)
-    all_objects.sort_values(
-        by=["window_id", "object_id"], ascending=[True, True], inplace=True, ignore_index=True
-    )
-    for col in ["window_id", "num_obs", "findable"]:
-        all_objects.loc[:, col] = all_objects[col].astype(int)
-    return all_objects
+            num_obs_per_object = observations_in_window_table.group_by(
+                ["object_id"], use_threads=False
+            ).aggregate(
+                [
+                    ("object_id", "count", pc.CountOptions(mode="all")),
+                    ("mjd_utc", "max", pc.CountOptions(mode="all")),
+                    ("mjd_utc", "min", pc.CountOptions(mode="all")),
+                    ("observatory_code", "count_distinct", pc.CountOptions(mode="all")),
+                ]
+            )
+
+            all_objects_i = cls.from_kwargs(
+                partition_id=pa.repeat(partition_id, len(num_obs_per_object)),
+                object_id=num_obs_per_object["object_id"],
+                num_obs=num_obs_per_object["object_id_count"],
+                num_observatories=num_obs_per_object["observatory_code_count_distinct"],
+                mjd_min=num_obs_per_object["mjd_utc_min"],
+                mjd_max=num_obs_per_object["mjd_utc_max"],
+                arc_length=pc.subtract(num_obs_per_object["mjd_utc_max"], num_obs_per_object["mjd_utc_min"]),
+                findable=pc.is_in(num_obs_per_object["object_id"], findable_i.object_id.unique()),
+            )
+
+            all_objects = qv.concatenate([all_objects, all_objects_i])
+
+        return all_objects.sort_by([("partition_id", "ascending"), ("num_obs", "descending")])
 
 
 def _create_summary(
@@ -277,7 +312,7 @@ def analyzeObservations(
         num_jobs=num_jobs,
     )
     # Create the all objects dataframe
-    all_objects = _create_all_objects(observations, findable_observations, window_summary)
+    all_objects = AllObjects.create(observations, findable_observations, window_summary)
 
     # Populate summary DataFrame
     summary = _create_summary(observations, classes, all_objects, window_summary)
