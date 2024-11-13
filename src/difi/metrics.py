@@ -14,7 +14,7 @@ from numba import njit
 from .observations import Observations
 from .partitions import Partitions
 
-__all__ = ["FindabilityMetric", "NightlyLinkagesMetric", "MinObsMetric"]
+__all__ = ["FindabilityMetric", "TrackletMetric", "SingletonMetric"]
 
 Metrics = TypeVar("Metrics", bound="FindabilityMetric")
 
@@ -693,10 +693,10 @@ class FindabilityMetric(ABC):
         return findable
 
 
-class NightlyLinkagesMetric(FindabilityMetric):
+class TrackletMetric(FindabilityMetric):
     def __init__(
         self,
-        linkage_min_obs: int = 2,
+        tracklet_min_obs: int = 2,
         max_obs_separation: float = 1.5 / 24,
         min_linkage_nights: int = 3,
         min_obs_angular_separation: float = 1.0,
@@ -705,12 +705,12 @@ class NightlyLinkagesMetric(FindabilityMetric):
         Given observations belonging to one object, finds all observations that are within
         max_obs_separation of each other.
 
-        If linkage_min_obs is 1 then the object is findable if there are at least
+        If tracklet_min_obs is 1 then the object is findable if there are at least
         min_linkage_nights of observations.
 
         Parameters
         ----------
-        linkage_min_obs : int, optional
+        tracklet_min_obs : int, optional
             Minimum number of observations needed to make a intra-night
             linkage (tracklet).
         tracklet_max_time_span : float, optional
@@ -724,7 +724,7 @@ class NightlyLinkagesMetric(FindabilityMetric):
             to be considered to be in a linkage (in arcseconds).
         """
         super().__init__()
-        self.linkage_min_obs = linkage_min_obs
+        self.tracklet_min_obs = tracklet_min_obs
         self.min_linkage_nights = min_linkage_nights
         self.max_obs_separation = max_obs_separation
         self.min_obs_angular_separation = min_obs_angular_separation
@@ -738,7 +738,7 @@ class NightlyLinkagesMetric(FindabilityMetric):
         Given observations belonging to one object, finds all observations that are within
         max_obs_separation of each other.
 
-        If linkage_min_obs is 1 then the object is findable if there are at least
+        If tracklet_min_obs is 1 then the object is findable if there are at least
         min_linkage_nights of observations.
 
         Parameters
@@ -770,7 +770,7 @@ class NightlyLinkagesMetric(FindabilityMetric):
             observations_in_window = observations.filter_partition(partition)
 
             # Exit early if there are not enough observations
-            total_required_obs = self.linkage_min_obs * self.min_linkage_nights
+            total_required_obs = self.tracklet_min_obs * self.min_linkage_nights
             if len(observations_in_window) < total_required_obs:
                 obs_ids_partition[partition_id] = []
                 continue
@@ -782,7 +782,7 @@ class NightlyLinkagesMetric(FindabilityMetric):
             ra = observations_in_window.ra.to_numpy(zero_copy_only=False)
             dec = observations_in_window.dec.to_numpy(zero_copy_only=False)
 
-            if self.linkage_min_obs > 1:
+            if self.tracklet_min_obs > 1:
 
                 linkage_obs = obs_ids[
                     find_observations_within_max_time_separation(
@@ -797,7 +797,7 @@ class NightlyLinkagesMetric(FindabilityMetric):
                 )
 
                 # Make sure that there are enough observations on each night to make a linkage
-                valid_unique_nights = linkage_nights[night_counts >= self.linkage_min_obs]
+                valid_unique_nights = linkage_nights[night_counts >= self.tracklet_min_obs]
                 valid_mask = np.isin(nights, valid_unique_nights)
                 valid_nights = nights[valid_mask]
                 linkage_obs = obs_ids[valid_mask]
@@ -821,13 +821,13 @@ class NightlyLinkagesMetric(FindabilityMetric):
                     valid_unique_nights = np.unique(valid_nights)
 
             else:
-                # If linkage_min_obs is 1, then we don't need to check for time separation
+                # If tracklet_min_obs is 1, then we don't need to check for time separation
                 # All nights with at least one observation are valid
                 valid_nights = nights
                 valid_unique_nights = np.unique(valid_nights)
                 linkage_obs = obs_ids
 
-            # Make sure that the number of observations is still linkage_min_obs * min_linkage_nights
+            # Make sure that the number of observations is still tracklet_min_obs * min_linkage_nights
             enough_obs = len(linkage_obs) >= total_required_obs
 
             # Make sure that the number of unique nights on which a linkage is made
@@ -845,7 +845,7 @@ class NightlyLinkagesMetric(FindabilityMetric):
         return obs_ids_partition
 
 
-class MinObsMetric(FindabilityMetric):
+class SingletonMetric(FindabilityMetric):
     def __init__(
         self,
         min_obs: int = 5,

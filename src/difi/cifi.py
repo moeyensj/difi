@@ -7,8 +7,8 @@ import quivr as qv
 from .metrics import (
     FindabilityMetric,
     FindableObservations,
-    MinObsMetric,
-    NightlyLinkagesMetric,
+    SingletonMetric,
+    TrackletMetric,
 )
 from .observations import Observations
 from .partitions import Partitions, PartitionSummary
@@ -112,7 +112,7 @@ class AllObjects(qv.Table):
 def analyze_observations(
     observations: Observations,
     partitions: Optional[Partitions] = None,
-    metric: Union[str, Metrics] = "min_obs",
+    metric: Union[str, Metrics] = "singletons",
     discovery_opportunities: bool = False,
     discovery_probability: float = 1.0,
     by_object: bool = False,
@@ -161,8 +161,8 @@ def analyze_observations(
         partitions = Partitions.create_single(observations.night)
 
     metric_func_mapper = {
-        "min_obs": MinObsMetric,
-        "nightly_linkages": NightlyLinkagesMetric,
+        "singletons": SingletonMetric,
+        "tracklets": TrackletMetric,
     }
     if isinstance(metric, str):
         if metric not in metric_func_mapper:
