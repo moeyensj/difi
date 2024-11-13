@@ -5,6 +5,5 @@ except ImportError:
     __version__ = "unknown"
 from .cifi import *
 from .difi import *
-from .io import *
 from .metrics import *
 from .utils import *
