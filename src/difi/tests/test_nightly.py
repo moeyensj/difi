@@ -1,15 +1,15 @@
 import numpy as np
+import pytest
 from adam_core.coordinates import Residuals
 from adam_core.orbit_determination import FittedOrbitMembers
 from adam_core.time import Timestamp
 
-from ..nightly import NightlyOrbitSummary
+from ..nightly import NightlyOrbitSummary, OrbitSummary
 from ..observations import Observations
 
 
-def test_NightlyOrbitSummary_create():
-    # Test that the NightlyOrbitSummary.create method to group
-    # orbit members by orbit and night and calculate summary statistics correctly
+@pytest.fixture
+def observations_and_orbit_members() -> tuple[Observations, FittedOrbitMembers]:
     times = Timestamp.from_kwargs(
         days=[59000, 59000, 59001, 59001, 59002, 59003], nanos=[0, 60 * 1e9, 0, 60 * 1e9, 0, 0], scale="utc"
     )
@@ -46,7 +46,13 @@ def test_NightlyOrbitSummary_create():
             chi2=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
         ),
     )
+    return observations, orbit_members
 
+
+def test_NightlyOrbitSummary_create(observations_and_orbit_members):
+    # Test that the NightlyOrbitSummary.create method to group
+    # orbit members by orbit and night and calculate summary statistics correctly
+    observations, orbit_members = observations_and_orbit_members
     nightly_summary = NightlyOrbitSummary.create(orbit_members, observations)
 
     assert nightly_summary.orbit_id.to_pylist() == ["1", "1", "1", "1", "2", "2", "2", "2"]
@@ -105,3 +111,17 @@ def test_NightlyOrbitSummary_create():
     np.testing.assert_almost_equal(
         nightly_summary.dchi2.to_numpy(zero_copy_only=False), [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0]
     )
+
+
+def test_OrbitSummary_create(observations_and_orbit_members):
+    # Test that the OrbitSummary.create method to group
+    # orbit members by orbit and calculate summary statistics correctly
+    observations, orbit_members = observations_and_orbit_members
+    nightly_summary = NightlyOrbitSummary.create(orbit_members, observations)
+    orbit_summary = OrbitSummary.create(nightly_summary)
+
+    assert orbit_summary.orbit_id.to_pylist() == ["1", "2"]
+    assert orbit_summary.num_obs.to_pylist() == [6, 6]
+    assert orbit_summary.num_nights.to_pylist() == [4, 4]
+    assert orbit_summary.num_singletons.to_pylist() == [2, 2]
+    assert orbit_summary.num_tracklets.to_pylist() == [2, 2]

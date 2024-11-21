@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -7,6 +9,70 @@ from adam_core.orbit_determination import FittedOrbitMembers
 from difi.observations import Observations
 
 from .metrics import haversine_distance
+
+
+class OrbitSummary(qv.Table):
+    #: Orbit ID
+    orbit_id = qv.LargeStringColumn()
+    #: Number of observations
+    num_obs = qv.Int64Column()
+    #: Number of nights
+    num_nights = qv.Int64Column()
+    #: Number of singletons
+    num_singletons = qv.Int64Column()
+    #: Number of tracklets
+    num_tracklets = qv.Int64Column()
+
+    @classmethod
+    def create(cls, nightly_orbit_summary: "NightlyOrbitSummary") -> "OrbitSummary":
+        """
+        Create an OrbitSummary table from a NightlyOrbitSummary table. This table describes
+        the number of observed tracklets and singletons for each orbit.
+
+        Parameters
+        ----------
+        nightly_orbit_summary : NightlyOrbitSummary
+            NightlyOrbitSummary table.
+
+        Returns
+        -------
+        OrbitSummary
+            OrbitSummary table.
+        """
+        nightly_orbit_summary_table = (
+            nightly_orbit_summary.flattened_table().sort_by(
+                [("orbit_id", "ascending"), ("night", "ascending")]
+            )
+        ).combine_chunks()
+
+        orbit_summary = nightly_orbit_summary_table.group_by(["orbit_id"], use_threads=False).aggregate(
+            [
+                ("night", "count"),
+                # ("dtime", "sum"),
+                # ("dsky", "sum"),
+                ("num_obs", "sum"),
+            ]
+        )
+
+        singletons = nightly_orbit_summary_table.filter(pc.equal(nightly_orbit_summary_table["num_obs"], 1))
+        singletons = (
+            singletons.group_by(["orbit_id"], use_threads=False)
+            .aggregate(
+                [
+                    ("num_obs", "count"),
+                ]
+            )
+            .rename_columns({"num_obs_count": "singletons"})
+        )
+        orbit_summary = orbit_summary.join(singletons, "orbit_id", "orbit_id")
+
+        return OrbitSummary.from_kwargs(
+            orbit_id=orbit_summary["orbit_id"],
+            num_nights=orbit_summary["night_count"],
+            num_obs=orbit_summary["num_obs_sum"],
+            num_singletons=orbit_summary["singletons"],
+            num_tracklets=pc.subtract(orbit_summary["night_count"], orbit_summary["singletons"]),
+        )
 
 
 class NightlyOrbitSummary(qv.Table):
@@ -176,3 +242,26 @@ class NightlyOrbitSummary(qv.Table):
             chi2_sigma=nightly_summary["residuals.chi2_stddev"],
             dchi2=nightly_summary["dchi2"],
         )
+
+
+def compute_orbit_summaries(
+    orbit_members: FittedOrbitMembers, observations: Observations
+) -> Tuple[OrbitSummary, NightlyOrbitSummary]:
+    """
+    Compute the nightly and orbit summaries for the given orbit members and observations.
+
+    Parameters
+    ----------
+    orbit_members : FittedOrbitMembers
+        The fitted orbit members.
+    observations : Observations
+        The observations table.
+
+    Returns
+    -------
+    Tuple[OrbitSummary, NightlyOrbitSummary]
+        The orbit and nightly summaries.
+    """
+    nightly_summary = NightlyOrbitSummary.create(orbit_members, observations)
+    orbit_summary = OrbitSummary.create(nightly_summary)
+    return orbit_summary, nightly_summary
