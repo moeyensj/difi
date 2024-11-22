@@ -147,8 +147,9 @@ class PartitionSummary(qv.Table):
     findable = qv.Int64Column(nullable=True)
     #: Number of unique objects that were found in the partition.
     found = qv.Int64Column(nullable=True)
-    #: The completeness of the partition (found / findable).
-    completeness = qv.Float64Column(nullable=True, validator=and_(ge(0), le(1)))
+    #: The completeness of the partition (found / findable). If findable is
+    # 0 then completness is the number of objects found * 100.
+    completeness = qv.Float64Column(nullable=True)
     #: Number of pure linkages of known objects.
     pure_known = qv.Int64Column(nullable=True)
     #: Number of pure linkages of unassociated observations.
@@ -194,7 +195,7 @@ class PartitionSummary(qv.Table):
             if partition_summaries.fragmented():
                 partition_summaries = qv.defragment(partition_summaries)
 
-        return partition_summaries
+        return partition_summaries.sort_by([("id", "ascending")])
 
     def update_findable(self, findable_observations: "FindableObservations") -> "PartitionSummary":
         """

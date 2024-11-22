@@ -27,19 +27,18 @@ class AllObjects(qv.Table):
     arc_length = qv.Float64Column()
     num_obs = qv.Int64Column()
     num_observatories = qv.Int64Column()
-    findable = qv.Int64Column(nullable=True)
-    found = qv.Int64Column(nullable=True)
+    findable = qv.BooleanColumn(nullable=True)
     found_pure = qv.Int64Column(nullable=True)
-    found_partial = qv.Int64Column(nullable=True)
+    found_contaminated = qv.Int64Column(nullable=True)
     pure = qv.Int64Column(nullable=True)
     pure_complete = qv.Int64Column(nullable=True)
-    partial = qv.Int64Column(nullable=True)
-    partial_contaminant = qv.Int64Column(nullable=True)
+    contaminated = qv.Int64Column(nullable=True)
+    contaminant = qv.Int64Column(nullable=True)
     mixed = qv.Int64Column(nullable=True)
     obs_in_pure = qv.Int64Column(nullable=True)
     obs_in_pure_complete = qv.Int64Column(nullable=True)
-    obs_in_partial = qv.Int64Column(nullable=True)
-    obs_in_partial_contaminant = qv.Int64Column(nullable=True)
+    obs_in_contaminated = qv.Int64Column(nullable=True)
+    obs_as_contaminant = qv.Int64Column(nullable=True)
     obs_in_mixed = qv.Int64Column(nullable=True)
 
     @classmethod
@@ -106,7 +105,7 @@ class AllObjects(qv.Table):
 
             all_objects = qv.concatenate([all_objects, all_objects_i])
 
-        return all_objects.sort_by([("partition_id", "ascending"), ("num_obs", "descending")])
+        return all_objects.sort_by([("partition_id", "ascending"), ("object_id", "ascending")])
 
 
 def analyze_observations(
