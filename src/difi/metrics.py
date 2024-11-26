@@ -6,6 +6,7 @@ from itertools import combinations
 from typing import Optional, TypeVar
 
 import numpy as np
+import pyarrow.compute as pc
 import quivr as qv
 import ray
 from adam_core.ray_cluster import initialize_use_ray
@@ -24,12 +25,10 @@ class FindableObservations(qv.Table):
     partition_id = qv.LargeStringColumn()
     #: Object ID
     object_id = qv.LargeStringColumn()
-    #: The number of discovery opportunities for this object during this partition.
-    discovery_opportunities = qv.Int64Column()
-    #: For each discovery opportunity, the night at which the minimum critera was met.
-    discovery_nights = qv.ListColumn(qv.Int64Column())
-    #: The observations IDs for each discovery opportunity.
-    obs_ids = qv.ListColumn(qv.ListColumn(qv.LargeStringColumn()), nullable=True)
+    #: The night at which the minimum critera was met.
+    discovery_night = qv.Int64Column(nullable=True)
+    #: The observations IDs found that statisfied the discovery criteria.
+    obs_ids = qv.ListColumn(qv.LargeStringColumn(), nullable=True)
 
 
 @njit(cache=True)
@@ -244,11 +243,7 @@ def apply_discovery_probability(
 
 
 def partition_worker(
-    metric: "FindabilityMetric",
-    partition: Partitions,
-    observations: Observations,
-    discovery_opportunities: bool = False,
-    discovery_probability: float = 1.0,
+    metric: "FindabilityMetric", partition: Partitions, observations: Observations
 ) -> FindableObservations:
     """
     Run the metric on a single window of observations.
@@ -261,17 +256,6 @@ def partition_worker(
         Partition defining the start and end night (both inclusive) of the observations to include.
     observations : Observations
         Observations to run the metric on.
-    discovery_opportunities : bool, optional
-        If True, then return the combinations of observations that made each object findable.
-        Note, that if True, this can greatly increase the memory consumption.
-        If False, just return the unique observation IDs across all discovery chances.
-    discovery_probability : float, optional
-        The probability applied to a single discovery opportunity that this object will be discovered.
-        Each object will have a random seed generated from its object ID, and for each discovery
-        opportunity a random number will be drawn between 0 and 1. If the random number is less
-        than the discovery probability, then the object will be discovered. If not, then it will
-        not be discovered.
-
 
     Returns
     -------
@@ -287,45 +271,27 @@ def partition_worker(
     findable_observations = FindableObservations.empty()
     for object_id in observations_in_partition.object_id.unique():
 
-        discovery_opportunities = metric.determine_object_findable(
+        discovery_opportunities_partition = metric.determine_object_findable(
             observations_in_partition.select("object_id", object_id),
-            # We are running on a single partition so don't need to pass in partitions
-            partitions=None,
+            partitions=partition,
         )
-        discovery_nights_partition, discovery_obs_ids_partition = discovery_opportunities[partition_id]
+        discovery_night_partition, discovery_obs_ids_partition = discovery_opportunities_partition[
+            partition_id
+        ]
 
-        # If there are discovery opportunities, then apply the discovery probability
-        if len(discovery_obs_ids_partition) > 0:
+        if discovery_night_partition is None:
+            continue
 
-            obs_ids_unique, discovery_nights_partition, discovery_obs_ids_partition = (
-                apply_discovery_probability(
-                    discovery_obs_ids_partition, discovery_nights_partition, object_id, discovery_probability
-                )
-            )
-            num_opportunities = len(discovery_obs_ids_partition)
+        findable = FindableObservations.from_kwargs(
+            partition_id=[partition_id],
+            object_id=[object_id],
+            discovery_night=[discovery_night_partition],
+            obs_ids=[discovery_obs_ids_partition],
+        )
 
-            if discovery_opportunities:
-                obs_ids = discovery_obs_ids_partition
-            else:
-                obs_ids = [obs_ids_unique]
-                discovery_nights_partition = np.unique(discovery_nights_partition)
-                discovery_nights_partition.sort()
-
-        else:
-            num_opportunities = 0
-
-        if num_opportunities > 0:
-            findable = FindableObservations.from_kwargs(
-                partition_id=[partition_id],
-                object_id=[object_id],
-                discovery_nights=[discovery_nights_partition],
-                discovery_opportunities=[num_opportunities],
-                obs_ids=[obs_ids],
-            )
-
-            findable_observations = qv.concatenate([findable_observations, findable])
-            if findable_observations.fragmented():
-                findable_observations = qv.defragment(findable_observations)
+        findable_observations = qv.concatenate([findable_observations, findable])
+        if findable_observations.fragmented():
+            findable_observations = qv.defragment(findable_observations)
 
     findable_observations = findable_observations.sort_by(
         [
@@ -345,8 +311,6 @@ def object_worker(
     object_id: str,
     partitions: Partitions,
     observations: Observations,
-    discovery_opportunities: bool = False,
-    discovery_probability: float = 1.0,
     ignore_after_discovery: bool = False,
 ) -> FindableObservations:
     """
@@ -363,16 +327,6 @@ def object_worker(
         These partitions are used to filter the observations to only include those within the given partition.
     observations : Observations
         Observations to run the metric on.
-    discovery_opportunities : bool, optional
-        If True, then return the combinations of observations that made each object findable.
-        Note, that if True, this can greatly increase the memory consumption.
-        If False, just return the unique observation IDs across all discovery chances.
-    discovery_probability : float, optional
-        The probability applied to a single discovery opportunity that this object will be discovered.
-        Each object will have a random seed generated from its object ID, and for each discovery
-        opportunity a random number will be drawn between 0 and 1. If the random number is less
-        than the discovery probability, then the object will be discovered. If not, then it will
-        not be discovered.
 
     Returns
     -------
@@ -385,47 +339,31 @@ def object_worker(
     if num_obs == 0:
         return FindableObservations.empty()
 
-    discovery_opportunities = metric.determine_object_findable(object_observations, partitions=partitions)
+    discovery_opportunities_object = metric.determine_object_findable(
+        object_observations, partitions=partitions
+    )
 
     findable_observations = FindableObservations.empty()
     for partition in partitions:
         partition_id = partition.id[0].as_py()
 
-        discovery_nights_partition, discovery_obs_ids_partition = discovery_opportunities[partition_id]
+        discovery_night_partition, discovery_obs_ids_partition = discovery_opportunities_object[partition_id]
 
-        if len(discovery_obs_ids_partition) > 0:
+        if discovery_night_partition is None:
+            continue
 
-            obs_ids_unique, discovery_nights_partition, discovery_obs_ids_partition = (
-                apply_discovery_probability(
-                    discovery_obs_ids_partition, discovery_nights_partition, object_id, discovery_probability
-                )
-            )
-            num_opportunities = len(discovery_obs_ids_partition)
+        findable = FindableObservations.from_kwargs(
+            partition_id=partition.id,
+            object_id=[object_id],
+            discovery_night=[discovery_night_partition],
+            obs_ids=[discovery_obs_ids_partition],
+        )
 
-            if discovery_opportunities:
-                obs_ids = discovery_obs_ids_partition
-            else:
-                obs_ids = [obs_ids_unique]
-                discovery_nights_partition = np.unique(discovery_nights_partition)
-                discovery_nights_partition.sort()
+        findable_observations = qv.concatenate([findable_observations, findable])
+        if findable_observations.fragmented():
+            findable_observations = qv.defragment(findable_observations)
 
-        else:
-            num_opportunities = 0
-
-        if num_opportunities > 0:
-            findable = FindableObservations.from_kwargs(
-                partition_id=partition.id,
-                object_id=[object_id],
-                discovery_nights=[discovery_nights_partition],
-                discovery_opportunities=[num_opportunities],
-                obs_ids=[obs_ids],
-            )
-
-            findable_observations = qv.concatenate([findable_observations, findable])
-            if findable_observations.fragmented():
-                findable_observations = qv.defragment(findable_observations)
-
-        if ignore_after_discovery and num_opportunities > 0:
+        if ignore_after_discovery:
             break
 
     findable_observations = findable_observations.sort_by(
@@ -452,8 +390,6 @@ class FindabilityMetric(ABC):
         self,
         observations: Observations,
         partitions: Partitions,
-        discovery_opportunities: bool = False,
-        discovery_probability: float = 1.0,
         ignore_after_discovery: bool = False,
         max_processes: Optional[int] = 1,
     ) -> FindableObservations:
@@ -467,16 +403,6 @@ class FindabilityMetric(ABC):
         partitions : Partitions
             Partitions defining the start and end night (both inclusive) of the observations to include.
             These partitions are used to filter the observations to only include those within the given partition.
-        discovery_opportunities : bool, optional
-            If True, then return the combinations of observations that made each object findable.
-            Note, that if True, this can greatly increase the memory consumption.
-            If False, just return the unique observation IDs across all discovery chances.
-        discovery_probability : float, optional
-            The probability applied to a single discovery opportunity that this object will be discovered.
-            Each object will have a random seed generated from its object ID, and for each discovery
-            opportunity a random number will be drawn between 0 and 1. If the random number is less
-            than the discovery probability, then the object will be discovered. If not, then it will
-            not be discovered.
         ignore_after_discovery : bool, optional
             If True, then ignore observations that occur after the object has been discovered. Only applies
             when by_object is True. If False, then the objects will be tested for discovery chances again.
@@ -506,8 +432,6 @@ class FindabilityMetric(ABC):
                         object_id,
                         partitions,
                         observations_ref,
-                        discovery_opportunities=discovery_opportunities,
-                        discovery_probability=discovery_probability,
                         ignore_after_discovery=ignore_after_discovery,
                     )
                 )
@@ -537,8 +461,6 @@ class FindabilityMetric(ABC):
                     object_id,
                     partitions,
                     observations,
-                    discovery_opportunities=discovery_opportunities,
-                    discovery_probability=discovery_probability,
                     ignore_after_discovery=ignore_after_discovery,
                 )
 
@@ -552,8 +474,6 @@ class FindabilityMetric(ABC):
         self,
         observations: Observations,
         partitions: Partitions,
-        discovery_opportunities: bool = False,
-        discovery_probability: float = 1.0,
         max_processes: Optional[int] = 1,
     ) -> FindableObservations:
         """
@@ -600,8 +520,6 @@ class FindabilityMetric(ABC):
                         self,
                         partition,
                         observations_ref,
-                        discovery_opportunities=discovery_opportunities,
-                        discovery_probability=discovery_probability,
                     )
                 )
 
@@ -628,8 +546,6 @@ class FindabilityMetric(ABC):
                     self,
                     partition,
                     observations,
-                    discovery_opportunities=discovery_opportunities,
-                    discovery_probability=discovery_probability,
                 )
                 findable_observations = qv.concatenate([findable_observations, findable_observations_i])
                 if findable_observations.fragmented():
@@ -641,8 +557,6 @@ class FindabilityMetric(ABC):
         self,
         observations: Observations,
         partitions: Partitions,
-        discovery_opportunities: bool = False,
-        discovery_probability: float = 1.0,
         by_object: bool = False,
         ignore_after_discovery: bool = False,
         max_processes: Optional[int] = None,
@@ -658,16 +572,6 @@ class FindabilityMetric(ABC):
             Partitions defining the start and end night (both inclusive) of the observations to include.
             These partitions are used to filter the observations to only include those within the given partition.
             If None, then the observations are partitioned into a single partition spanning the full range of nights.
-        discovery_opportunities : bool, optional
-            If True, then return the combinations of observations that made each object findable.
-            Note, that if True, this can greatly increase the memory consumption.
-            If False, just return the unique observation IDs across all discovery chances.
-        discovery_probability : float, optional
-            The probability applied to a single discovery opportunity that this object will be discovered.
-            Each object will have a random seed generated from its object ID, and for each discovery
-            opportunity a random number will be drawn between 0 and 1. If the random number is less
-            than the discovery probability, then the object will be discovered. If not, then it will
-            not be discovered.
         by_object : bool, optional
             If True, then run the metric by object. If False, then run the metric by partition.
         ignore_after_discovery : bool, optional
@@ -692,25 +596,27 @@ class FindabilityMetric(ABC):
             )
             ignore_after_discovery = False
 
+        observations_with_object_ids = observations.apply_mask(
+            pc.invert(
+                pc.is_null(observations.object_id),
+            )
+        )
+
         if by_object:
             findable = self.run_by_object(
-                observations,
+                observations_with_object_ids,
                 partitions,
-                discovery_opportunities=discovery_opportunities,
-                discovery_probability=discovery_probability,
                 ignore_after_discovery=ignore_after_discovery,
                 max_processes=max_processes,
             )
         else:
             findable = self.run_by_partition(
-                observations,
+                observations_with_object_ids,
                 partitions,
-                discovery_opportunities=discovery_opportunities,
-                discovery_probability=discovery_probability,
                 max_processes=max_processes,
             )
 
-        return findable
+        return findable.sort_by([("partition_id", "ascending"), ("object_id", "ascending")])
 
 
 class TrackletMetric(FindabilityMetric):
@@ -753,7 +659,7 @@ class TrackletMetric(FindabilityMetric):
         self,
         observations: Observations,
         partitions: Optional[Partitions] = None,
-    ) -> dict[str, tuple[list[int], list[list[str]]]]:
+    ) -> dict[str, Optional[int], Optional[list[str]]]:
         """
         Given observations belonging to one object, finds all observations that are within
         max_obs_separation of each other.
@@ -772,7 +678,7 @@ class TrackletMetric(FindabilityMetric):
 
         Returns
         -------
-        obs_ids : dict[str, tuple[list[int], list[list[str]]]]:
+        obs_ids : dict[str, Optional[int], Optional[list[str]]]:
             dictionary keyed on partition IDs, with values of lists containining a tuple
             of discovery nights and corresponding observation IDs for each discovery opportunity.
             If no discovery opportunities are found, then the list will be empty.
@@ -790,7 +696,7 @@ class TrackletMetric(FindabilityMetric):
             # Exit early if there are not enough observations
             total_required_obs = self.tracklet_min_obs * self.min_linkage_nights
             if len(observations_in_window) < total_required_obs:
-                obs_ids_partition[partition_id] = []
+                obs_ids_partition[partition_id] = (None, None)
                 continue
 
             # Grab times and observation IDs from grouped observations
@@ -852,18 +758,17 @@ class TrackletMetric(FindabilityMetric):
             # is still equal to or greater than the minimum number of nights.
             enough_nights = len(valid_unique_nights) >= self.min_linkage_nights
 
-            discovery_nights = []
-            obs_ids_discovery = []
+            discovery_night = None
+            obs_ids_discovery = None
             if not enough_obs or not enough_nights:
                 obs_ids_discovery = []
             else:
-                obs_indices = select_tracklet_combinations(valid_nights, self.min_linkage_nights)
-                obs_ids_discovery = [linkage_obs[ind].tolist() for ind in obs_indices]
-                discovery_nights = [
-                    valid_nights[ind[self.min_linkage_nights - 1]].tolist() for ind in obs_indices
+                discovery_night = valid_unique_nights[self.min_linkage_nights - 1]
+                obs_ids_discovery = obs_ids[
+                    np.isin(valid_nights, valid_unique_nights[valid_unique_nights <= discovery_night])
                 ]
 
-            obs_ids_partition[partition_id] = (discovery_nights, obs_ids_discovery)
+            obs_ids_partition[partition_id] = (discovery_night, obs_ids_discovery)
 
         return obs_ids_partition
 
@@ -886,7 +791,7 @@ class SingletonMetric(FindabilityMetric):
 
     def determine_object_findable(
         self, observations: Observations, partitions: Optional[Partitions] = None
-    ) -> dict[str, tuple[list[int], list[list[str]]]]:
+    ) -> dict[str, Optional[int], Optional[list[str]]]:
         """
         Finds all objects with a minimum of self.min_obs observations and the observations
         that makes them findable.
@@ -902,7 +807,7 @@ class SingletonMetric(FindabilityMetric):
 
         Returns
         -------
-        obs_ids : dict[str, tuple[list[int], list[list[str]]]]:
+        obs_ids : dict[str, Optional[int], Optional[list[str]]]:
             dictionary keyed on partition IDs, with values of lists containining a tuple
             of discovery nights and corresponding observation IDs for each discovery opportunity.
             If no discovery opportunities are found, then the list will be empty.
@@ -918,19 +823,15 @@ class SingletonMetric(FindabilityMetric):
 
             observations_in_partition = observations.filter_partition(partition)
 
-            discovery_nights = []
-            obs_ids_discovery = []
+            discovery_night = None
+            obs_ids_discovery = None
             if len(observations_in_partition) >= self.min_obs:
                 obs_ids = observations_in_partition.id.to_numpy(zero_copy_only=False)
                 nights = observations_in_partition.night.to_numpy(zero_copy_only=False)
 
-                idx = np.arange(len(observations_in_partition))
-                indices = list(combinations(idx, self.min_obs))
-                for ind in indices:
-                    ind = list(ind)
-                    discovery_nights.append(nights[ind[-1]].tolist())
-                    obs_ids_discovery.append(obs_ids[ind].tolist())
+                discovery_night = nights[self.min_obs - 1]
+                obs_ids_discovery = obs_ids[: self.min_obs].tolist()
 
-            obs_ids_partition[partition_id] = (discovery_nights, obs_ids_discovery)
+            obs_ids_partition[partition_id] = (discovery_night, obs_ids_discovery)
 
         return obs_ids_partition

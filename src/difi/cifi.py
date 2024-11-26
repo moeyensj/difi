@@ -112,8 +112,6 @@ def analyze_observations(
     observations: Observations,
     partitions: Optional[Partitions] = None,
     metric: Union[str, Metrics] = "singletons",
-    discovery_opportunities: bool = False,
-    discovery_probability: float = 1.0,
     by_object: bool = False,
     ignore_after_discovery: bool = False,
     max_processes: Optional[int] = 1,
@@ -132,10 +130,6 @@ def analyze_observations(
     metric : Union[str, Metrics], optional
         Metric to use to determine findability. If a string, the metric is looked up in the metric mapper.
         If a FindabilityMetric, the metric is used directly.
-    discovery_opportunities : bool, optional
-        Whether to include each discovery opportunity in the output.
-    discovery_probability : float, optional
-        The probability of a discovery opportunity actually resulting in a discovery.
     by_object : bool, optional
         Whether to calculate findability by object.
     ignore_after_discovery : bool, optional
@@ -173,21 +167,24 @@ def analyze_observations(
     else:
         raise ValueError("metric must be a string or a FindabilityMetric")
 
-    findable_observations = metric_.run(
-        observations,
-        partitions,
-        discovery_opportunities=discovery_opportunities,
-        discovery_probability=discovery_probability,
-        by_object=by_object,
-        ignore_after_discovery=ignore_after_discovery,
-        max_processes=max_processes,
-    )
-
     # Create the partition summary table
     partition_summary = PartitionSummary.create(observations, partitions)
-    partition_summary = partition_summary.update_findable(findable_observations)
 
-    # Create the AllObjects table
-    all_objects = AllObjects.create(observations, findable_observations, partition_summary)
+    if not pc.all(pc.is_null(observations.object_id)).as_py():
 
-    return all_objects, findable_observations, partition_summary
+        findable_observations = metric_.run(
+            observations,
+            partitions,
+            by_object=by_object,
+            ignore_after_discovery=ignore_after_discovery,
+            max_processes=max_processes,
+        )
+        partition_summary = partition_summary.update_findable(findable_observations)
+
+        # Create the AllObjects table
+        all_objects = AllObjects.create(observations, findable_observations, partition_summary)
+
+        return all_objects, findable_observations, partition_summary
+
+    else:
+        return AllObjects.empty(), FindableObservations.empty(), partition_summary
