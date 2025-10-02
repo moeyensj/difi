@@ -105,3 +105,8 @@ exclude = ["build"]
 
 [tool.mypy]
 ignore_missing_imports = true
+
+[tool.coverage.run]
+omit = [
+  "src/difi/tests/create_test_data.py",
+]
