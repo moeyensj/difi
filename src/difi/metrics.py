@@ -556,7 +556,7 @@ class FindabilityMetric(ABC):
     def run(
         self,
         observations: Observations,
-        partitions: Partitions,
+        partitions: Optional[Partitions] = None,
         by_object: bool = False,
         ignore_after_discovery: bool = False,
         max_processes: Optional[int] = None,
@@ -595,6 +595,9 @@ class FindabilityMetric(ABC):
                 )
             )
             ignore_after_discovery = False
+
+        if partitions is None:
+            partitions = Partitions.create_single(observations.night)
 
         observations_with_object_ids = observations.apply_mask(
             pc.invert(
@@ -764,9 +767,11 @@ class TrackletMetric(FindabilityMetric):
                 obs_ids_discovery = []
             else:
                 discovery_night = valid_unique_nights[self.min_linkage_nights - 1]
-                obs_ids_discovery = obs_ids[
-                    np.isin(valid_nights, valid_unique_nights[valid_unique_nights <= discovery_night])
-                ]
+                mask_discovery = np.isin(
+                    valid_nights, valid_unique_nights[valid_unique_nights <= discovery_night]
+                )
+                # valid_nights is aligned with linkage_obs; select from linkage_obs
+                obs_ids_discovery = linkage_obs[mask_discovery]
 
             obs_ids_partition[partition_id] = (discovery_night, obs_ids_discovery)
 

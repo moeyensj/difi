@@ -125,14 +125,10 @@ def test_PartitionSummary_update_findable():
     findable_observations = FindableObservations.from_kwargs(
         partition_id=["1", "2"],
         object_id=["1", "2"],
-        discovery_opportunities=[1, 1],
+        discovery_night=[59001, 59004],
         obs_ids=[
-            [
-                ["1", "2"],
-            ],
-            [
-                ["4", "5"],
-            ],  # Observation 2 is not in partition 3
+            ["1", "2"],
+            ["4", "5"],
         ],
     )
 

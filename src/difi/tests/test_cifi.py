@@ -1,196 +1,87 @@
+import pyarrow as pa
+import pyarrow.compute as pc
 import pytest
 
-from ..cifi import analyzeObservations
+from ..cifi import analyze_observations
+from ..observations import Observations
+from ..partitions import Partitions
 
 
-@pytest.mark.parametrize("num_jobs", [1, None])
-def test_analyzeObservations_noClasses(test_observations, num_jobs):
-    # Test analyzeObservations when no truth classes are given
+def test_analyze_observations_no_partitions(test_observations):
 
-    all_objects, findable_observations, summary = analyzeObservations(
+    all_objects, findable_observations, summary = analyze_observations(
         test_observations,
-        min_obs=5,
-        classes=None,
-        detection_window=None,
+        partitions=None,
+        metric="singletons",
+        by_object=True,
+        ignore_after_discovery=False,
+        max_processes=1,
     )
 
-    # Check that all three objects are in the all_objects data frame
-    assert all_objects["object_id"].nunique() == 3
-    for object_id in ["23636", "58177", "82134"]:
-        assert object_id in all_objects["object_id"].values
+    num_objects = len(test_observations.object_id.unique())
+    # Check that all objects have been correctly analyzed
+    assert len(all_objects.object_id.unique()) == num_objects
+    assert pc.all(pc.equal(all_objects.partition_id, pa.array(["0"] * num_objects))).as_py()
+    assert pc.all(pc.greater_equal(all_objects.num_observatories, pa.array([1] * num_objects))).as_py()
+    # Our generator makes 30 obs per object
+    assert pc.all(pc.equal(all_objects.num_obs, pa.array([30] * num_objects))).as_py()
+    assert pc.all(pc.equal(all_objects.findable, pa.array([True] * num_objects))).as_py()
 
-    # Check that the number of observations is correct
-    assert all_objects["num_obs"].sum() == 30
+    assert len(findable_observations) == num_objects
 
-    # Check that the objects have been correctly marked as findable
-    assert all_objects["findable"].sum() == 3
-
-    # Check that the summary data frame is correct, no classes
-    # were passed so the length should be one
     assert len(summary) == 1
-    assert summary["num_members"].sum() == 3
-    assert summary["findable"].sum() == 3
-    assert summary["num_obs"].sum() == 30
-    assert summary["class"].values[0] == "All"
+    assert pc.all(pc.equal(summary.id, pa.array(["0"]))).as_py()
+    assert pc.all(pc.equal(summary.findable, pa.array([num_objects]))).as_py()
+    # Total observations equals table length
+    assert summary.observations[0].as_py() == len(test_observations)
 
-    all_objects, findable_observations, summary = analyzeObservations(
+    return
+
+
+def test_analyze_observations_simple_partition(test_observations):
+
+    # Use a detection window of 10 nights to create exactly one window for our 10-day dataset
+    partitions = Partitions.create_linking_windows(test_observations.night, detection_window=10)
+
+    all_objects, findable_observations, summary = analyze_observations(
         test_observations,
-        min_obs=10,
-        classes=None,
-        detection_window=None,
-        num_jobs=num_jobs,
+        partitions=partitions,
+        metric="singletons",
+        by_object=True,
+        ignore_after_discovery=False,
+        max_processes=1,
     )
 
-    # Check that all three objects are in the all_objects data frame
-    assert all_objects["object_id"].nunique() == 3
-    for object_id in ["23636", "58177", "82134"]:
-        assert object_id in all_objects["object_id"].values
-
-    # Check that the number of observations is correct
-    assert all_objects["num_obs"].sum() == 30
-
-    # Check that the objects have been correctly marked as findable
-    # Only two objects are now findable
-    assert all_objects["findable"].sum() == 2
-    assert all_objects[all_objects["object_id"].isin(["58177", "82134"])]["findable"].sum() == 2
-
-    # Check that the summary data frame is correct, no classes
-    # were passed so the length should be one
+    num_objects = len(test_observations.object_id.unique())
+    assert len(all_objects.object_id.unique()) == num_objects
+    assert len(findable_observations) == num_objects
     assert len(summary) == 1
-    assert summary["num_members"].sum() == 3
-    assert summary["findable"].sum() == 2
-    assert summary["num_obs"].sum() == 30
-    assert summary["class"].values[0] == "All"
+    assert summary.findable[0].as_py() == num_objects
 
     return
 
 
-@pytest.mark.parametrize("num_jobs", [1, None])
-def test_analyzeObservations_withClassesColumn(test_observations, num_jobs):
-    # Test analyzeObservations when a column name is given for the truth classes
+def test_analyze_observations_no_observations():
+    # Test analyze_observations when the observations data frame is empty
+    test_observations = Observations.empty()
 
-    # Add class column to test observations
-    for i, object_id in enumerate(["23636", "58177", "82134"]):
-        test_observations.loc[test_observations["object_id"] == object_id, "class"] = "Class_{}".format(i)
-
-    all_objects, findable_observations, summary = analyzeObservations(
+    all_objects, findable_observations, summary = analyze_observations(
         test_observations,
-        min_obs=5,
-        classes="class",
-        detection_window=None,
-        discovery_opportunities=False,
-        num_jobs=num_jobs,
     )
-
-    # Check that all three objects are in the all_objects data frame
-    assert all_objects["object_id"].nunique() == 3
-    for object_id in ["23636", "58177", "82134"]:
-        assert object_id in all_objects["object_id"].values
-
-    # Check that the number of observations is correct
-    assert all_objects["num_obs"].sum() == 30
-
-    # Check that the objects have been correctly marked as findable
-    assert all_objects["findable"].sum() == 3
-
-    # Check that the summary data frame is correct, there should
-    # be a row for each class and a row for the "All" class
-    assert len(summary) == 4
-    for class_id in ["All", "Class_0", "Class_1", "Class_2"]:
-        assert class_id in summary["class"].values
-
-    # Check that the summary data frame is correct for all but
-    # the "All" class
-    for class_id in ["Class_0", "Class_1", "Class_2"]:
-        assert summary[summary["class"] == class_id]["num_members"].sum() == 1
-        assert summary[summary["class"] == class_id]["findable"].sum() == 1
-
-    assert summary[summary["class"] == "Class_0"]["num_obs"].sum() == 6
-    assert summary[summary["class"] == "Class_1"]["num_obs"].sum() == 10
-    assert summary[summary["class"] == "Class_2"]["num_obs"].sum() == 14
-
-    # Check the "All" class
-    assert summary[summary["class"] == "All"]["num_obs"].sum() == 30
-    assert summary[summary["class"] == "All"]["num_members"].sum() == 3
-    assert summary[summary["class"] == "All"]["findable"].sum() == 3
+    assert len(all_objects) == 0
+    assert len(findable_observations) == 0
+    assert len(summary) == 0
 
     return
 
 
-@pytest.mark.parametrize("num_jobs", [1, None])
-def test_analyzeObservations_withClassesDictionary(test_observations, num_jobs):
-    # Test analyzeObservations when a dictionary is given for the truth classes
-
-    # Add class column to test observations
-    classes_dict = {
-        "Class_0": ["23636"],
-        "Class_1": ["58177"],
-        "Class_2": ["82134"],
-    }
-
-    all_objects, findable_observations, summary = analyzeObservations(
-        test_observations,
-        min_obs=5,
-        classes=classes_dict,
-        detection_window=None,
-        discovery_opportunities=False,
-        num_jobs=num_jobs,
-    )
-
-    # Check that all three objects are in the all_objects data frame
-    assert all_objects["object_id"].nunique() == 3
-    for object_id in ["23636", "58177", "82134"]:
-        assert object_id in all_objects["object_id"].values
-
-    # Check that the number of observations is correct
-    assert all_objects["num_obs"].sum() == 30
-
-    # Check that the objects have been correctly marked as findable
-    assert all_objects["findable"].sum() == 3
-
-    # Check that the summary data frame is correct, there should
-    # be a row for each class and a row for the "All" class
-    assert len(summary) == 4
-    for class_id in ["All", "Class_0", "Class_1", "Class_2"]:
-        assert class_id in summary["class"].values
-
-    # Check that the summary data frame is correct for all but
-    # the "All" class
-    for class_id in ["Class_0", "Class_1", "Class_2"]:
-        assert summary[summary["class"] == class_id]["num_members"].sum() == 1
-        assert summary[summary["class"] == class_id]["findable"].sum() == 1
-
-    assert summary[summary["class"] == "Class_0"]["num_obs"].sum() == 6
-    assert summary[summary["class"] == "Class_1"]["num_obs"].sum() == 10
-    assert summary[summary["class"] == "Class_2"]["num_obs"].sum() == 14
-
-    # Check the "All" class
-    assert summary[summary["class"] == "All"]["num_obs"].sum() == 30
-    assert summary[summary["class"] == "All"]["num_members"].sum() == 3
-    assert summary[summary["class"] == "All"]["findable"].sum() == 3
-
-    return
-
-
-def test_analyzeObservations_noObservations(test_observations):
-    # Test analyzeObservations when the observations data frame is empty
-    test_observations = test_observations.drop(test_observations.index)
-
+def test_analyze_observations_raises(test_observations):
+    # Test analyze_observations the metric is incorrectly defined
     with pytest.raises(ValueError):
         # Build the all_objects and summary data frames
-        all_objects, findable_observations, summary = analyzeObservations(
-            test_observations, min_obs=5, classes=None, discovery_opportunities=False
-        )
-
-    return
-
-
-def test_analyzeObservations_errors(test_observations):
-    # Test analyzeObservations the metric is incorrectly defined
-    with pytest.raises(ValueError):
-        # Build the all_objects and summary data frames
-        all_objects, findable_observations, summary = analyzeObservations(
-            test_observations, min_obs=5, metric="wrong_metric", classes=None, discovery_opportunities=False
+        all_objects, findable_observations, summary = analyze_observations(
+            test_observations,
+            metric="wrong_metric",
         )
 
     return

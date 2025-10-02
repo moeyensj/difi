@@ -335,16 +335,21 @@ def update_all_objects(
         unique_object_members.group_by("object_id").aggregate([]).rename_columns(["object_id"])
     )
 
+    # Count True values rather than rows for pure/pure_complete/contaminated
+    uom_counts = (
+        unique_object_members.append_column("pure_int", pc.cast(unique_object_members["pure"], pa.int64()))
+        .append_column("pure_complete_int", pc.cast(unique_object_members["pure_complete"], pa.int64()))
+        .append_column("contaminated_int", pc.cast(unique_object_members["contaminated"], pa.int64()))
+    )
+
     all_objects_linkages_counts = (
-        unique_object_members.filter(
-            pc.equal(unique_object_members["object_id"], unique_object_members["linked_object_id"])
-        )
+        uom_counts.filter(pc.equal(uom_counts["object_id"], uom_counts["linked_object_id"]))
         .group_by("object_id")
         .aggregate(
             [
-                ("pure", "count"),
-                ("pure_complete", "count"),
-                ("contaminated", "count"),
+                ("pure_int", "sum"),
+                ("pure_complete_int", "sum"),
+                ("contaminated_int", "sum"),
             ]
         )
         .rename_columns(["object_id", "pure", "pure_complete", "contaminated"])
@@ -487,18 +492,18 @@ def update_all_objects(
         num_obs=all_objects["num_obs"],
         num_observatories=all_objects["num_observatories"],
         findable=all_objects["findable"],
-        found_pure=pc.fill_null(all_objects["found_pure"], 0),
-        found_contaminated=pc.fill_null(all_objects["found_contaminated"], 0),
-        pure=pc.fill_null(all_objects["pure"], 0),
-        pure_complete=pc.fill_null(all_objects["pure_complete"], 0),
-        contaminated=pc.fill_null(all_objects["contaminated"], 0),
-        contaminant=pc.fill_null(all_objects["contaminant"], 0),
-        mixed=pc.fill_null(all_objects["mixed"], 0),
-        obs_in_pure=pc.fill_null(all_objects["obs_in_pure"], 0),
-        obs_in_pure_complete=pc.fill_null(all_objects["obs_in_pure_complete"], 0),
-        obs_in_contaminated=pc.fill_null(all_objects["obs_in_contaminated"], 0),
-        obs_as_contaminant=pc.fill_null(all_objects["obs_as_contaminant"], 0),
-        obs_in_mixed=pc.fill_null(all_objects["obs_in_mixed"], 0),
+        found_pure=pc.fill_null(all_objects["found_pure"], 0).cast(pa.int64()),
+        found_contaminated=pc.fill_null(all_objects["found_contaminated"], 0).cast(pa.int64()),
+        pure=pc.fill_null(all_objects["pure"], 0).cast(pa.int64()),
+        pure_complete=pc.fill_null(all_objects["pure_complete"], 0).cast(pa.int64()),
+        contaminated=pc.fill_null(all_objects["contaminated"], 0).cast(pa.int64()),
+        contaminant=pc.fill_null(all_objects["contaminant"], 0).cast(pa.int64()),
+        mixed=pc.fill_null(all_objects["mixed"], 0).cast(pa.int64()),
+        obs_in_pure=pc.fill_null(all_objects["obs_in_pure"], 0).cast(pa.int64()),
+        obs_in_pure_complete=pc.fill_null(all_objects["obs_in_pure_complete"], 0).cast(pa.int64()),
+        obs_in_contaminated=pc.fill_null(all_objects["obs_in_contaminated"], 0).cast(pa.int64()),
+        obs_as_contaminant=pc.fill_null(all_objects["obs_as_contaminant"], 0).cast(pa.int64()),
+        obs_in_mixed=pc.fill_null(all_objects["obs_in_mixed"], 0).cast(pa.int64()),
     )
 
 
@@ -614,9 +619,10 @@ def analyze_linkages(
                 )
             ).linked_object_id.unique()
         )
-        findable = partition.findable[0].as_py()
+        # findable may be null if not set; treat None as 0
+        findable = partition.findable[0].as_py() if not pc.is_null(partition.findable[0]).as_py() else 0
 
-        completeness = found / findable if findable > 0 else found
+        completeness = found / findable if findable and findable > 0 else float(found)
         completeness *= 100
 
         # Update the partition summary with the number of pure, pure unknown, contaminated, and mixed linkages
@@ -636,4 +642,4 @@ def analyze_linkages(
 
         partition_summaries_updated = qv.concatenate([partition_summaries_updated, partition_summary_updated])
 
-    return all_objects, all_linkages, partition_summaries_updated
+    return all_objects_updated, all_linkages, partition_summaries_updated

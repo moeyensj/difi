@@ -1,6 +1,9 @@
+import pyarrow as pa
 import pytest
 
-from ..difi import analyzeLinkages
+from ..cifi import analyze_observations
+from ..difi import PartitionMapping, analyze_linkages
+from ..partitions import Partitions
 
 
 @pytest.mark.parametrize(
@@ -16,18 +19,38 @@ from ..difi import analyzeLinkages
 )
 @pytest.mark.benchmark(group="analyze_linkages")
 def test_benchmark_analyze_linkages_no_classes_no_all_objects(
-    benchmark, test_observations, test_linkages, min_obs, contamination_percentage
+    benchmark, test_observations, test_linkage_members, min_obs, contamination_percentage
 ):
-    test_linkage_members, expected_all_linkages = test_linkages
-
-    # Test analyzeLinkages when no classes are given and no all_objects are given
-    all_linkages, all_objects, summary = benchmark(
-        analyzeLinkages,
+    # Prepare all_objects and partition_summary via cifi
+    partitions = Partitions.create_single(test_observations.night)
+    all_objects, _, partition_summary = analyze_observations(
         test_observations,
+        partitions=partitions,
+        metric="singletons",
+        by_object=True,
+        ignore_after_discovery=False,
+        max_processes=1,
+    )
+
+    # Map all linkage ids to this partition
+    linkage_ids_unique = test_linkage_members.linkage_id.unique()
+    partition_mapping = PartitionMapping.from_kwargs(
+        linkage_id=linkage_ids_unique,
+        partition_id=pa.repeat(partition_summary.id[0], len(linkage_ids_unique)),
+    )
+
+    # all_objects already prepared above
+
+    # Benchmark analyze_linkages
+    all_objects_updated, all_linkages, partition_summaries_updated = benchmark(
+        analyze_linkages,
+        test_observations,
+        partition_summary,
         test_linkage_members,
+        partition_mapping,
+        all_objects,
         min_obs=min_obs,
         contamination_percentage=contamination_percentage,
-        classes=None,
     )
 
     return
@@ -46,22 +69,37 @@ def test_benchmark_analyze_linkages_no_classes_no_all_objects(
 )
 @pytest.mark.benchmark(group="analyze_linkages")
 def test_benchmark_analyze_linkages_no_classes_all_objects(
-    benchmark, test_observations, test_linkages, test_all_objects, min_obs, contamination_percentage
+    benchmark, test_observations, test_linkage_members, min_obs, contamination_percentage
 ):
-    test_linkage_members, expected_all_linkages = test_linkages
-
-    # Test analyzeLinkages when no classes are given and all_objects are given
-    # Set findable column in test all truths
-    test_all_objects.loc[:, "findable"] = 1
-
-    all_linkages, all_objects, summary = benchmark(
-        analyzeLinkages,
+    # Prepare all_objects and partition_summary via cifi
+    partitions = Partitions.create_single(test_observations.night)
+    all_objects, _, partition_summary = analyze_observations(
         test_observations,
+        partitions=partitions,
+        metric="singletons",
+        by_object=True,
+        ignore_after_discovery=False,
+        max_processes=1,
+    )
+
+    # Map all linkage ids to this partition
+    linkage_ids_unique = test_linkage_members.linkage_id.unique()
+    partition_mapping = PartitionMapping.from_kwargs(
+        linkage_id=linkage_ids_unique,
+        partition_id=pa.repeat(partition_summary.id[0], len(linkage_ids_unique)),
+    )
+
+    # all_objects already prepared above
+
+    all_objects_updated, all_linkages, partition_summaries_updated = benchmark(
+        analyze_linkages,
+        test_observations,
+        partition_summary,
         test_linkage_members,
+        partition_mapping,
+        all_objects,
         min_obs=min_obs,
         contamination_percentage=contamination_percentage,
-        classes=None,
-        all_objects=test_all_objects[["object_id", "num_obs", "findable"]],
     )
 
     return

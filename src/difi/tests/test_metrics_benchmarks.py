@@ -73,7 +73,7 @@ def test_benchmark_calcFindableMinObs_by_object(benchmark, test_observations, mi
 
 
 @pytest.mark.parametrize(
-    ["linkage_min_obs", "max_obs_separation", "min_linkage_nights"],
+    ["tracklet_min_obs", "max_obs_separation", "min_linkage_nights"],
     [
         (2, 2 / 24, 2),
         (2, 4 / 24, 3),
@@ -85,11 +85,11 @@ def test_benchmark_calcFindableMinObs_by_object(benchmark, test_observations, mi
 )
 @pytest.mark.benchmark(group="metrics_tracklets")
 def test_benchmark_calcFindableNightlyLinkages(
-    benchmark, test_observations, linkage_min_obs, max_obs_separation, min_linkage_nights
+    benchmark, test_observations, tracklet_min_obs, max_obs_separation, min_linkage_nights
 ):
 
     metric = TrackletMetric(
-        linkage_min_obs=linkage_min_obs,
+        tracklet_min_obs=tracklet_min_obs,
         max_obs_separation=max_obs_separation,
         min_linkage_nights=min_linkage_nights,
     )
@@ -101,7 +101,7 @@ def test_benchmark_calcFindableNightlyLinkages(
 
 
 @pytest.mark.parametrize(
-    ["linkage_min_obs", "max_obs_separation", "min_linkage_nights"],
+    ["tracklet_min_obs", "max_obs_separation", "min_linkage_nights"],
     [
         (2, 2 / 24, 2),
         (2, 4 / 24, 3),
@@ -113,11 +113,11 @@ def test_benchmark_calcFindableNightlyLinkages(
 )
 @pytest.mark.benchmark(group="metrics_tracklets")
 def test_benchmark_calcFindableNightlyLinkages_by_object(
-    benchmark, test_observations, linkage_min_obs, max_obs_separation, min_linkage_nights
+    benchmark, test_observations, tracklet_min_obs, max_obs_separation, min_linkage_nights
 ):
 
     metric = TrackletMetric(
-        linkage_min_obs=linkage_min_obs,
+        tracklet_min_obs=tracklet_min_obs,
         max_obs_separation=max_obs_separation,
         min_linkage_nights=min_linkage_nights,
     )

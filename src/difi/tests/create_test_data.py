@@ -206,13 +206,13 @@ if __name__ == "__main__":
                 num_distinct = min(max(3, 3), min(desired_k, num_objects))
                 chosen_objects = rng.choice(unique_object_ids, size=num_distinct, replace=False).tolist()
 
-                # Start with one observation from each chosen object, then distribute the remainder
-                counts = np.ones(num_distinct, dtype=int)
-                remaining = desired_k - num_distinct
-                while remaining > 0:
-                    idx = int(rng.integers(low=0, high=num_distinct))
-                    counts[idx] += 1
-                    remaining -= 1
+                # Distribute counts as evenly as possible to ensure no single object dominates (>50%)
+                base = desired_k // num_distinct
+                remainder = desired_k % num_distinct
+                counts = np.full(num_distinct, base, dtype=int)
+                if remainder > 0:
+                    counts[:remainder] += 1
+                rng.shuffle(counts)
 
                 mixed_obs: list[str] = []
                 for oid, cnt in zip(chosen_objects, counts.tolist()):

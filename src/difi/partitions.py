@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING, Optional
 import pyarrow as pa
 import pyarrow.compute as pc
 import quivr as qv
-from quivr.validators import and_, ge, le
 
 if TYPE_CHECKING:
     from .metrics import FindableObservations
