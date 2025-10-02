@@ -77,17 +77,18 @@ coverage = "pytest --cov=difi --cov-report=xml"
 
 [project.optional-dependencies]
 dev = [
-  "black",
-  "ipython",
-  "isort",
-  "mypy",
-  "pdm",
-  "pytest-benchmark",
-  "pytest-cov",
-  "pytest-doctestplus",
-  "pytest-mock",
-  "pytest",
-  "ruff",
+    "black",
+    "ipython",
+    "isort",
+    "mypy",
+    "pdm",
+    "pytest-benchmark",
+    "pytest-cov",
+    "pytest-doctestplus",
+    "pytest-mock",
+    "pytest",
+    "ruff",
+    "adam-assist>=0.2.1",
 ]
 
 [tool.black]
