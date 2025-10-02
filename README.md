@@ -81,6 +81,75 @@ the source code after any changes have been staged for a commit. To load the app
 
 ```pre-commit install```
 
-## Example and Tutorial
+## Quick start
 
-The example below can be found in greater detail in this [Jupyter Notebook](https://github.com/moeyensj/difi/tree/main/examples/tutorial.ipynb).
+This short example shows how to:
+- generate a tiny, deterministic dataset of observations and linkages for testing
+- run cifi (can I find it?) to compute findable objects
+- run difi (did I find it?) to classify linkages and update object summaries
+
+### 1) Generate example data
+
+Within a pdm-managed checkout, run:
+
+```
+pdm run python src/difi/tests/create_test_data.py --seed 42
+```
+
+This writes three parquet files to `src/difi/tests/testdata/`:
+- `observations.parquet`
+- `linkage_members.parquet`
+
+### 2) Analyze in Python
+
+```python
+from importlib.resources import files
+
+import pyarrow as pa
+
+from difi.cifi import analyze_observations
+from difi.difi import analyze_linkages, PartitionMapping
+from difi.observations import Observations
+from difi.partitions import Partitions, PartitionSummary
+
+# Load example observations and linkage members
+testdata = files("difi.tests.testdata")
+observations = Observations.from_parquet(testdata.joinpath("observations.parquet"))
+from difi.difi import LinkageMembers
+linkage_members = LinkageMembers.from_parquet(testdata.joinpath("linkage_members.parquet"))
+
+# cifi: compute per-partition findable objects and a partition summary
+partitions = Partitions.create_single(observations.night)
+all_objects, findable, partition_summary = analyze_observations(
+    observations,
+    partitions=partitions,
+    metric="singletons",
+    by_object=True,
+    ignore_after_discovery=False,
+    max_processes=1,
+)
+
+# Map all linkages to the single partition
+linkage_ids = linkage_members.linkage_id.unique()
+partition_mapping = PartitionMapping.from_kwargs(
+    linkage_id=linkage_ids,
+    partition_id=pa.repeat(partition_summary.id[0], len(linkage_ids)),
+)
+
+# difi: classify linkages and update object summaries
+all_objects_updated, all_linkages, partition_summary_updated = analyze_linkages(
+    observations,
+    partition_summary,
+    linkage_members,
+    partition_mapping,
+    all_objects,
+    min_obs=6,
+    contamination_percentage=50.0,
+)
+
+print("Objects:", len(all_objects_updated))
+print("Linkages:", len(all_linkages))
+print("Partitions:", len(partition_summary_updated))
+```
+
+The example dataset includes 5 objects over 10 nights, 3 observations per night, two observatories, one pure linkage per object, one pure-incomplete linkage per object, and several mixed and contaminated linkages to exercise the analysis.

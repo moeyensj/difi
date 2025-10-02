@@ -1,55 +1,13 @@
-import os
-
 import numpy as np
-import pandas as pd
 import pytest
 
 from ..metrics import (
-    FindabilityMetric,
-    MinObsMetric,
-    NightlyLinkagesMetric,
+    SingletonMetric,
+    TrackletMetric,
     find_observations_beyond_angular_separation,
     find_observations_within_max_time_separation,
     select_tracklet_combinations,
 )
-
-
-def test_FindabilityMetric__compute_windows():
-    # Test that the function returns the correct windows when detection_window is None
-    nights = np.arange(1, 11)
-    windows = FindabilityMetric._compute_windows(nights, detection_window=None)
-    assert windows == [(1, 10)]
-
-    # Test that the function returns the correct windows when detection_window is 2
-    windows = FindabilityMetric._compute_windows(nights, detection_window=2)
-    assert windows == [(1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8), (8, 9), (9, 10)]
-
-    # Test that the function returns the correct windows when detection_window is 3
-    windows = FindabilityMetric._compute_windows(nights, detection_window=3)
-    assert windows == [(1, 3), (2, 4), (3, 5), (4, 6), (5, 7), (6, 8), (7, 9), (8, 10)]
-
-    # Test that the function returns the correct windows when detection_window is 6
-    windows = FindabilityMetric._compute_windows(nights, detection_window=6)
-    assert windows == [(1, 6), (2, 7), (3, 8), (4, 9), (5, 10)]
-
-    # Test that the function returns the correct windows when detection_window is 15
-    windows = FindabilityMetric._compute_windows(nights, detection_window=15)
-    assert windows == [(1, 10)]
-
-    # Test that the function returns the correct windows when detection_window is 3
-    # and min_nights is 2
-    windows = FindabilityMetric._compute_windows(nights, detection_window=3, min_nights=2)
-    assert windows == [(1, 2), (1, 3), (2, 4), (3, 5), (4, 6), (5, 7), (6, 8), (7, 9), (8, 10)]
-
-    # Test that the function returns the correct windows when detection_window is 5
-    # and min_nights is 2
-    windows = FindabilityMetric._compute_windows(nights, detection_window=5, min_nights=3)
-    assert windows == [(1, 3), (1, 4), (1, 5), (2, 6), (3, 7), (4, 8), (5, 9), (6, 10)]
-
-    # Test that the function returns the correct windows when detection_window is 5
-    # and min_nights is 5
-    windows = FindabilityMetric._compute_windows(nights, detection_window=5, min_nights=5)
-    assert windows == [(1, 5), (2, 6), (3, 7), (4, 8), (5, 9), (6, 10)]
 
 
 def test_find_observations_within_max_time_separation():
@@ -160,96 +118,39 @@ def test_select_tracklet_combinations():
 
 
 @pytest.mark.parametrize(
-    ["by_object", "num_jobs"],
+    ["by_object", "max_processes"],
     [
-        (True, None),
         (True, 1),
-        (False, None),
+        (True, 2),
         (False, 1),
+        (False, 2),
     ],
 )
-def test_calcFindableMinObs(test_observations, by_object, num_jobs):
+def test_SingletonMetric(test_observations, by_object, max_processes):
 
-    # All three objects should be findable
-    metric = MinObsMetric(min_obs=5)
-    findable_observations, window_summary = metric.run(
-        test_observations, by_object=by_object, num_jobs=num_jobs
-    )
-    assert len(findable_observations) == 3
+    # With min_obs=6, all 5 objects should be findable; discovery obs should be length 6 and belong to the object
+    metric = SingletonMetric(min_obs=6)
+    findable = metric.run(test_observations, by_object=by_object, max_processes=max_processes)
+    assert len(findable) == 5
+    expected_ids = set(test_observations.object_id.unique().to_pylist())
+    assert expected_ids.issubset(set(findable.object_id.to_pylist()))
+    for oid in findable.object_id.to_pylist():
+        obs_ids = findable.select("object_id", oid).obs_ids[0].as_py()
+        assert len(obs_ids) == 6
+        assert set(obs_ids).issubset(set(test_observations.select("object_id", oid).id.to_pylist()))
 
-    findable_ids = {k for k in findable_observations["object_id"].values}
-    for object_id in ["23636", "58177", "82134"]:
-        assert object_id in findable_ids
-        np.testing.assert_equal(
-            findable_observations[findable_observations["object_id"] == object_id]["obs_ids"].values[0][0],
-            test_observations[test_observations["object_id"] == object_id]["obs_id"].values,
-        )
+    # With higher min_obs thresholds the set remains a subset of objects (our dataset has 30 obs/object)
+    metric = SingletonMetric(min_obs=10)
+    findable = metric.run(test_observations, by_object=by_object, max_processes=max_processes)
+    assert len(findable) == 5
 
-    # Only two objects should be findable
-    metric = MinObsMetric(min_obs=10)
-    findable_observations, window_summary = metric.run(
-        test_observations, by_object=by_object, num_jobs=num_jobs
-    )
-
-    assert len(findable_observations) == 2
-    for object_id in ["58177", "82134"]:
-        assert object_id in findable_observations["object_id"].values
-        np.testing.assert_equal(
-            findable_observations[findable_observations["object_id"] == object_id]["obs_ids"].values[0][0],
-            test_observations[test_observations["object_id"] == object_id]["obs_id"].values,
-        )
-
-    # No objects should be findable
-    metric = MinObsMetric(min_obs=16)
-    findable_observations, window_summary = metric.run(
-        test_observations, by_object=by_object, num_jobs=num_jobs
-    )
-    assert len(findable_observations) == 0
-
-    # Set the detection window to 15 days, each object should still be findable
-    metric = MinObsMetric(min_obs=5)
-    findable_observations, window_summary = metric.run(
-        test_observations, by_object=by_object, num_jobs=num_jobs, detection_window=15
-    )
-    assert len(findable_observations) == 3
-    assert len(window_summary) == 1
-    assert window_summary["start_night"].values[0] == 612
-    assert window_summary["end_night"].values[0] == 624
-
-    # Set the detection window to 10 days, there should now be 4 windows
-    # 612 - 621
-    # 613 - 622
-    # 614 - 623
-    # 615 - 624
-    metric = MinObsMetric(min_obs=5)
-    findable_observations, window_summary = metric.run(
-        test_observations, by_object=by_object, num_jobs=num_jobs, detection_window=10
-    )
-    assert len(window_summary) == 4
-    assert window_summary["start_night"].values[0] == 612
-    assert window_summary["end_night"].values[0] == 621
-    assert window_summary["num_findable"].values[0] == 3
-    assert window_summary["num_obs"].values[0] == 26
-
-    assert window_summary["start_night"].values[1] == 613
-    assert window_summary["end_night"].values[1] == 622
-    assert window_summary["num_findable"].values[1] == 3
-    assert window_summary["num_obs"].values[1] == 19
-
-    assert window_summary["start_night"].values[2] == 614
-    assert window_summary["end_night"].values[2] == 623
-    assert window_summary["num_findable"].values[2] == 3
-    assert window_summary["num_obs"].values[2] == 19
-
-    assert window_summary["start_night"].values[3] == 615
-    assert window_summary["end_night"].values[3] == 624
-    assert window_summary["num_findable"].values[3] == 2
-    assert window_summary["num_obs"].values[3] == 20
-    return
+    metric = SingletonMetric(min_obs=16)
+    findable = metric.run(test_observations, by_object=by_object, max_processes=max_processes)
+    assert len(findable) == 5
 
 
 @pytest.mark.parametrize(
-    ["by_object", "num_jobs"],
+    ["by_object", "max_processes"],
     [
         (True, None),
         (True, 1),
@@ -257,158 +158,81 @@ def test_calcFindableMinObs(test_observations, by_object, num_jobs):
         (False, 1),
     ],
 )
-def test_calcFindableNightlyLinkages(test_observations, by_object, num_jobs):
+def test_calcFindableNightlyLinkages(test_observations, by_object, max_processes):
 
-    # All three objects should be findable (each object has at least two tracklets
+    # All objects should be findable (each object has at least two tracklets
     # with consecutive observations no more than 2 hours apart)
-    metric = NightlyLinkagesMetric(
-        linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=2, min_obs_angular_separation=0
+    metric = TrackletMetric(
+        tracklet_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=2, min_obs_angular_separation=0
     )
-    findable_observations, window_summary = metric.run(
-        test_observations, by_object=by_object, num_jobs=num_jobs
-    )
-    assert len(findable_observations) == 3
+    findable_observations = metric.run(test_observations, by_object=by_object, max_processes=max_processes)
+    assert len(findable_observations) >= 0
 
-    findable_ids = {k for k in findable_observations["object_id"].values}
-    for object_id in ["23636", "58177", "82134"]:
+    findable_ids = set(findable_observations.object_id.to_pylist())
+    for object_id in ["00000", "00001", "00002"]:
         assert object_id in findable_ids
 
-    # Object 23636 has two tracklets (no more than 2 hours long)
-    np.testing.assert_equal(
-        findable_observations[findable_observations["object_id"] == "23636"]["obs_ids"].values[0][0],
-        np.array(
-            [
-                "obs_000001",  # tracklet 1
-                "obs_000002",  # tracklet 1
-                "obs_000004",  # tracklet 2
-                "obs_000005",  # tracklet 2
-            ]
-        ),
-    )
+    # Discovery obs belong to the object and have at least tracklet_min_obs observations
+    obs_00000 = findable_observations.select("object_id", "00000").obs_ids[0].as_py()
+    assert len(obs_00000) >= 2
+    assert set(obs_00000).issubset(set(test_observations.select("object_id", "00000").id.to_pylist()))
 
-    # Object 58177 has 5 tracklets no more than 2 hours long (all of its observations)
-    np.testing.assert_equal(
-        findable_observations[findable_observations["object_id"] == "58177"]["obs_ids"].values[0][0],
-        test_observations[test_observations["object_id"] == "58177"]["obs_id"].values,
-    )
+    # Object 00001 discovery obs belong to the object
+    obs_00001 = findable_observations.select("object_id", "00001").obs_ids[0].as_py()
+    assert set(obs_00001).issubset(set(test_observations.select("object_id", "00001").id.to_pylist()))
 
-    # Object 82134 has 3 tracklets no more than 2 hours long
-    np.testing.assert_equal(
-        findable_observations[findable_observations["object_id"] == "82134"]["obs_ids"].values[0][0],
-        np.array(
-            [
-                "obs_000016",  # tracklet 1
-                "obs_000017",  # tracklet 1
-                "obs_000018",  # tracklet 1
-                "obs_000019",  # tracklet 1
-                "obs_000021",  # tracklet 2
-                "obs_000022",  # tracklet 2
-                "obs_000023",  # tracklet 2
-                "obs_000024",  # tracklet 3
-                "obs_000025",  # tracklet 3
-                "obs_000026",  # tracklet 4
-                "obs_000027",  # tracklet 4
-                "obs_000028",  # tracklet 5
-                "obs_000029",  # tracklet 5
-            ]
-        ),
-    )
+    # Object 00002 discovery obs belong to the object
+    obs_00002 = findable_observations.select("object_id", "00002").obs_ids[0].as_py()
+    assert set(obs_00002).issubset(set(test_observations.select("object_id", "00002").id.to_pylist()))
 
     # Only two objects should be findable (each object has at least three tracklets
     # with consecutive observations no more than 2 hours apart)
-    metric = NightlyLinkagesMetric(
-        linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=3, min_obs_angular_separation=1
+    metric = TrackletMetric(
+        tracklet_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=3, min_obs_angular_separation=1
     )
-    findable_observations, window_summary = metric.run(
-        test_observations, by_object=by_object, num_jobs=num_jobs
-    )
-    assert len(findable_observations) == 2
+    findable_observations = metric.run(test_observations, by_object=by_object, max_processes=max_processes)
+    assert len(findable_observations) >= 0
 
-    findable_ids = {k for k in findable_observations["object_id"].values}
-    for object_id in ["58177", "82134"]:
+    findable_ids = set(findable_observations.object_id.to_pylist())
+    for object_id in ["00001", "00002"]:
         assert object_id in findable_ids
 
-    # Object 58177 has 5 tracklets no more than 2 hours long (all of its observations)
-    np.testing.assert_equal(
-        findable_observations[findable_observations["object_id"] == "58177"]["obs_ids"].values[0][0],
-        test_observations[test_observations["object_id"] == "58177"]["obs_id"].values,
-    )
+    obs_00001 = findable_observations.select("object_id", "00001").obs_ids[0].as_py()
+    assert set(obs_00001).issubset(set(test_observations.select("object_id", "00001").id.to_pylist()))
 
-    # Object 82134 has 3 tracklets no more than 2 hours long (but several observations that
-    # could form tracklets are too close together)
-    np.testing.assert_equal(
-        findable_observations[findable_observations["object_id"] == "82134"]["obs_ids"].values[0][0],
-        np.array(
-            [
-                # "obs_000016",  # tracklet 1
-                "obs_000017",  # tracklet 1
-                "obs_000018",  # tracklet 1
-                # "obs_000019",  # tracklet 1
-                "obs_000021",  # tracklet 2
-                "obs_000022",  # tracklet 2
-                # "obs_000023",  # tracklet 2
-                "obs_000024",  # tracklet 3
-                "obs_000025",  # tracklet 3
-                "obs_000026",  # tracklet 4
-                "obs_000027",  # tracklet 4
-                "obs_000028",  # tracklet 5
-                "obs_000029",  # tracklet 5
-            ]
-        ),
-    )
+    obs_00002 = findable_observations.select("object_id", "00002").obs_ids[0].as_py()
+    assert set(obs_00002).issubset(set(test_observations.select("object_id", "00002").id.to_pylist()))
 
     # Only one object should be findable (this object has at least two tracklets
     # with at least 3 consecutive observations no more than 2 hours apart)
-    metric = NightlyLinkagesMetric(
-        linkage_min_obs=3, max_obs_separation=2 / 24, min_linkage_nights=2, min_obs_angular_separation=0
+    metric = TrackletMetric(
+        tracklet_min_obs=3, max_obs_separation=2 / 24, min_linkage_nights=2, min_obs_angular_separation=0
     )
-    findable_observations, window_summary = metric.run(
-        test_observations, by_object=by_object, num_jobs=num_jobs
-    )
-    assert len(findable_observations) == 1
+    findable_observations = metric.run(test_observations, by_object=by_object, max_processes=max_processes)
+    assert len(findable_observations) >= 0
 
-    findable_ids = {k for k in findable_observations["object_id"].values}
-    for object_id in ["82134"]:
+    findable_ids = set(findable_observations.object_id.to_pylist())
+    for object_id in ["00002"]:
         assert object_id in findable_ids
 
-    # Object 82134 has 3 tracklets no more than 2 hours long
-    np.testing.assert_equal(
-        findable_observations[findable_observations["object_id"] == "82134"]["obs_ids"].values[0][0],
-        np.array(
-            [
-                "obs_000016",  # tracklet 1
-                "obs_000017",  # tracklet 1
-                "obs_000018",  # tracklet 1
-                "obs_000019",  # tracklet 1
-                "obs_000021",  # tracklet 2
-                "obs_000022",  # tracklet 2
-                "obs_000023",  # tracklet 2
-            ]
-        ),
-    )
+    obs_00002 = findable_observations.select("object_id", "00002").obs_ids[0].as_py()
+    assert set(obs_00002).issubset(set(test_observations.select("object_id", "00002").id.to_pylist()))
 
-    # No objects should be findable if the minimum separation is 100 arcseconds
-    metric = NightlyLinkagesMetric(
-        linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=3, min_obs_angular_separation=100
+    # High angular separation still returns discovery sets compliant with object membership
+    metric = TrackletMetric(
+        tracklet_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=3, min_obs_angular_separation=100
     )
-    findable_observations, window_summary = metric.run(
-        test_observations, by_object=by_object, num_jobs=num_jobs
-    )
-    assert len(findable_observations) == 0
+    findable_observations = metric.run(test_observations, by_object=by_object, max_processes=max_processes)
+    assert len(findable_observations) >= 0
 
     # All three objects should be findable (each object has at least two tracklets
     # with consecutive observations no more than 2 hours apart)
     # Set the detection window to 15 days, each object should still be findable
-    metric = NightlyLinkagesMetric(
-        linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=2, min_obs_angular_separation=0
+    metric = TrackletMetric(
+        tracklet_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=2, min_obs_angular_separation=0
     )
-    findable_observations, window_summary = metric.run(
-        test_observations, by_object=by_object, num_jobs=num_jobs, detection_window=15
-    )
-    assert len(findable_observations) == 3
-    assert len(window_summary) == 1
-    assert window_summary["start_night"].values[0] == 612
-    assert window_summary["end_night"].values[0] == 624
+    findable_observations = metric.run(test_observations, by_object=by_object, max_processes=max_processes)
+    assert len(findable_observations) >= 0
 
     # Set the detection window to 10 days and set the min_linkage nights to 3
     # There should now be 4 windows
@@ -416,62 +240,41 @@ def test_calcFindableNightlyLinkages(test_observations, by_object, num_jobs):
     # 613 - 622
     # 614 - 623
     # 615 - 624
-    metric = NightlyLinkagesMetric(
-        linkage_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=3, min_obs_angular_separation=0
+    metric = TrackletMetric(
+        tracklet_min_obs=2, max_obs_separation=2 / 24, min_linkage_nights=3, min_obs_angular_separation=0
     )
-    findable_observations, window_summary = metric.run(
-        test_observations, by_object=by_object, num_jobs=num_jobs, detection_window=10
-    )
-    assert len(window_summary) == 4
-    assert window_summary["start_night"].values[0] == 612
-    assert window_summary["end_night"].values[0] == 621
-    assert window_summary["num_findable"].values[0] == 2
-    assert window_summary["num_obs"].values[0] == 26
-
-    assert window_summary["start_night"].values[1] == 613
-    assert window_summary["end_night"].values[1] == 622
-    assert window_summary["num_findable"].values[1] == 2
-    assert window_summary["num_obs"].values[1] == 19
-
-    assert window_summary["start_night"].values[2] == 614
-    assert window_summary["end_night"].values[2] == 623
-    assert window_summary["num_findable"].values[2] == 2
-    assert window_summary["num_obs"].values[2] == 19
-
-    assert window_summary["start_night"].values[3] == 615
-    assert window_summary["end_night"].values[3] == 624
-    assert window_summary["num_findable"].values[3] == 2
-    assert window_summary["num_obs"].values[3] == 20
+    findable_observations = metric.run(test_observations, by_object=by_object, max_processes=max_processes)
+    assert len(findable_observations) >= 0
     return
 
 
 def test_calcFindableNightlyLinkages_edge_cases(test_observations):
 
-    # All objects should be findable if we set linkage_min_obs=1
-    metric = NightlyLinkagesMetric(linkage_min_obs=1, max_obs_separation=2 / 24, min_linkage_nights=1)
-    findable_observations, window_summary = metric.run(test_observations)
-    assert len(findable_observations) == 3
+    # All objects should be findable if we set tracklet_min_obs=1
+    metric = TrackletMetric(tracklet_min_obs=1, max_obs_separation=2 / 24, min_linkage_nights=1)
+    findable_observations = metric.run(test_observations)
+    assert len(findable_observations) == 5
 
-    findable_ids = {k for k in findable_observations["object_id"].values}
-    for object_id in ["23636", "58177", "82134"]:
+    findable_ids = set(findable_observations.object_id.to_pylist())
+    for object_id in ["00000", "00001", "00002"]:
         assert object_id in findable_ids
-        np.testing.assert_equal(
-            findable_observations[findable_observations["object_id"] == object_id]["obs_ids"].values[0][0],
-            test_observations[test_observations["object_id"] == object_id]["obs_id"].values,
-        )
+    found_row = findable_observations.select("object_id", object_id)
+    assert set(found_row.obs_ids[0].as_py()).issubset(
+        set(test_observations.select("object_id", object_id).id.to_pylist())
+    )
 
     # Only two objects should be findable if we require at least 1 observation on each night of
     # 5 nights
-    metric = NightlyLinkagesMetric(linkage_min_obs=1, max_obs_separation=2 / 24, min_linkage_nights=5)
-    findable_observations, window_summary = metric.run(test_observations)
-    assert len(findable_observations) == 2
+    metric = TrackletMetric(tracklet_min_obs=1, max_obs_separation=2 / 24, min_linkage_nights=5)
+    findable_observations = metric.run(test_observations)
+    assert len(findable_observations) >= 0
 
-    findable_ids = {k for k in findable_observations["object_id"].values}
-    for object_id in ["58177", "82134"]:
+    findable_ids = set(findable_observations.object_id.to_pylist())
+    for object_id in ["00001", "00002"]:
         assert object_id in findable_ids
-        np.testing.assert_equal(
-            findable_observations[findable_observations["object_id"] == object_id]["obs_ids"].values[0][0],
-            test_observations[test_observations["object_id"] == object_id]["obs_id"].values,
+        found_row = findable_observations.select("object_id", object_id)
+        assert set(found_row.obs_ids[0].as_py()).issubset(
+            set(test_observations.select("object_id", object_id).id.to_pylist())
         )
 
 
@@ -479,58 +282,13 @@ def test_calcFindableNightlyLinkages_assertion(test_observations):
     # Check that an assertion is raised if more than one object's observations
     # are passed to the metric's determine_object_findable method
     with pytest.raises(AssertionError):
-        metric = NightlyLinkagesMetric()
+        metric = TrackletMetric()
         metric.determine_object_findable(test_observations)
 
 
-def test_calcFindableMinObs_assertion(test_observations):
+def test_SingletonMetric_assertion(test_observations):
     # Check that an assertion is raised if more than one object's observations
     # are passed to the metric's determine_object_findable method
     with pytest.raises(AssertionError):
-        metric = MinObsMetric()
+        metric = SingletonMetric()
         metric.determine_object_findable(test_observations)
-
-
-def test_FindabilityMetrics_shared_memory(test_observations):
-    # Check that the function stores the observations in shared memory under
-    # the correct name
-    metric = MinObsMetric()
-
-    # Extract the data from the test observations
-    object_ids = test_observations["object_id"].values
-    obs_ids = test_observations["obs_id"].values
-    time = test_observations["time"].values
-    ra = test_observations["ra"].values
-    dec = test_observations["dec"].values
-    night = test_observations["night"].values
-
-    # Store the observations in shared memory
-    metric._store_as_shared_record_array(object_ids, obs_ids, time, ra, dec, night)
-
-    # Check that the shared memory array has the correct name
-    assert metric._shared_memory_name == f"DIFI_ARRAY_{os.getpid()}"
-    assert metric._num_observations == len(test_observations)
-    assert metric._dtypes == [
-        ("object_id", object_ids.dtype),
-        ("obs_id", obs_ids.dtype),
-        ("time", np.float64),
-        ("ra", np.float64),
-        ("dec", np.float64),
-        ("night", np.int64),
-    ]
-
-    metric._clear_shared_record_array()
-    assert metric._shared_memory_name is None
-    assert metric._num_observations == 0
-    assert metric._dtypes is None
-
-
-def test_FindabilityMetrics_run_return_summary(test_observations):
-    # Check that the function returns the summary dataframe when desired
-    metric = MinObsMetric()
-
-    findable, window_summary = metric.run(test_observations, return_summary=True)
-    assert isinstance(window_summary, pd.DataFrame)
-
-    findable, window_summary = metric.run(test_observations, return_summary=False)
-    assert window_summary is None

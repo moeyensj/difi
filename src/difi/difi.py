@@ -1,773 +1,645 @@
-import warnings
-from typing import Optional, Tuple
+import pyarrow as pa
+import pyarrow.compute as pc
+import quivr as qv
 
-import numpy as np
-import pandas as pd
-
-from .utils import _checkColumnTypes, _checkColumnTypesEqual, _classHandler
-
-__all__ = ["analyzeLinkages"]
+from .cifi import AllObjects
+from .observations import Observations
+from .partitions import PartitionSummary
 
 
-def analyzeLinkages(
-    observations: pd.DataFrame,
-    linkage_members: pd.DataFrame,
-    all_objects: Optional[pd.DataFrame] = None,
-    min_obs: int = 5,
-    contamination_percentage: float = 20.0,
-    classes: Optional[dict] = None,
-) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+class PartitionMapping(qv.Table):
+    linkage_id = qv.LargeStringColumn()
+    partition_id = qv.LargeStringColumn()
+
+
+class LinkageMembers(qv.Table):
+    linkage_id = qv.LargeStringColumn()
+    obs_id = qv.LargeStringColumn()
+
+
+class AllLinkages(qv.Table):
+    linkage_id = qv.LargeStringColumn()
+    partition_id = qv.LargeStringColumn()
+    linked_object_id = qv.LargeStringColumn(nullable=True)
+    num_obs = qv.Int64Column()
+    num_obs_outside_partition = qv.Int64Column()
+    num_members = qv.Int64Column()
+    pure = qv.BooleanColumn()
+    pure_complete = qv.BooleanColumn()
+    contaminated = qv.BooleanColumn()
+    contamination = qv.Float64Column()
+    mixed = qv.BooleanColumn()
+    found_pure = qv.BooleanColumn()
+    found_contaminated = qv.BooleanColumn()
+
+    @classmethod
+    def create(
+        cls,
+        observations: Observations,
+        partition_summary: PartitionSummary,
+        linkage_members: LinkageMembers,
+        min_obs: int = 6,
+        contamination_percentage: float = 0.0,
+    ) -> "AllLinkages":
+        """
+        Create a table of all linkages and classify them as pure, contaminated, or mixed.
+        All linkages in linkage members are assumed to be within the given partition though
+        observations may be outside the partition.
+
+        Parameters
+        ----------
+        observations : Observations
+            Table of observations
+        linkage_members : LinkageMembers
+            Table of linkage members.
+        partition_summary : PartitionSummary
+            The partition summary table (must only be a single partition).
+        min_obs : int
+            Minimum number of observations required to consider a linkage found.
+        contamination_percentage : float
+            Maximum percentage of observations that can belong to a different object
+            for a linkage to be considered contaminated. Otherwise, it is considered
+            mixed.
+
+        Returns
+        -------
+        AllLinkages
+            Table of all linkages.
+        """
+        if len(partition_summary) != 1:
+            raise ValueError("Partition summary must contain exactly one partition.")
+        if not pc.all(pc.is_in(linkage_members.obs_id.unique(), observations.id.unique())).as_py():
+            raise ValueError("All linkage members must be in the observations.")
+
+        # Join linkage members with observations so we get the object ID for each
+        # linkage's constituent observations
+        linkage_member_associations = (
+            linkage_members.flattened_table()
+            .select(["linkage_id", "obs_id"])
+            .join(observations.table.select(["id", "object_id", "night"]), "obs_id", "id")
+        )
+
+        # Identify observations as outside_partition
+        linkage_member_associations = linkage_member_associations.append_column(
+            "outside_partition",
+            pc.invert(
+                pc.and_(
+                    pc.greater_equal(
+                        linkage_member_associations["night"], partition_summary.start_night[0].as_py()
+                    ),
+                    pc.less_equal(
+                        linkage_member_associations["night"], partition_summary.end_night[0].as_py()
+                    ),
+                )
+            ),
+        )
+
+        # Observation counts per object
+        observations_per_object = observations.table.group_by("object_id").aggregate([("id", "count")])
+
+        unique_object_members = (
+            linkage_member_associations.group_by("linkage_id")
+            .aggregate(
+                [
+                    ("obs_id", "count_distinct"),
+                    ("object_id", "count_distinct"),
+                    ("object_id", "distinct"),
+                    ("outside_partition", "sum"),
+                ]
+            )
+            .rename_columns(
+                ["linkage_id", "num_obs", "num_members", "object_ids", "num_obs_outside_partition"]
+            )
+        )
+
+        all_linkages = (
+            linkage_member_associations.group_by(("linkage_id", "object_id"))
+            .aggregate([([], "count_all")])
+            .rename_columns(["linkage_id", "object_id", "object_id_counts"])
+            .join(
+                unique_object_members.select(
+                    ["linkage_id", "num_obs", "num_members", "num_obs_outside_partition"]
+                ),
+                "linkage_id",
+            )
+        )
+        all_linkages = (
+            all_linkages.append_column(
+                "percentage_in_linkage",
+                pc.divide(
+                    pc.cast(all_linkages["object_id_counts"], pa.float64()),
+                    pc.cast(all_linkages["num_obs"], pa.float64()),
+                ),
+            )
+            .sort_by([("linkage_id", "ascending"), ("percentage_in_linkage", "descending")])
+            .group_by("linkage_id", use_threads=False)
+            .aggregate(
+                [("object_id", "first"), ("object_id_counts", "first"), ("percentage_in_linkage", "first")]
+            )
+            .join(
+                unique_object_members.select(
+                    ["linkage_id", "num_obs", "num_members", "num_obs_outside_partition"]
+                ),
+                "linkage_id",
+            )
+        )
+        all_linkages = all_linkages.append_column(
+            "contamination",
+            pc.round(
+                pc.multiply(
+                    pc.subtract(1.0, all_linkages["percentage_in_linkage_first"]),
+                    100.0,
+                ),
+                10,
+            ),
+        )
+
+        # Identify those linkages that are pure
+        all_linkages = all_linkages.append_column(
+            "pure",
+            pc.if_else(pc.equal(all_linkages["contamination"], 0.0), pa.scalar(True), pa.scalar(False)),
+        )
+
+        # Identify those linkages that are contaminated
+        all_linkages = all_linkages.append_column(
+            "contaminated",
+            pc.if_else(
+                pc.and_(
+                    pc.less_equal(all_linkages["contamination"], contamination_percentage),
+                    pc.greater(all_linkages["contamination"], 0.0),
+                ),
+                pa.scalar(True),
+                pa.scalar(False),
+            ),
+        )
+
+        # Identify those linkages that are mixed
+        all_linkages = all_linkages.append_column(
+            "mixed",
+            pc.if_else(
+                pc.and_(pc.equal(all_linkages["pure"], False), pc.equal(all_linkages["contaminated"], False)),
+                pa.scalar(True),
+                pa.scalar(False),
+            ),
+        )
+
+        # Identify the linked object ID for each linkage if the linkage is pure or contaminated
+        all_linkages = all_linkages.append_column(
+            "linked_object_id",
+            pc.if_else(
+                pc.or_(all_linkages["pure"], all_linkages["contaminated"]),
+                all_linkages["object_id_first"],
+                pa.scalar(None),
+            ),
+        )
+
+        # Identify those linkages that are pure and complete
+        # Pure complete linkages are linkages that contain all observations of the linked object
+        # within the given observations
+        all_linkages = all_linkages.join(observations_per_object, "linked_object_id", "object_id")
+
+        # Count the number of observations in the partition and in the linkage
+        obs_partition_counts = (
+            observations.filter_partition(partition_summary)
+            .flattened_table()
+            .group_by("object_id")
+            .aggregate([("id", "count")])
+            .rename_columns(["object_id", "num_obs_in_partition"])
+        )
+        linkage_obs_partition_counts = (
+            linkage_member_associations.filter(
+                pc.equal(linkage_member_associations["outside_partition"], False)
+            )
+            .group_by("linkage_id")
+            .aggregate([("obs_id", "count_distinct")])
+            .rename_columns(["linkage_id", "num_linkage_obs_inside_partition"])
+        )
+
+        all_linkages = all_linkages.join(obs_partition_counts, "linked_object_id", "object_id").join(
+            linkage_obs_partition_counts, "linkage_id"
+        )
+        all_linkages = all_linkages.append_column(
+            "pure_complete",
+            pc.if_else(
+                pc.and_(
+                    pc.equal(all_linkages["pure"], True),
+                    pc.and_(
+                        pc.equal(
+                            all_linkages["num_obs_in_partition"],
+                            all_linkages["num_linkage_obs_inside_partition"],
+                        ),
+                        pc.invert(pc.is_null(all_linkages["num_obs_in_partition"])),
+                    ),
+                ),
+                pa.scalar(True),
+                pa.scalar(False),
+            ),
+        )
+
+        # Identify those linkages that are found and pure
+        # Pure linkages are linkages that contain at least min_obs observations
+        # of the linked object
+        all_linkages = all_linkages.append_column(
+            "found_pure",
+            pc.if_else(
+                pc.and_(
+                    pc.equal(all_linkages["pure"], True), pc.greater_equal(all_linkages["num_obs"], min_obs)
+                ),
+                pa.scalar(True),
+                pa.scalar(False),
+            ),
+        )
+
+        # Identify those linkages that are found and contaminated
+        all_linkages = all_linkages.append_column(
+            "found_contaminated",
+            pc.if_else(
+                pc.and_(
+                    pc.equal(all_linkages["contaminated"], True),
+                    pc.greater_equal(all_linkages["object_id_counts_first"], min_obs),
+                ),
+                pa.scalar(True),
+                pa.scalar(False),
+            ),
+        )
+
+        return AllLinkages.from_kwargs(
+            linkage_id=all_linkages["linkage_id"],
+            partition_id=pa.repeat(partition_summary.id[0], len(all_linkages)),
+            linked_object_id=all_linkages["linked_object_id"],
+            num_obs=all_linkages["num_obs"],
+            num_obs_outside_partition=all_linkages["num_obs_outside_partition"],
+            num_members=all_linkages["num_members"],
+            pure=all_linkages["pure"],
+            pure_complete=pc.fill_null(all_linkages["pure_complete"], False),
+            contaminated=all_linkages["contaminated"],
+            contamination=all_linkages["contamination"],
+            mixed=all_linkages["mixed"],
+            found_pure=all_linkages["found_pure"],
+            found_contaminated=all_linkages["found_contaminated"],
+        )
+
+
+def update_all_objects(
+    all_objects: AllObjects,
+    observations: Observations,
+    linkage_members: LinkageMembers,
+    all_linkages: AllLinkages,
+    min_obs: int = 6,
+) -> AllObjects:
     """
-    Did I Find It?
-
-    Given a data frame of observations and a data frame defining possible linkages made from those
-    observations this function identifies each linkage as one of three possible types:
-    - pure: a linkage where all constituent observations belong to a single object
-    - partial: a linkage that contains observations belonging to multiple objects but
-        equal to or more than min_obs observations of one object and no more than the contamination
-        threshold of observations of other objects. For example, a linkage with ten observations,
-        eight of which belong to a single unique object and two of which belong to other objects
-        has contamination percentage 20%. If the threshold is set to 20% or greater, and min_obs
-        is less than or equal to eight then the object with the eight observations
-        is considered found and the linkage is considered a partial linkage.
-    - mixed: all linkages that are neither pure nor partial.
-
+    Update the AllObjects table using the AllLinkages table. This function updates the
+    pure, pure_complete, contaminated, contaminant, mixed, obs_in_pure, obs_in_pure_complete,
+    obs_in_contaminated, obs_as_contaminant, obs_in_mixed, found_pure, found_contaminated
+    columns.
 
     Parameters
     ----------
-    observations : `~pandas.DataFrame`
-        Pandas DataFrame with at least two columns: observation IDs and the object IDs
-        (the object to which the observation belongs to).
-    linkage_members : `~pandas.DataFrame`
-        Pandas DataFrame with at least two columns: linkage IDs and the observation
-    all_linkages : {`~pandas.DataFrame`, None}, optional
-        Pandas DataFrame with one row per linkage with at least one column: linkage IDs.
-        If None, all_linkages will be created.
-        [Default = None]
-    all_objects : {`~pandas.DataFrame`, None}, optional
-        Pandas DataFrame with one row per unique object with at least one column: object_id.
-        If None, all_objects will be created.
-        [Default = None]
-    min_obs : int, optional
-        The minimum number of observations belonging to one object in a pure linkage for
-        that object to be considered found. In a partial linkage, for an object to be considered
-        found it must have equal to or more than this number of observations for it to be considered
-        found.
-    contamination_percentage : float, optional
-        Number of detections expressed as a percentage [0-100] belonging to other objects in a linkage
-        for that linkage to considered partial. For example, if contamination_percentage is
-        20% then a linkage with 10 members, where 8 belong to one object and 2 belong to other objects,
-        will be considered a partial linkage.
-        [Default = 20]
-    classes : {dict, str, None}
-        Analyze observations for objects grouped in different classes.
-        str : Name of the column in the observations dataframe which identifies
-            the class of each object.
-        dict : A dictionary with class names as keys and a list of unique
-            objects belonging to each class as values.
-        None : If there are no classes of objects.
+    all_objects : AllObjects
+        Table of all objects.
+    observations : Observations
+        Table of observations.
+    linkage_members : LinkageMembers
+        Table of linkage members.
+    all_linkages : AllLinkages
+        Table of all linkages.
+    min_obs : int
+        Minimum number of observations required to consider an object found in
+        either a pure or contaminated linkage.
 
     Returns
     -------
-    all_linkages : `~pandas.DataFrame`
-        A per-linkage summary.
-
-        Columns:
-            "linkage_id" : str
-                Unique linkage ID.
-            "num_obs" : int
-                Number of constituent observations contained in the linkage.
-            "num_members" : int
-                Number of unique object IDs contained in the linkage.
-            "pure" : int
-                1 if this linkage is pure, 0 otherwise.
-            "pure_complete" : int
-                1 if this linkage is complete and pure, 0 otherwise.
-            "partial" : int
-                1 if this linkage is partial, 0 otherwise.
-            "contamination_percentage" : float
-                Percent of observations that do not belong to the linked object. For pure
-                linkages this number is always 0, for partial linkages it will never exceed
-                the contaminationPercentage, for mixed linkages it is always NaN.
-            "found_pure" : int
-                1 if the pure linkage has equal to or more than min_obs observations (the linked object
-                is then considered found), 0 otherwise. A linkage can be pure but not condisered found
-                and pure if it does not have enough observations.
-            "found_partial" : int
-                1 if the partial linkage has equal to or more than min_obs observations of the linked
-                object (the linked object is then considered found), 0 otherwise. A linkage can be
-                partial but not considered found if it does not have enough observations of the linked
-                object.
-            "found" : int
-                1 if either found_partial or found_pure is 1, 0 otherwise.
-            "linked_object_id" : str
-                The object linked in the linkage if the linkage is pure or partial, NaN otherwise.
-
-    all_objects: `~pandas.DataFrame`
-        A per-object summary.
-
-        Columns:
-            "object_id" : str
-                Truth
-            "num_obs" : int
-                Number of observations in the observations dataframe
-                for each object
-            "findable" : int
-                1 if the object is findable, 0 if the object is not findable.
-                (NaN if no findable column is found in the all_objects dataframe)
-            "found_pure" : int
-                Number of pure linkages that contain at least min_obs observations.
-            "found_partial" : int
-                Number of partial linkages that contain at least min_obs observations
-                and contain no more than the contamination_percentage of observations
-                of other object IDs.
-            "found" : int
-                Sum of found_pure and found_partial.
-            "pure" : int
-                Number of pure linkages that observations belonging to this object
-                are found in.
-            "pure_complete" : int
-                Number of pure linkage that contain all of this object's observations (this number is
-                a subset of the the number of pure linkages).
-            "partial" : int
-                Number of partial linkages.
-            "partial_contaminant" : int
-                Number of partial linkages that are contaminated by observations belonging to
-                this object.
-            "mixed" : int
-                Number of mixed linkages that observations belonging to this object are
-                found in.
-            "obs_in_pure" : int
-                Total number of observations (not-unique) that are contained in pure linkages.
-            "obs_in_partial" : int
-                Total number of observations (not-unique) that are contained in partial linkages.
-            "obs_in_partial_contaminant" : int
-                Total number of observations (not-unique) that contaminate other object's partial
-                linkages.
-            "obs_in_mixed" : int
-                Total number of observations (not-unique) that are contained in mixed linkages.
-
-    summary : `~pandas.DataFrame`
-        A per-class summary.
-
-        Columns:
-            "class" : str
-                Name of class (if none are defined, will only contain) "All".
-            "num_members" : int
-                Number of unique object IDs that belong to the class.
-            "num_obs" : int
-                Number of observations of object IDs belonging to the class in
-                the observations dataframe.
-            "completeness" : float
-                Percent of object IDs deemed findable that are found in pure or
-                partial linkages that contain more than min_obs observations.
-            "findable" : int
-                Number of object IDs deemed findable (all_objects must be passed to this
-                function with a findable column)
-            "found" : int
-                Number of object IDs found in pure and partial linkages with equal to or
-                more than min_obs observations.
-            "findable_found" : int
-                Number of object IDs deemed findable that were found.
-            "findable_missed" : int
-                Number of object IDs deemed findable that were not found.
-            "not_findable_found" : int
-                Number of object IDs deemed not findable that were found (serendipitous discoveries).
-            "not_findable_missed" : int
-                Number of object IDs deemed not findable that were not found.
-            "linkages" : int
-                Number of unique linkages that contain observations of this class of object IDs.
-            "pure_linkages" : int
-                Number of pure linkages that contain observations of this class of object IDs.
-            "pure_complete_linkages" : int
-                Number of complete pure linkages that contain observations of this class of object IDs.
-            "partial_linkages" : int
-                Number of partial linkages that contain observations of this class of object IDs.
-            "partial_contaminant_linkages" : int
-                Number of partial linkages that are contaminated by observations of this class of object IDs.
-            "mixed_linkages" :
-                Number of mixed linkages that contain observations of this class of object IDs.
-            "unique_in_pure_linkages" : int
-                Number of unique object IDs in pure linkages.
-            "unique_in_pure_complete_linkages" : int
-                Number of unique object IDs in pure complete linkages (subset of unique_in_pure_linkages).
-            "unique_in_pure_linkages_only" : int
-                Number of unique object IDs in pure linkages only (not in partial linkages but can be in mixed
-                linkages).
-            "unique_in_partial_linkages_only" : int
-                Number of unique object IDs in partial linkages only (not in pure linkages but can be in mixed
-                linkages).
-            "unique_in_pure_and_partial_linkages" : int
-                Number of unique object IDs that appear in both pure and partial linkages.
-            "unique_in_partial_linkages" : int
-                Number of unique object IDs in partial linkages.
-            "unique_in_partial_contaminant_linkages" : int
-                Number of unique object IDs that contaminate partial linkages.
-            "unique_in_mixed_linkages" : int
-                Number of unique object IDs in mixed linkages.
-            "obs_in_pure_linkages" : int
-                Number of observations of object IDs of this class in pure linkages.
-            "obs_in_pure_complete_linkages" : int
-                Number of observations of object IDs of this class in complete pure linkages.
-            "obs_in_partial_linkages" : int
-                Number of observations of object IDs of this class in partial linkages.
-            "obs_in_partial_contaminant_linkages" : int
-                Number of observations of object IDs of this class that contaminate partial linkages.
-            "obs_in_mixed_linkages" : int
-                Number of observations of object IDs of this class in mixed linkages.
-
-    Raises
-    ------
-    TypeError : If the object ID column in observations does not have type "Object",
-        or if the obs_id columns in observations and linkage_members do not have the same type,
-        or if the linkage_id columns in all_linkages (if passed) and linkage_members do not have the same
-        type, or if the object ID columns in all_objects (if passed)
-        and observations do not have the same type.
+    all_objects : AllObjects
+        Updated table of all objects.
     """
-    # Raise error if there are no observations
-    if len(observations) == 0:
-        raise ValueError("There are no observations in the observations DataFrame!")
-
-    findable_present = True
-    # If all_objects DataFrame does not exist, create it
-    if all_objects is None:
-        objects = observations["object_id"].value_counts()
-
-        all_objects = pd.DataFrame(
-            {
-                "object_id": objects.index.values,
-                # "class" : ["None" for i in range(len(objects))],
-                "num_obs": np.zeros(len(objects), dtype=int),
-                "findable": [np.nan for i in range(len(objects))],
-            }
-        )
-        all_objects["object_id"] = all_objects["object_id"].astype(str)
-
-        num_obs_per_object = observations["object_id"].value_counts()
-        all_objects.loc[all_objects["object_id"].isin(num_obs_per_object.index.values), "num_obs"] = (
-            num_obs_per_object.values
-        )
-
-        all_objects.sort_values(
-            by=["num_obs", "object_id"], ascending=[False, True], inplace=True, ignore_index=True
-        )
-
-        findable_present = False
-
-    # If it does exist, add columns
-    else:
-        all_objects = all_objects.copy()
-        if "findable" not in all_objects.columns:
-            warn = (
-                "No findable column found in all_objects. Completeness\n" "statistics can not be calculated."
-            )
-            warnings.warn(warn, UserWarning)
-            all_objects.loc[:, "findable"] = np.nan
-            findable_present = False
-        _checkColumnTypesEqual(all_objects, observations, ["object_id"])
-
-    # Check column types
-    _checkColumnTypes(observations, ["object_id"])
-    _checkColumnTypes(observations, ["obs_id"])
-    _checkColumnTypes(linkage_members, ["obs_id"])
-    _checkColumnTypesEqual(observations, linkage_members, ["obs_id"])
-
-    # Create a summary dictionary
-    summary_cols = [
-        "class",
-        "num_members",
-        "num_obs",
-        "completeness",
-        "findable",
-        "found",
-        "findable_found",
-        "findable_missed",
-        "not_findable_found",
-        "not_findable_missed",
-        "linkages",
-        "found_pure_linkages",
-        "found_partial_linkages",
-        "pure_linkages",
-        "pure_complete_linkages",
-        "partial_linkages",
-        "partial_contaminant_linkages",
-        "mixed_linkages",
-        "unique_in_pure_linkages",
-        "unique_in_pure_complete_linkages",
-        "unique_in_pure_linkages_only",
-        "unique_in_partial_linkages_only",
-        "unique_in_pure_and_partial_linkages",
-        "unique_in_partial_linkages",
-        "unique_in_partial_contaminant_linkages",
-        "unique_in_mixed_linkages",
-        "obs_in_pure_linkages",
-        "obs_in_pure_complete_linkages",
-        "obs_in_partial_linkages",
-        "obs_in_partial_contaminant_linkages",
-        "obs_in_mixed_linkages",
-    ]
-    summary: dict = {c: [] for c in summary_cols}
-
-    if len(linkage_members) > 0:
-        # Grab only observation IDs and object IDs from observations
-        all_linkages = observations[["obs_id", "object_id"]].copy()
-
-        # Merge object ID from observations with linkage_members on observation IDs
-        all_linkages = all_linkages.merge(linkage_members[["linkage_id", "obs_id"]], on="obs_id")
-
-        # Group the data frame of objects, linkage_ids and
-        # observation IDs by object ID and linkage ID
-        # then count the number of occurences
-        all_linkages = all_linkages.groupby(by=["object_id", "linkage_id"]).count().reset_index()
-        all_linkages.rename(columns={"obs_id": "num_obs"}, inplace=True)
-
-        # Calculate the total number of observations in each linkage
-        num_obs_in_linkage = (
-            all_linkages.groupby(by=["linkage_id"])["num_obs"].sum().to_frame(name="num_obs_in_linkage")
-        )
-        num_obs_in_linkage.reset_index(drop=False, inplace=True)
-
-        # Merge with num_obs_in_linkage to get the total
-        # number of observations in each linkage
-        all_linkages = all_linkages.merge(
-            num_obs_in_linkage,
-            left_on="linkage_id",
-            right_on="linkage_id",
-            suffixes=("", "_"),
-        )
-
-        # Calculate the number of unique objects in each linkage
-        num_object_in_linkage = (
-            all_linkages.groupby(by=["linkage_id"])["object_id"].nunique().to_frame(name="num_members")
-        )
-        num_obs_in_linkage.reset_index(drop=False, inplace=True)
-
-        # Merge with num_object_in_linkage to get the total
-        # number of objects in each linkage
-        all_linkages = all_linkages.merge(
-            num_object_in_linkage,
-            left_on="linkage_id",
-            right_on="linkage_id",
-            suffixes=("", "_"),
-        )
-
-        # Merge with all_objects to get the total number of
-        # observations in the observations data frame
-        all_linkages = all_linkages.merge(
-            all_objects[["object_id", "num_obs"]].rename(
-                columns={"num_obs": "num_obs_in_observations"},
-            ),
-            left_on="object_id",
-            right_on="object_id",
-            suffixes=("", "_"),
-        )
-
-        # For each object calculate the percent of observations
-        # in a linkage that belong to that object
-        all_linkages["percentage_in_linkage"] = (
-            100.0 * all_linkages["num_obs"] / all_linkages["num_obs_in_linkage"]
-        )
-        all_linkages["contamination_percentage_in_linkages"] = 100 - all_linkages["percentage_in_linkage"]
-
-        # Sort by linkage_id and the percentage then reset the index
-        all_linkages.sort_values(
-            by=["linkage_id", "percentage_in_linkage"],
-            ascending=[True, False],
-            inplace=True,
-            ignore_index=True,
-        )
-
-        # Initialize the linkage purity columns
-        all_linkages.loc[:, "found_pure"] = 0
-        all_linkages.loc[:, "found_partial"] = 0
-        all_linkages.loc[:, "found"] = 0
-        all_linkages.loc[:, "pure"] = 0
-        all_linkages.loc[:, "pure_complete"] = 0
-        all_linkages.loc[:, "partial"] = 0
-        all_linkages.loc[:, "partial_contaminant"] = 0
-        all_linkages.loc[:, "mixed"] = 0
-
-        # Pure linkages: any linkage where each observation belongs to the same object
-        all_linkages.loc[(all_linkages["num_obs"] == all_linkages["num_obs_in_linkage"]), "pure"] = 1
-
-        # Complete pure linkages: any linkage where all observations of a object are linked
-        all_linkages.loc[
-            (all_linkages["num_obs"] == all_linkages["num_obs_in_observations"])
-            & (all_linkages["pure"] == 1),
-            "pure_complete",
-        ] = 1
-
-        # Partial linkages: any linkage where up to a contamination percentage of observations belong
-        # to other objects
-        all_linkages.loc[
-            (all_linkages["pure"] == 0)
-            & (all_linkages["contamination_percentage_in_linkages"] <= contamination_percentage),
-            "partial",
-        ] = 1
-        partial_linkages = all_linkages[all_linkages["partial"] == 1]["linkage_id"].unique()
-        all_linkages.loc[
-            (
-                all_linkages["linkage_id"].isin(partial_linkages)
-                & (all_linkages["contamination_percentage_in_linkages"] > contamination_percentage)
-            ),
-            "partial_contaminant",
-        ] = 1
-
-        # If the contamination percentage is high it may set linkages with no clear majority of detections
-        # belonging to one object as partials.. these are actually mixed so make sure
-        # they are correctly indentified.
-        contamination_counts = (
-            all_linkages[all_linkages["linkage_id"].isin(partial_linkages)]
-            .groupby("linkage_id")["contamination_percentage_in_linkages"]
-            .nunique()
-        )
-        no_majority_partials = contamination_counts[contamination_counts.values == 1].index.values
-        all_linkages.loc[all_linkages["linkage_id"].isin(no_majority_partials), "partial"] = 0
-        all_linkages.loc[
-            all_linkages["linkage_id"].isin(no_majority_partials),
-            "partial_contaminant",
-        ] = 0
-        all_linkages.loc[all_linkages["linkage_id"].isin(no_majority_partials), "mixed"] = 1
-
-        # Mixed linkages: any linkage that is not pure or partial
-        all_linkages.loc[
-            (all_linkages["pure"] == 0)
-            & (all_linkages["partial"] == 0)
-            & (all_linkages["partial_contaminant"] == 0),
-            "mixed",
-        ] = 1
-
-        # Update found columns
-        all_linkages.loc[
-            (all_linkages["num_obs"] >= min_obs) & (all_linkages["pure"] == 1),
-            "found_pure",
-        ] = 1
-        all_linkages.loc[
-            (all_linkages["num_obs"] >= min_obs) & (all_linkages["partial"] == 1),
-            "found_partial",
-        ] = 1
-        all_linkages.loc[
-            (all_linkages["found_pure"] == 1) | (all_linkages["found_partial"] == 1),
-            "found",
-        ] = 1
-
-        # Calculate number of observations in pure linkages for each object
-        pure_obs = (
-            all_linkages[all_linkages["pure"] == 1]
-            .groupby(by="object_id")["num_obs"]
-            .sum()
-            .to_frame(name="obs_in_pure")
-        )
-        pure_obs.reset_index(inplace=True)
-
-        # Calculate number of observations in pure complete linkages for each object
-        pure_complete_obs = (
-            all_linkages[all_linkages["pure_complete"] == 1]
-            .groupby(by="object_id")["num_obs"]
-            .sum()
-            .to_frame(name="obs_in_pure_complete")
-        )
-        pure_complete_obs.reset_index(inplace=True)
-
-        # Calculate number of observations in partial linkages for each object
-        partial_obs = (
-            all_linkages[all_linkages["partial"] == 1]
-            .groupby(by="object_id")["num_obs"]
-            .sum()
-            .to_frame(name="obs_in_partial")
-        )
-        partial_obs.reset_index(inplace=True)
-
-        # Calculate number of observations in partial linkages for each object
-        partial_contaminant_obs = (
-            all_linkages[(all_linkages["partial_contaminant"] == 1)]
-            .groupby(by="object_id")["num_obs"]
-            .sum()
-            .to_frame(name="obs_in_partial_contaminant")
-        )
-        partial_contaminant_obs.reset_index(inplace=True)
-
-        # Calculate number of observations in mixed linkages for each object
-        mixed_obs = (
-            all_linkages[all_linkages["mixed"] == 1]
-            .groupby(by="object_id")["num_obs"]
-            .sum()
-            .to_frame(name="obs_in_mixed")
-        )
-        mixed_obs.reset_index(inplace=True)
-
-        linkage_types = all_linkages.groupby(by=["object_id"])[
-            [
-                "pure",
-                "pure_complete",
-                "partial",
-                "partial_contaminant",
-                "mixed",
-                "found_pure",
-                "found_partial",
-                "found",
-            ]
-        ].sum()
-        linkage_types.reset_index(inplace=True)
-
-        for df in [
-            pure_obs,
-            pure_complete_obs,
-            partial_obs,
-            partial_contaminant_obs,
-            mixed_obs,
-        ]:
-            linkage_types = linkage_types.merge(df, on="object_id", how="outer")
-
-    else:
-        # Create empty linkage_types dataframe when linkage_members is empty
-        dtypes = np.dtype(
-            [
-                ("object_id", str),
-                ("pure", int),
-                ("pure_complete", int),
-                ("partial", int),
-                ("partial_contaminant", int),
-                ("mixed", int),
-                ("found_pure", int),
-                ("found_partial", int),
-                ("found", int),
-                ("obs_in_pure", int),
-                ("obs_in_pure_complete", int),
-                ("obs_in_partial", int),
-                ("obs_in_partial_contaminant", int),
-                ("obs_in_mixed", int),
-            ]
-        )
-        linkage_types = pd.DataFrame(np.empty(0, dtype=dtypes))
-
-        # Create empty all_linkages dataframe when linkage_members is empty
-        dtypes = np.dtype(
-            [
-                ("linkage_id", str),
-                ("num_obs", int),
-                ("num_obs_in_linkage", int),
-                ("num_members", int),
-                ("num_obs_in_observations", int),
-                ("percentage_in_linkage", float),
-                ("pure", int),
-                ("pure_complete", int),
-                ("partial", int),
-                ("partial_contaminant", int),
-                ("mixed", int),
-                ("contamination_percentage_in_linkages", float),
-                ("found_pure", int),
-                ("found_partial", int),
-                ("found", int),
-                ("object_id", str),
-            ]
-        )
-        all_linkages = pd.DataFrame(np.empty(0, dtype=dtypes))
-
-    all_objects = all_objects.merge(linkage_types, on="object_id", how="outer")
-    all_objects_int_cols = [
-        "pure",
-        "pure_complete",
-        "partial",
-        "partial_contaminant",
-        "mixed",
-        "found_pure",
-        "found_partial",
-        "found",
-        "obs_in_pure",
-        "obs_in_pure_complete",
-        "obs_in_partial",
-        "obs_in_partial_contaminant",
-        "obs_in_mixed",
-    ]
-    all_objects[all_objects_int_cols] = all_objects[all_objects_int_cols].fillna(0)
-    all_objects[all_objects_int_cols] = all_objects[all_objects_int_cols].astype(int)
-
-    class_list, objects_list = _classHandler(classes, observations)
-
-    # Loop through the classes and summarize the results
-    for c, v in zip(class_list, objects_list):
-        # Create masks for the class of objects
-        all_objects_class = all_objects[all_objects["object_id"].isin(v)]
-        all_linkages_class = all_linkages[all_linkages["object_id"].isin(v)]
-        observations_class = observations[observations["object_id"].isin(v)]
-
-        # Add class and the number of members to the summary
-        summary["class"].append(c)
-        summary["num_members"].append(len(v))
-        summary["num_obs"].append(len(observations_class))
-
-        # Number of objects found
-        found = len((all_objects_class[all_objects_class["found"] >= 1]))
-        summary["found"].append(found)
-
-        if findable_present:
-            # Number of objects findable
-            findable = len(all_objects_class[all_objects_class["findable"] == 1])
-            summary["findable"].append(findable)
-
-            # Number of findable objects found
-            findable_found = len(
-                all_objects_class[(all_objects_class["findable"] == 1) & (all_objects_class["found"] >= 1)]
-            )
-            summary["findable_found"].append(findable_found)
-
-            # Calculate completeness
-            if findable == 0:
-                completeness = np.nan
-            else:
-                completeness = 100.0 * findable_found / findable
-            summary["completeness"].append(completeness)
-
-            # Number of findable objects missed
-            findable_missed = len(
-                all_objects_class[(all_objects_class["findable"] == 1) & (all_objects_class["found"] == 0)]
-            )
-            summary["findable_missed"].append(findable_missed)
-
-            # Number of not findable objects found
-            not_findable_found = len(
-                all_objects_class[(all_objects_class["findable"] == 0) & (all_objects_class["found"] >= 1)]
-            )
-            summary["not_findable_found"].append(not_findable_found)
-
-            # Number of not findable objects missed
-            not_findable_missed = len(
-                all_objects_class[(all_objects_class["findable"] == 0) & (all_objects_class["found"] == 0)]
-            )
-            summary["not_findable_missed"].append(not_findable_missed)
-
-        else:
-            summary["completeness"].append(np.nan)
-            summary["findable"].append(np.nan)
-            summary["findable_found"].append(np.nan)
-            summary["findable_missed"].append(np.nan)
-            summary["not_findable_found"].append(np.nan)
-            summary["not_findable_missed"].append(np.nan)
-
-        # Calculate number of linkage types that contain observations of this class
-        for linkage_type in [
-            "found_pure",
-            "found_partial",
-            "pure",
-            "pure_complete",
-            "partial",
-            "partial_contaminant",
-            "mixed",
-        ]:
-            summary["{}_linkages".format(linkage_type)].append(
-                all_linkages_class[all_linkages_class[linkage_type] == 1]["linkage_id"].nunique()
-            )
-        summary["linkages"].append(all_linkages_class["linkage_id"].nunique())
-
-        # Calculate number of linkage types that contain observations of this class
-        for linkage_type in [
-            "pure",
-            "pure_complete",
-            "partial",
-            "partial_contaminant",
-            "mixed",
-        ]:
-            summary["unique_in_{}_linkages".format(linkage_type)].append(
-                all_linkages_class[all_linkages_class[linkage_type] == 1]["object_id"].nunique()
-            )
-
-        # Calculate number of observations in different linkages for each class
-        for linkage_type in [
-            "pure",
-            "pure_complete",
-            "partial",
-            "partial_contaminant",
-            "mixed",
-        ]:
-            summary["obs_in_{}_linkages".format(linkage_type)].append(
-                all_objects_class["obs_in_{}".format(linkage_type)].sum()
-            )
-
-        summary["unique_in_pure_and_partial_linkages"].append(
-            all_objects_class[(all_objects_class["pure"] >= 1) & (all_objects_class["partial"] >= 1)][
-                "object_id"
-            ].nunique()
-        )
-
-        summary["unique_in_partial_linkages_only"].append(
-            all_objects_class[(all_objects_class["pure"] == 0) & (all_objects_class["partial"] >= 1)][
-                "object_id"
-            ].nunique()
-        )
-
-        summary["unique_in_pure_linkages_only"].append(
-            all_objects_class[(all_objects_class["pure"] >= 1) & (all_objects_class["partial"] == 0)][
-                "object_id"
-            ].nunique()
-        )
-
-    all_linkages.loc[all_linkages["mixed"] == 1, "object_id"] = np.nan
-    all_linkages.loc[all_linkages["mixed"] == 1, "contamination_percentage_in_linkages"] = np.nan
-    all_linkages["object_id"] = all_linkages["object_id"].astype(str)
-
-    # Drop all duplicate linkage_id entries which has the effect of
-    # dropping all but one of the entries for mixed linkages and dropping
-    # the contaminant entries for partial linkages. Pure linkages are already
-    # unique at this stage
-    all_linkages.drop_duplicates(subset=["linkage_id"], keep="first", inplace=True)
-
-    # Reset index after dataframe size change
-    all_linkages.reset_index(drop=True, inplace=True)
-
-    # Organize columns and rename a few
-    all_linkages = all_linkages[
-        [
-            "linkage_id",
-            # "num_obs", # UNCOMMENT FOR DEBUG
-            "num_obs_in_linkage",
-            "num_members",
-            # "num_obs_in_observations", # UNCOMMENT FOR DEBUG
-            # "percentage_in_linkage", # UNCOMMENT FOR DEBUG
-            "pure",
-            "pure_complete",
-            "partial",
-            # "partial_contaminant", # UNCOMMENT FOR DEBUG
-            "mixed",
-            "contamination_percentage_in_linkages",
-            "found_pure",
-            "found_partial",
-            "found",
-            "object_id",
-        ]
-    ]
-    all_linkages.rename(
-        columns={
-            "object_id": "linked_object_id",
-            "num_obs_in_linkage": "num_obs",
-            "contamination_percentage_in_linkages": "contamination_percentage",
-        },
-        inplace=True,
+    # Create a table of linkage members and their associated object IDs
+    linkage_member_associations = (
+        linkage_members.flattened_table()
+        .select(["linkage_id", "obs_id"])
+        .join(observations.table.select(["id", "object_id"]), "obs_id", "id")
     )
 
-    all_objects = all_objects[
+    unique_object_members = (
+        linkage_member_associations.group_by(("linkage_id", "object_id"))
+        .aggregate([([], "count_all")])
+        .rename_columns(["linkage_id", "object_id", "object_id_counts"])
+        .join(
+            all_linkages.table.select(
+                ["linkage_id", "linked_object_id", "pure", "pure_complete", "contaminated", "mixed"]
+            ),
+            "linkage_id",
+        )
+    )
+
+    all_objects_linkages = (
+        unique_object_members.group_by("object_id").aggregate([]).rename_columns(["object_id"])
+    )
+
+    # Count True values rather than rows for pure/pure_complete/contaminated
+    uom_counts = (
+        unique_object_members.append_column("pure_int", pc.cast(unique_object_members["pure"], pa.int64()))
+        .append_column("pure_complete_int", pc.cast(unique_object_members["pure_complete"], pa.int64()))
+        .append_column("contaminated_int", pc.cast(unique_object_members["contaminated"], pa.int64()))
+    )
+
+    all_objects_linkages_counts = (
+        uom_counts.filter(pc.equal(uom_counts["object_id"], uom_counts["linked_object_id"]))
+        .group_by("object_id")
+        .aggregate(
+            [
+                ("pure_int", "sum"),
+                ("pure_complete_int", "sum"),
+                ("contaminated_int", "sum"),
+            ]
+        )
+        .rename_columns(["object_id", "pure", "pure_complete", "contaminated"])
+    )
+    all_objects_linkages = all_objects_linkages.join(all_objects_linkages_counts, "object_id", "object_id")
+
+    all_objects_linkages_contaminant = (
+        unique_object_members.filter(
+            pc.and_(
+                pc.invert(
+                    pc.equal(unique_object_members["object_id"], unique_object_members["linked_object_id"])
+                ),
+                pc.equal(unique_object_members["contaminated"], True),
+            )
+        )
+        .group_by("object_id")
+        .aggregate(
+            [
+                ("contaminated", "count"),
+            ]
+        )
+        .rename_columns(["object_id", "contaminant"])
+    )
+    all_objects_linkages = all_objects_linkages.join(
+        all_objects_linkages_contaminant, "object_id", "object_id"
+    )
+
+    all_objects_linkages_mixed = (
+        unique_object_members.filter(pc.equal(unique_object_members["mixed"], True))
+        .group_by("object_id")
+        .aggregate(
+            [
+                ("mixed", "count"),
+            ]
+        )
+        .rename_columns(["object_id", "mixed"])
+    )
+    all_objects_linkages = all_objects_linkages.join(all_objects_linkages_mixed, "object_id", "object_id")
+
+    obs_in_pure = (
+        unique_object_members.filter(pc.equal(unique_object_members["pure"], True))
+        .group_by("object_id")
+        .aggregate([("object_id_counts", "sum")])
+        .rename_columns(["object_id", "obs_in_pure"])
+    )
+    all_objects_linkages = all_objects_linkages.join(obs_in_pure, "object_id", "object_id")
+
+    obs_in_pure_complete = (
+        unique_object_members.filter(pc.equal(unique_object_members["pure_complete"], True))
+        .group_by("object_id")
+        .aggregate([("object_id_counts", "sum")])
+        .rename_columns(["object_id", "obs_in_pure_complete"])
+    )
+    all_objects_linkages = all_objects_linkages.join(obs_in_pure_complete, "object_id", "object_id")
+
+    obs_in_contaminated = (
+        unique_object_members.filter(
+            pc.and_(
+                pc.equal(unique_object_members["object_id"], unique_object_members["linked_object_id"]),
+                pc.equal(unique_object_members["contaminated"], True),
+            )
+        )
+        .group_by("object_id")
+        .aggregate([("object_id_counts", "sum")])
+        .rename_columns(["object_id", "obs_in_contaminated"])
+    )
+    all_objects_linkages = all_objects_linkages.join(obs_in_contaminated, "object_id", "object_id")
+
+    obs_in_contaminated_as_contaminant = (
+        unique_object_members.filter(
+            pc.and_(
+                pc.invert(
+                    pc.equal(unique_object_members["object_id"], unique_object_members["linked_object_id"])
+                ),
+                pc.equal(unique_object_members["contaminated"], True),
+            )
+        )
+        .group_by("object_id")
+        .aggregate([("object_id_counts", "sum")])
+        .rename_columns(["object_id", "obs_as_contaminant"])
+    )
+    all_objects_linkages = all_objects_linkages.join(
+        obs_in_contaminated_as_contaminant, "object_id", "object_id"
+    )
+
+    obs_in_mixed = (
+        unique_object_members.filter(pc.equal(unique_object_members["mixed"], True))
+        .group_by("object_id")
+        .aggregate([("object_id_counts", "sum")])
+        .rename_columns(["object_id", "obs_in_mixed"])
+    )
+    all_objects_linkages = all_objects_linkages.join(obs_in_mixed, "object_id", "object_id")
+
+    # Now determine which objects were found (in pure or contaminated linkages with at least min_obs observations belonging to the object)
+    found_pure = (
+        unique_object_members.filter(
+            pc.and_(
+                pc.equal(unique_object_members["pure"], True),
+                pc.greater_equal(unique_object_members["object_id_counts"], min_obs),
+            )
+        )
+        .group_by("object_id")
+        .aggregate([("linkage_id", "count_distinct")])
+        .rename_columns(["object_id", "found_pure"])
+    )
+    all_objects_linkages = all_objects_linkages.join(found_pure, "object_id", "object_id")
+
+    found_contaminated = (
+        unique_object_members.filter(
+            pc.and_(
+                pc.equal(unique_object_members["contaminated"], True),
+                pc.greater_equal(unique_object_members["object_id_counts"], min_obs),
+            )
+        )
+        .group_by("object_id")
+        .aggregate([("linkage_id", "count_distinct")])
+        .rename_columns(["object_id", "found_contaminated"])
+    )
+    all_objects_linkages = all_objects_linkages.join(found_contaminated, "object_id", "object_id")
+
+    all_objects = all_objects.table.select(
         [
             "object_id",
-            # "class",
+            "partition_id",
+            "mjd_min",
+            "mjd_max",
+            "arc_length",
             "num_obs",
+            "num_observatories",
             "findable",
-            "found_pure",
-            "found_partial",
-            "found",
-            "pure",
-            "pure_complete",
-            "partial",
-            "partial_contaminant",
-            "mixed",
-            "obs_in_pure",
-            "obs_in_pure_complete",
-            "obs_in_partial",
-            "obs_in_partial_contaminant",
-            "obs_in_mixed",
         ]
-    ]
+    ).join(all_objects_linkages, "object_id", "object_id")
 
-    summary_df = pd.DataFrame(summary)
-    summary_df.sort_values(by=["num_obs", "class"], ascending=False, inplace=True, ignore_index=True)
+    return AllObjects.from_kwargs(
+        object_id=all_objects["object_id"],
+        partition_id=all_objects["partition_id"],
+        mjd_min=all_objects["mjd_min"],
+        mjd_max=all_objects["mjd_max"],
+        arc_length=all_objects["arc_length"],
+        num_obs=all_objects["num_obs"],
+        num_observatories=all_objects["num_observatories"],
+        findable=all_objects["findable"],
+        found_pure=pc.fill_null(all_objects["found_pure"], 0).cast(pa.int64()),
+        found_contaminated=pc.fill_null(all_objects["found_contaminated"], 0).cast(pa.int64()),
+        pure=pc.fill_null(all_objects["pure"], 0).cast(pa.int64()),
+        pure_complete=pc.fill_null(all_objects["pure_complete"], 0).cast(pa.int64()),
+        contaminated=pc.fill_null(all_objects["contaminated"], 0).cast(pa.int64()),
+        contaminant=pc.fill_null(all_objects["contaminant"], 0).cast(pa.int64()),
+        mixed=pc.fill_null(all_objects["mixed"], 0).cast(pa.int64()),
+        obs_in_pure=pc.fill_null(all_objects["obs_in_pure"], 0).cast(pa.int64()),
+        obs_in_pure_complete=pc.fill_null(all_objects["obs_in_pure_complete"], 0).cast(pa.int64()),
+        obs_in_contaminated=pc.fill_null(all_objects["obs_in_contaminated"], 0).cast(pa.int64()),
+        obs_as_contaminant=pc.fill_null(all_objects["obs_as_contaminant"], 0).cast(pa.int64()),
+        obs_in_mixed=pc.fill_null(all_objects["obs_in_mixed"], 0).cast(pa.int64()),
+    )
 
-    return all_linkages, all_objects, summary_df
+
+def analyze_linkages(
+    observations: Observations,
+    partition_summary: PartitionSummary,
+    linkage_members: LinkageMembers,
+    partition_mapping: PartitionMapping,
+    all_objects: AllObjects,
+    min_obs: int = 6,
+    contamination_percentage: float = 20.0,
+) -> tuple[AllObjects, AllLinkages, PartitionSummary]:
+    """
+    Did I Find It?
+
+    Given a table of observations and a table of linkage members, this function
+    determines which objects were found in the observations and updates the
+    all_objects table with the results. It also returns an AllLinkages table that classifies
+    each linkage as pure, contaminated, or mixed.
+
+    A pure linkage is one where all constieuent observations belong to the same object. A contaminated
+    linkage is where up to the contamination_percentage of the observations belong to a different object but
+    the rest belong to the same object. A mixed linkage is where the observations belong to multiple objects.
+
+    Parameters
+    ----------
+    observations : Observations
+        Table of observations.
+    linkage_members : LinkageMembers
+        Table of linkage members.
+    all_objects : AllObjects
+        Table of all objects.
+    min_obs : int
+        Minimum number of observations required to consider an object found in
+        either a pure or contaminated linkage.
+    contamination_percentage : float
+        Maximum percentage of observations that can belong to a different object
+        for a linkage to be considered contaminated. Otherwise, it is considered
+        mixed.
+
+    Returns
+    -------
+    all_objects : AllObjects
+        Updated table of all objects.
+    all_linkages : AllLinkages
+        Table of all linkages.
+    """
+
+    all_linkages = AllLinkages.empty()
+    all_objects_updated = AllObjects.empty()
+    partition_summaries_updated = PartitionSummary.empty()
+
+    for partition in partition_summary:
+        partition_id = partition.id[0].as_py()
+
+        linkage_ids = partition_mapping.select("partition_id", partition_id).linkage_id
+        linkage_members_partition = linkage_members.apply_mask(
+            pc.is_in(linkage_members.linkage_id, linkage_ids)
+        )
+
+        # Create the AllLinkages table for this partition
+        if len(linkage_members_partition) > 0:
+
+            all_linkages_partition = AllLinkages.create(
+                observations,
+                partition,
+                linkage_members_partition,
+                min_obs=min_obs,
+                contamination_percentage=contamination_percentage,
+            )
+
+        else:
+            all_linkages_partition = AllLinkages.empty()
+
+        all_linkages = qv.concatenate([all_linkages, all_linkages_partition])
+
+        # Update the AllObjects table for this partition
+        all_objects_partition = update_all_objects(
+            all_objects.select("partition_id", partition_id),
+            observations,
+            linkage_members_partition,
+            all_linkages,
+            min_obs=min_obs,
+        )
+        all_objects_updated = qv.concatenate([all_objects_updated, all_objects_partition])
+
+        # Update the partion summary with the number of pure, pure unknown, contaminated, and mixed linkages
+        # and the completeness
+        pure_known = len(
+            all_linkages_partition.apply_mask(
+                pc.and_(
+                    pc.equal(all_linkages_partition.pure, True),
+                    pc.invert(pc.is_null(all_linkages_partition.linked_object_id)),
+                )
+            )
+        )
+        pure_unknown = len(
+            all_linkages_partition.apply_mask(
+                pc.and_(
+                    pc.equal(all_linkages_partition.pure, True),
+                    pc.is_null(all_linkages_partition.linked_object_id),
+                )
+            )
+        )
+        contaminated = len(all_linkages_partition.select("contaminated", True))
+        mixed = len(all_linkages_partition.select("mixed", True))
+
+        found = len(
+            all_linkages_partition.apply_mask(
+                pc.and_(
+                    pc.equal(all_linkages_partition.pure, True),
+                    pc.invert(pc.is_null(all_linkages_partition.linked_object_id)),
+                )
+            ).linked_object_id.unique()
+        )
+        # findable may be null if not set; treat None as 0
+        findable = partition.findable[0].as_py() if not pc.is_null(partition.findable[0]).as_py() else 0
+
+        completeness = found / findable if findable and findable > 0 else float(found)
+        completeness *= 100
+
+        # Update the partition summary with the number of pure, pure unknown, contaminated, and mixed linkages
+        partition_summary_updated = PartitionSummary.from_kwargs(
+            id=partition.id,
+            start_night=partition.start_night,
+            end_night=partition.end_night,
+            observations=partition.observations,
+            findable=partition.findable,
+            found=[found],
+            completeness=[completeness],
+            pure_known=[pure_known],
+            pure_unknown=[pure_unknown],
+            contaminated=[contaminated],
+            mixed=[mixed],
+        )
+
+        partition_summaries_updated = qv.concatenate([partition_summaries_updated, partition_summary_updated])
+
+    return all_objects_updated, all_linkages, partition_summaries_updated
