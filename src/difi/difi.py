@@ -4,7 +4,7 @@ import quivr as qv
 
 from .cifi import AllObjects
 from .observations import Observations
-from .partitions import PartitionSummary
+from .partitions import Partitions, PartitionSummary
 
 
 class PartitionMapping(qv.Table):
@@ -509,10 +509,10 @@ def update_all_objects(
 
 def analyze_linkages(
     observations: Observations,
-    partition_summary: PartitionSummary,
     linkage_members: LinkageMembers,
-    partition_mapping: PartitionMapping,
     all_objects: AllObjects,
+    partition_summary: PartitionSummary | None = None,
+    partition_mapping: PartitionMapping | None = None,
     min_obs: int = 6,
     contamination_percentage: float = 20.0,
 ) -> tuple[AllObjects, AllLinkages, PartitionSummary]:
@@ -555,6 +555,23 @@ def analyze_linkages(
     all_linkages = AllLinkages.empty()
     all_objects_updated = AllObjects.empty()
     partition_summaries_updated = PartitionSummary.empty()
+
+    # If no partition summary is provided, create a single partition covering all observations
+    if partition_summary is None:
+        partitions = Partitions.create_single(observations.night)
+        partition_summary = PartitionSummary.create(observations, partitions)
+
+    # If no partition mapping is provided, assume all linkages belong to the single partition
+    if partition_mapping is None:
+        linkage_ids_unique = linkage_members.linkage_id.unique()
+        partition_mapping = PartitionMapping.from_kwargs(
+            linkage_id=linkage_ids_unique,
+            partition_id=pa.repeat(partition_summary.id[0], len(linkage_ids_unique)),
+        )
+
+    # Enforce exactly one partition in analyze_linkages
+    if len(partition_summary) != 1:
+        raise ValueError("analyze_linkages requires exactly one partition in partition_summary")
 
     for partition in partition_summary:
         partition_id = partition.id[0].as_py()
