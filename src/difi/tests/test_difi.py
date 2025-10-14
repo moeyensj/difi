@@ -29,10 +29,10 @@ def test_analyze_linkages_basic(test_observations, test_linkage_members):
     # Run difi with a permissive contamination threshold
     all_objects_updated, all_linkages, partition_summaries_updated = analyze_linkages(
         test_observations,
-        partition_summary,
         test_linkage_members,
-        partition_mapping,
         all_objects,
+        partition_summary=partition_summary,
+        partition_mapping=partition_mapping,
         min_obs=6,
         contamination_percentage=50.0,
     )
@@ -78,12 +78,72 @@ def test_analyze_linkages_errors(test_observations, test_linkage_members):
     with pytest.raises(ValueError):
         _ = analyze_linkages(
             empty_obs,
-            partition_summary,
             test_linkage_members,
-            partition_mapping,
-            all_objects=analyze_observations(empty_obs)[0],
+            analyze_observations(empty_obs)[0],
+            partition_summary=partition_summary,
+            partition_mapping=partition_mapping,
+            min_obs=6,
+            contamination_percentage=20.0,
+        )
+
+    # More than one partition should raise
+    partitions_multi = Partitions.create_linking_windows(test_observations.night, detection_window=5)
+    partition_summary_multi = PartitionSummary.create(test_observations, partitions_multi)
+    with pytest.raises(ValueError):
+        _ = analyze_linkages(
+            test_observations,
+            test_linkage_members,
+            analyze_observations(test_observations, partitions=partitions)[0],
+            partition_summary=partition_summary_multi,
+            partition_mapping=partition_mapping,
             min_obs=6,
             contamination_percentage=20.0,
         )
 
     return
+
+
+def test_analyze_linkages_optional_kwargs(test_observations, test_linkage_members):
+    # Explicit single-partition call
+    partitions = Partitions.create_single(test_observations.night)
+    partition_summary = PartitionSummary.create(test_observations, partitions)
+
+    linkage_ids_unique = test_linkage_members.linkage_id.unique()
+    partition_mapping = PartitionMapping.from_kwargs(
+        linkage_id=linkage_ids_unique,
+        partition_id=pa.repeat(partition_summary.id[0], len(linkage_ids_unique)),
+    )
+
+    all_objects, _, _ = analyze_observations(
+        test_observations,
+        partitions=partitions,
+        metric="singletons",
+        by_object=True,
+        ignore_after_discovery=False,
+        max_processes=1,
+    )
+
+    explicit_all_objects, explicit_all_linkages, explicit_summary = analyze_linkages(
+        test_observations,
+        test_linkage_members,
+        all_objects,
+        partition_summary=partition_summary,
+        partition_mapping=partition_mapping,
+        min_obs=6,
+        contamination_percentage=50.0,
+    )
+
+    # Now omit both partition_summary and partition_mapping (they are optional)
+    implicit_all_objects, implicit_all_linkages, implicit_summary = analyze_linkages(
+        test_observations,
+        test_linkage_members,
+        all_objects,
+        min_obs=6,
+        contamination_percentage=50.0,
+    )
+
+    # Compare key properties
+    assert len(explicit_all_linkages) == len(implicit_all_linkages)
+    assert len(explicit_summary) == len(implicit_summary)
+    # Object IDs and counts should match
+    assert set(explicit_all_objects.object_id.to_pylist()) == set(implicit_all_objects.object_id.to_pylist())

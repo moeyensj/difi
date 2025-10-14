@@ -45,10 +45,10 @@ def test_benchmark_analyze_linkages_no_classes_no_all_objects(
     all_objects_updated, all_linkages, partition_summaries_updated = benchmark(
         analyze_linkages,
         test_observations,
-        partition_summary,
         test_linkage_members,
-        partition_mapping,
         all_objects,
+        partition_summary,
+        partition_mapping,
         min_obs=min_obs,
         contamination_percentage=contamination_percentage,
     )
@@ -94,10 +94,10 @@ def test_benchmark_analyze_linkages_no_classes_all_objects(
     all_objects_updated, all_linkages, partition_summaries_updated = benchmark(
         analyze_linkages,
         test_observations,
-        partition_summary,
         test_linkage_members,
-        partition_mapping,
         all_objects,
+        partition_summary,
+        partition_mapping,
         min_obs=min_obs,
         contamination_percentage=contamination_percentage,
     )

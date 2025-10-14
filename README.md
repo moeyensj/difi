@@ -137,11 +137,23 @@ partition_mapping = PartitionMapping.from_kwargs(
 )
 
 # difi: classify linkages and update object summaries
+# Option A: pass partition_summary and partition_mapping explicitly
 all_objects_updated, all_linkages, partition_summary_updated = analyze_linkages(
     observations,
-    partition_summary,
     linkage_members,
-    partition_mapping,
+    all_objects,
+    partition_summary=partition_summary,
+    partition_mapping=partition_mapping,
+    min_obs=6,
+    contamination_percentage=50.0,
+)
+
+# Option B: omit partition_summary and partition_mapping (kwargs are optional)
+# difi will assume a single partition spanning all observations and map all
+# linkages to that partition.
+all_objects_updated2, all_linkages2, partition_summary_updated2 = analyze_linkages(
+    observations,
+    linkage_members,
     all_objects,
     min_obs=6,
     contamination_percentage=50.0,
