@@ -6,4 +6,3 @@ except ImportError:
 from .cifi import *
 from .difi import *
 from .metrics import *
-from .utils import *
