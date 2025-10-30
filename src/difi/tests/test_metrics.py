@@ -8,6 +8,7 @@ from ..metrics import (
     find_observations_within_max_time_separation,
     select_tracklet_combinations,
 )
+from ..partitions import Partitions
 
 
 def test_find_observations_within_max_time_separation():
@@ -292,3 +293,48 @@ def test_SingletonMetric_assertion(test_observations):
     with pytest.raises(AssertionError):
         metric = SingletonMetric()
         metric.determine_object_findable(test_observations)
+
+
+def test_SingletonMetric_invalid_param_combo_raises():
+    # min_nights * min_nightly_obs_in_min_nights must be <= min_obs
+    with pytest.raises(ValueError):
+        _ = SingletonMetric(min_obs=6, min_nights=3, min_nightly_obs_in_min_nights=3)
+
+
+def test_SingletonMetric_exact_min_nights_min_nightly_enforced(test_observations):
+    # Create non-overlapping windows of exactly 3 nights
+    partitions = Partitions.create_linking_windows(test_observations.night, detection_window=3, sliding=False)
+
+    # Require 3 obs per night for 3 nights and 9 total
+    metric = SingletonMetric(min_obs=9, min_nights=3, min_nightly_obs_in_min_nights=3)
+
+    findable = metric.run(
+        test_observations,
+        partitions=partitions,
+        by_object=True,
+        ignore_after_discovery=True,
+        max_processes=1,
+    )
+
+    # All objects should be discovered in some 3-night window
+    assert len(findable) == len(test_observations.object_id.unique())
+
+    # Discovery set has exactly 9 obs from that object
+    for oid in findable.object_id.to_pylist():
+        row = findable.select("object_id", oid)
+        obs_ids = row.obs_ids[0].as_py()
+        assert len(obs_ids) == 9
+        assert set(obs_ids).issubset(set(test_observations.select("object_id", oid).id.to_pylist()))
+
+
+def test_SingletonMetric_more_than_min_nights_uses_min_obs_only(test_observations):
+    # Dataset spans > min_nights nights; nightly minimum shouldn't restrict discovery
+    metric = SingletonMetric(min_obs=6, min_nights=3, min_nightly_obs_in_min_nights=1)
+    findable = metric.run(test_observations, by_object=True, max_processes=1)
+
+    # All objects are findable; each discovery set is exactly min_obs long and belongs to that object
+    assert len(findable) == len(test_observations.object_id.unique())
+    for oid in findable.object_id.to_pylist():
+        obs_ids = findable.select("object_id", oid).obs_ids[0].as_py()
+        assert len(obs_ids) == 6
+        assert set(obs_ids).issubset(set(test_observations.select("object_id", oid).id.to_pylist()))
