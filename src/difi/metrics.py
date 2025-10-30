@@ -448,8 +448,6 @@ class FindabilityMetric(ABC):
                 if findable_observations.fragmented():
                     findable_observations = qv.defragment(findable_observations)
 
-            ray.internal.free(observations_ref)
-
         else:
 
             object_ids = observations.object_id.unique()
@@ -535,8 +533,6 @@ class FindabilityMetric(ABC):
                 findable_observations = qv.concatenate([findable_observations, ray.get(finished[0])])
                 if findable_observations.fragmented():
                     findable_observations = qv.defragment(findable_observations)
-
-            ray.internal.free(observations_ref)
 
         else:
 
@@ -782,6 +778,8 @@ class SingletonMetric(FindabilityMetric):
     def __init__(
         self,
         min_obs: int = 6,
+        min_nights: int = 3,
+        min_nightly_obs_in_min_nights: int = 1,
     ):
         """
         Create a metric that finds all objects with a minimum of min_obs observations.
@@ -790,9 +788,23 @@ class SingletonMetric(FindabilityMetric):
         ----------
         min_obs : int, optional
             Minimum number of observations needed to make a object findable.
+        min_nights : int, optional
+            Minimum number of nights needed to make a object findable.
+        min_nightly_obs_in_min_nights : int, optional
+            Minimum number of observations needed on each night of min_nights to make a object findable.
+            For example, if min_nights is 3, then when the number of nights is 3 at least this number of observations
+            are needed on each night to make a object findable. However, if min_nights is 3, and there are 4 nights
+            then as long as are a total of min_obs observations, then the object is findable.
         """
         super().__init__()
         self.min_obs = min_obs
+        self.min_nights = min_nights
+        self.min_nightly_obs_in_min_nights = min_nightly_obs_in_min_nights
+
+        if min_nights * min_nightly_obs_in_min_nights > min_obs:
+            raise ValueError(
+                "min_nights * min_nightly_obs_in_min_nights must be less than or equal to min_obs"
+            )
 
     def determine_object_findable(
         self, observations: Observations, partitions: Optional[Partitions] = None
@@ -834,8 +846,19 @@ class SingletonMetric(FindabilityMetric):
                 obs_ids = observations_in_partition.id.to_numpy(zero_copy_only=False)
                 nights = observations_in_partition.night.to_numpy(zero_copy_only=False)
 
-                discovery_night = nights[self.min_obs - 1]
-                obs_ids_discovery = obs_ids[: self.min_obs].tolist()
+                unique_nights, counts = np.unique(nights, return_counts=True)
+                sorted_unique_nights = unique_nights[np.argsort(counts)]
+                sorted_counts = counts[np.argsort(counts)]
+
+                if len(sorted_unique_nights) >= self.min_nights:
+
+                    if len(sorted_unique_nights) == self.min_nights:
+                        if np.all(sorted_counts >= self.min_nightly_obs_in_min_nights):
+                            discovery_night = sorted_unique_nights[self.min_nights - 1]
+                            obs_ids_discovery = obs_ids[: self.min_obs].tolist()
+                    elif len(sorted_unique_nights) > self.min_nights:
+                        discovery_night = sorted_unique_nights[self.min_nights - 1]
+                        obs_ids_discovery = obs_ids[: self.min_obs].tolist()
 
             obs_ids_partition[partition_id] = (discovery_night, obs_ids_discovery)
 
