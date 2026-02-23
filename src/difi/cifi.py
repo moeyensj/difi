@@ -77,6 +77,9 @@ class AllObjects(qv.Table):
             findable_i = findable.select("partition_id", partition_id)
 
             observations_in_window = observations.filter_partition(partition)
+            observations_in_window = observations_in_window.apply_mask(
+                pc.invert(pc.is_null(observations_in_window.object_id))
+            )
             observations_in_window_table = observations_in_window.flattened_table().append_column(
                 "mjd_utc", observations_in_window.time.rescale("utc").mjd()
             )
