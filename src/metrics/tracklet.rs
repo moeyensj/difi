@@ -5,9 +5,11 @@
 //! at least `tracklet_min_obs` observations within `max_obs_separation` time
 //! and with at least `min_obs_angular_separation` angular separation.
 
+use std::collections::HashMap;
+
 use crate::metrics::haversine_distance;
 use crate::partitions::Partition;
-use crate::types::{FindableObservation, Observations};
+use crate::types::{FindableObservation, ObservationSlices};
 
 use super::FindabilityMetric;
 
@@ -75,8 +77,7 @@ fn find_angularly_separated_indices(
     let mut valid = vec![false; nights.len()];
 
     // Group indices by night
-    let mut night_groups: std::collections::HashMap<i64, Vec<usize>> =
-        std::collections::HashMap::new();
+    let mut night_groups: HashMap<i64, Vec<usize>> = HashMap::new();
     for (i, &night) in nights.iter().enumerate() {
         night_groups.entry(night).or_default().push(i);
     }
@@ -103,7 +104,7 @@ impl FindabilityMetric for TrackletMetric {
     fn determine_object_findable(
         &self,
         obs_indices: &[usize],
-        observations: &Observations,
+        observations: &ObservationSlices<'_>,
         partitions: &[Partition],
     ) -> Vec<FindableObservation> {
         let mut results = Vec::new();
@@ -115,8 +116,8 @@ impl FindabilityMetric for TrackletMetric {
                 .iter()
                 .copied()
                 .filter(|&i| {
-                    observations.night[i] >= partition.start_night
-                        && observations.night[i] <= partition.end_night
+                    observations.nights[i] >= partition.start_night
+                        && observations.nights[i] <= partition.end_night
                 })
                 .collect();
 
@@ -127,11 +128,11 @@ impl FindabilityMetric for TrackletMetric {
             // Extract local arrays for this partition's observations
             let times: Vec<f64> = partition_indices
                 .iter()
-                .map(|&i| observations.time_mjd[i])
+                .map(|&i| observations.times_mjd[i])
                 .collect();
             let nights: Vec<i64> = partition_indices
                 .iter()
-                .map(|&i| observations.night[i])
+                .map(|&i| observations.nights[i])
                 .collect();
             let ra: Vec<f64> = partition_indices
                 .iter()
@@ -143,7 +144,7 @@ impl FindabilityMetric for TrackletMetric {
                 .collect();
             let ids: Vec<u64> = partition_indices
                 .iter()
-                .map(|&i| observations.id[i])
+                .map(|&i| observations.ids[i])
                 .collect();
 
             let mut valid_mask = vec![true; partition_indices.len()];
@@ -157,8 +158,7 @@ impl FindabilityMetric for TrackletMetric {
                 }
 
                 // Check per-night observation counts
-                let mut night_counts: std::collections::HashMap<i64, usize> =
-                    std::collections::HashMap::new();
+                let mut night_counts: HashMap<i64, usize> = HashMap::new();
                 for (i, &night) in nights.iter().enumerate() {
                     if valid_mask[i] {
                         *night_counts.entry(night).or_default() += 1;
@@ -243,7 +243,7 @@ impl FindabilityMetric for TrackletMetric {
 
             results.push(FindableObservation {
                 partition_id: partition.id,
-                object_id: observations.object_id[partition_indices[0]].unwrap(),
+                object_id: observations.object_ids[partition_indices[0]].unwrap(),
                 discovery_night: Some(discovery_night),
                 obs_ids: Some(discovery_obs),
             });

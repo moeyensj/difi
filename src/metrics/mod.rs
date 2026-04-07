@@ -8,22 +8,27 @@ pub mod singleton;
 pub mod tracklet;
 
 use crate::partitions::Partition;
-use crate::types::{FindableObservation, Observations};
+use crate::types::{FindableObservation, ObservationSlices};
 
 /// Trait for findability metrics.
 ///
 /// Implementations determine whether a single object (represented by its
-/// observations) is findable within each partition.
+/// observation indices) is findable within each partition.
+///
+/// Takes `ObservationSlices` (concrete borrowed slices) so generics
+/// don't propagate into metric implementations.
 pub trait FindabilityMetric: Send + Sync {
     /// Determine whether the given observations (belonging to a single object)
     /// satisfy the findability criteria within each partition.
     ///
-    /// Returns one `FindableObservation` per partition where the object is found
-    /// to be findable.
+    /// `obs_indices` are indices into the `observations` slices for this object.
+    ///
+    /// Returns one `FindableObservation` per partition where the object is
+    /// findable.
     fn determine_object_findable(
         &self,
         obs_indices: &[usize],
-        observations: &Observations,
+        observations: &ObservationSlices<'_>,
         partitions: &[Partition],
     ) -> Vec<FindableObservation>;
 }

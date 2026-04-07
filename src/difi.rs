@@ -12,35 +12,56 @@ use std::collections::{HashMap, HashSet};
 
 use crate::error::{Error, Result};
 use crate::partitions::PartitionSummary;
-use crate::types::{AllLinkages, AllObjects, LinkageMembers, LinkageSummary, Observations};
+use crate::types::{
+    AllLinkages, AllObjects, LinkageMemberSlices, LinkageMemberTable, LinkageSummary,
+    ObservationSlices, ObservationTable, compute_night_sorted_indices, indices_in_partition,
+};
 
 /// Classify all linkages within a single partition.
 ///
-/// For each linkage, determines the dominant object (highest observation count),
-/// computes contamination percentage, and classifies as pure/contaminated/mixed.
-///
-/// This is a single-pass algorithm replacing the v2 chain of group-by/join operations.
+/// Accepts any `ObservationTable` + `LinkageMemberTable` implementor.
+/// The generic boundary is here; internals use concrete slices.
 pub fn classify_linkages(
-    observations: &Observations,
-    linkage_members: &LinkageMembers,
+    observations: &impl ObservationTable,
+    linkage_members: &impl LinkageMemberTable,
+    partition_summary: &PartitionSummary,
+    min_obs: usize,
+    contamination_percentage: f64,
+) -> Result<AllLinkages> {
+    let obs = ObservationSlices::from_table(observations);
+    let lm = LinkageMemberSlices::from_table(linkage_members);
+    classify_linkages_inner(
+        &obs,
+        &lm,
+        partition_summary,
+        min_obs,
+        contamination_percentage,
+    )
+}
+
+/// Internal implementation operating on concrete slices.
+fn classify_linkages_inner(
+    obs: &ObservationSlices<'_>,
+    lm: &LinkageMemberSlices<'_>,
     partition_summary: &PartitionSummary,
     min_obs: usize,
     contamination_percentage: f64,
 ) -> Result<AllLinkages> {
     // Build obs_id -> index lookup
-    let obs_id_to_idx: HashMap<u64, usize> = observations
-        .id
-        .iter()
-        .enumerate()
-        .map(|(i, &id)| (id, i))
-        .collect();
+    let obs_id_to_idx: HashMap<u64, usize> =
+        obs.ids.iter().enumerate().map(|(i, &id)| (id, i)).collect();
 
     // Count observations per object in partition (for pure_complete check)
-    let partition_indices = observations
-        .indices_in_partition(partition_summary.start_night, partition_summary.end_night);
+    let night_sorted = compute_night_sorted_indices(obs.nights);
+    let partition_indices = indices_in_partition(
+        obs.nights,
+        &night_sorted,
+        partition_summary.start_night,
+        partition_summary.end_night,
+    );
     let mut obs_per_object_in_partition: HashMap<u64, usize> = HashMap::new();
     for &i in partition_indices {
-        if let Some(obj_id) = observations.object_id[i] {
+        if let Some(obj_id) = obs.object_ids[i] {
             *obs_per_object_in_partition.entry(obj_id).or_default() += 1;
         }
     }
@@ -56,16 +77,16 @@ pub fn classify_linkages(
 
     let mut linkage_accums: HashMap<u64, LinkageAccum> = HashMap::new();
 
-    for i in 0..linkage_members.len() {
-        let linkage_id = linkage_members.linkage_id[i];
-        let obs_id = linkage_members.obs_id[i];
+    for i in 0..lm.len() {
+        let linkage_id = lm.linkage_ids[i];
+        let obs_id = lm.obs_ids[i];
 
         let obs_idx = obs_id_to_idx
             .get(&obs_id)
             .ok_or_else(|| Error::InvalidInput(format!("Observation ID {} not found", obs_id)))?;
 
-        let object_id = observations.object_id[*obs_idx];
-        let night = observations.night[*obs_idx];
+        let object_id = obs.object_ids[*obs_idx];
+        let night = obs.nights[*obs_idx];
         let in_partition =
             night >= partition_summary.start_night && night <= partition_summary.end_night;
 
@@ -167,8 +188,21 @@ pub fn classify_linkages(
 /// on the appropriate object.
 pub fn update_all_objects(
     all_objects: &mut AllObjects,
-    observations: &Observations,
-    linkage_members: &LinkageMembers,
+    observations: &impl ObservationTable,
+    linkage_members: &impl LinkageMemberTable,
+    all_linkages: &AllLinkages,
+    min_obs: usize,
+) {
+    let obs = ObservationSlices::from_table(observations);
+    let lm = LinkageMemberSlices::from_table(linkage_members);
+    update_all_objects_inner(all_objects, &obs, &lm, all_linkages, min_obs);
+}
+
+/// Internal implementation operating on concrete slices.
+fn update_all_objects_inner(
+    all_objects: &mut AllObjects,
+    obs: &ObservationSlices<'_>,
+    lm: &LinkageMemberSlices<'_>,
     all_linkages: &AllLinkages,
     min_obs: usize,
 ) {
@@ -185,10 +219,10 @@ pub fn update_all_objects(
     }
 
     // Build obs_id -> object_id lookup
-    let obs_to_obj: HashMap<u64, Option<u64>> = observations
-        .id
+    let obs_to_obj: HashMap<u64, Option<u64>> = obs
+        .ids
         .iter()
-        .zip(observations.object_id.iter())
+        .zip(obs.object_ids.iter())
         .map(|(&id, &obj)| (id, obj))
         .collect();
 
@@ -200,9 +234,9 @@ pub fn update_all_objects(
 
     let mut membership: HashMap<(u64, u64), MembershipInfo> = HashMap::new();
 
-    for i in 0..linkage_members.len() {
-        let linkage_id = linkage_members.linkage_id[i];
-        let obs_id = linkage_members.obs_id[i];
+    for i in 0..lm.len() {
+        let linkage_id = lm.linkage_ids[i];
+        let obs_id = lm.obs_ids[i];
 
         let object_id = match obs_to_obj.get(&obs_id).and_then(|&o| o) {
             Some(id) => id,
@@ -224,8 +258,6 @@ pub fn update_all_objects(
     }
 
     // Accumulate per-object statistics
-    // Track which linkages have been counted for found_pure/found_contaminated
-    // to count distinct linkages per object
     let mut found_pure_linkages: HashMap<u64, HashSet<u64>> = HashMap::new();
     let mut found_contaminated_linkages: HashMap<u64, HashSet<u64>> = HashMap::new();
 
@@ -293,10 +325,13 @@ pub fn update_all_objects(
 
 /// Full DIFI analysis: classify linkages and update object summaries.
 ///
-/// Returns updated (AllObjects, AllLinkages, PartitionSummary).
+/// Accepts any `ObservationTable` + `LinkageMemberTable` implementor.
+///
+/// Returns the classified `AllLinkages`. Mutates `all_objects` and
+/// `partition_summary` in place.
 pub fn analyze_linkages(
-    observations: &Observations,
-    linkage_members: &LinkageMembers,
+    observations: &impl ObservationTable,
+    linkage_members: &impl LinkageMemberTable,
     all_objects: &mut AllObjects,
     partition_summary: &mut PartitionSummary,
     min_obs: usize,

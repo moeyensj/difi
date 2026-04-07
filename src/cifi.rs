@@ -10,17 +10,33 @@ use rayon::prelude::*;
 use crate::error::Result;
 use crate::metrics::FindabilityMetric;
 use crate::partitions::{self, Partition, PartitionSummary};
-use crate::types::{AllObjects, FindableObservations, ObjectSummary, Observations};
+use crate::types::{
+    AllObjects, FindableObservations, ObjectSummary, ObservationSlices, ObservationTable,
+    compute_night_sorted_indices, indices_in_partition,
+};
 
 /// Analyze observations to determine findability and build object summaries.
 ///
+/// Accepts any `ObservationTable` implementor — the generic boundary is here,
+/// all internal code works on concrete `ObservationSlices`.
+///
 /// Returns (AllObjects, FindableObservations, Vec<PartitionSummary>).
 pub fn analyze_observations(
-    observations: &Observations,
+    observations: &impl ObservationTable,
     partitions: Option<&[Partition]>,
     metric: &dyn FindabilityMetric,
 ) -> Result<(AllObjects, FindableObservations, Vec<PartitionSummary>)> {
-    if observations.is_empty() {
+    let slices = ObservationSlices::from_table(observations);
+    analyze_observations_inner(&slices, partitions, metric)
+}
+
+/// Internal implementation operating on concrete slices.
+fn analyze_observations_inner(
+    obs: &ObservationSlices<'_>,
+    partitions: Option<&[Partition]>,
+    metric: &dyn FindabilityMetric,
+) -> Result<(AllObjects, FindableObservations, Vec<PartitionSummary>)> {
+    if obs.is_empty() {
         return Ok((
             AllObjects::default(),
             FindableObservations::default(),
@@ -33,22 +49,21 @@ pub fn analyze_observations(
     let partitions = match partitions {
         Some(p) => p,
         None => {
-            owned_partitions = vec![partitions::create_single(&observations.night)?];
+            owned_partitions = vec![partitions::create_single(obs.nights)?];
             &owned_partitions
         }
     };
 
+    // Precompute night-sorted index for partition filtering
+    let night_sorted = compute_night_sorted_indices(obs.nights);
+
     // Create partition summaries
-    let mut summaries = partitions::create_summaries(
-        &observations.night,
-        partitions,
-        &observations.night_sorted_indices,
-    );
+    let mut summaries = partitions::create_summaries(obs.nights, partitions, &night_sorted);
 
     // Group observation indices by object_id (skip observations without object_id)
     let mut object_indices: HashMap<u64, Vec<usize>> = HashMap::new();
-    for i in 0..observations.len() {
-        if let Some(obj_id) = observations.object_id[i] {
+    for i in 0..obs.len() {
+        if let Some(obj_id) = obs.object_ids[i] {
             object_indices.entry(obj_id).or_default().push(i);
         }
     }
@@ -56,9 +71,7 @@ pub fn analyze_observations(
     // Run findability metric per object in parallel
     let findable_results: Vec<_> = object_indices
         .par_iter()
-        .flat_map(|(_, indices)| {
-            metric.determine_object_findable(indices, observations, partitions)
-        })
+        .flat_map(|(_, indices)| metric.determine_object_findable(indices, obs, partitions))
         .collect();
 
     // Collect into FindableObservations
@@ -91,12 +104,17 @@ pub fn analyze_observations(
     let mut all_objects = AllObjects::default();
 
     for partition in partitions {
-        let indices = observations.indices_in_partition(partition.start_night, partition.end_night);
+        let indices = indices_in_partition(
+            obs.nights,
+            &night_sorted,
+            partition.start_night,
+            partition.end_night,
+        );
 
         // Group by object within this partition
         let mut partition_objects: HashMap<u64, Vec<usize>> = HashMap::new();
         for &i in indices {
-            if let Some(obj_id) = observations.object_id[i] {
+            if let Some(obj_id) = obs.object_ids[i] {
                 partition_objects.entry(obj_id).or_default().push(i);
             }
         }
@@ -107,14 +125,14 @@ pub fn analyze_observations(
             let mut observatories = HashSet::new();
 
             for &i in obj_indices {
-                let t = observations.time_mjd[i];
+                let t = obs.times_mjd[i];
                 if t < mjd_min {
                     mjd_min = t;
                 }
                 if t > mjd_max {
                     mjd_max = t;
                 }
-                observatories.insert(observations.observatory_code[i]);
+                observatories.insert(obs.observatory_codes[i]);
             }
 
             all_objects.push(ObjectSummary {
