@@ -44,6 +44,7 @@ build-backend = "maturin"
 
 [tool.maturin]
 python-source = "python"
+module-name = "difi._core"
 features = ["python"]
 
 [project.urls]
