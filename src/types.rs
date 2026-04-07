@@ -1,27 +1,144 @@
 //! Core data types for difi.
 //!
-//! These types represent the inputs (observations, linkage members) and outputs
-//! (object summaries, linkage classifications) of the difi analysis pipeline.
+//! Defines the `ObservationStore` and `LinkageMemberStore` traits as the
+//! compile-time contract for data access. Downstream consumers (e.g. thor-rust)
+//! implement these traits for their own types. difi also provides built-in
+//! implementations (`Observations`, `LinkageMembers`) for standalone use.
 //!
-//! Design: types are stored in struct-of-arrays (SoA) form for cache-friendly
-//! bulk processing and efficient Arrow/Parquet I/O.
+//! Internally, algorithms work on `ObservationSlices` / `LinkageMemberSlices`
+//! (concrete borrowed slice bundles) so generics stay at the API boundary.
 
-/// An observation with optional ground-truth object association.
+// ---------------------------------------------------------------------------
+// Traits — the public contract
+// ---------------------------------------------------------------------------
+
+/// Trait for read-only access to observation data.
 ///
-/// Uses interned IDs internally for fast HashMap operations;
-/// string IDs are mapped at the I/O boundary.
-#[derive(Debug, Clone)]
-pub struct Observation {
-    pub id: u64,
-    pub time_mjd: f64,
-    pub ra: f64,
-    pub dec: f64,
-    pub observatory_code: u32,
-    pub object_id: Option<u64>,
-    pub night: i64,
+/// Implementors must provide parallel arrays of equal length.
+/// All string IDs should be pre-interned to `u64` by the caller.
+pub trait ObservationTable: Sync {
+    fn len(&self) -> usize;
+    fn ids(&self) -> &[u64];
+    fn times_mjd(&self) -> &[f64];
+    fn ra(&self) -> &[f64];
+    fn dec(&self) -> &[f64];
+    fn nights(&self) -> &[i64];
+    fn object_ids(&self) -> &[Option<u64>];
+    fn observatory_codes(&self) -> &[u32];
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
-/// Columnar storage for observations.
+/// Trait for read-only access to linkage membership data.
+///
+/// Maps linkage IDs to observation IDs (both interned to `u64`).
+pub trait LinkageMemberTable: Sync {
+    fn len(&self) -> usize;
+    fn linkage_ids(&self) -> &[u64];
+    fn obs_ids(&self) -> &[u64];
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Internal slice bundles — concrete types for algorithm internals
+// ---------------------------------------------------------------------------
+
+/// Borrowed slice view into observation data.
+///
+/// Created once at API entry points from an `&impl ObservationStore`,
+/// then passed to all internal functions. This keeps generics out of
+/// the algorithm code.
+pub struct ObservationSlices<'a> {
+    pub ids: &'a [u64],
+    pub times_mjd: &'a [f64],
+    pub ra: &'a [f64],
+    pub dec: &'a [f64],
+    pub nights: &'a [i64],
+    pub object_ids: &'a [Option<u64>],
+    pub observatory_codes: &'a [u32],
+}
+
+impl<'a> ObservationSlices<'a> {
+    /// Extract slices from any `ObservationTable` implementor.
+    pub fn from_table(table: &'a impl ObservationTable) -> Self {
+        Self {
+            ids: table.ids(),
+            times_mjd: table.times_mjd(),
+            ra: table.ra(),
+            dec: table.dec(),
+            nights: table.nights(),
+            object_ids: table.object_ids(),
+            observatory_codes: table.observatory_codes(),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.ids.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.ids.is_empty()
+    }
+}
+
+/// Borrowed slice view into linkage member data.
+pub struct LinkageMemberSlices<'a> {
+    pub linkage_ids: &'a [u64],
+    pub obs_ids: &'a [u64],
+}
+
+impl<'a> LinkageMemberSlices<'a> {
+    /// Extract slices from any `LinkageMemberTable` implementor.
+    pub fn from_table(table: &'a impl LinkageMemberTable) -> Self {
+        Self {
+            linkage_ids: table.linkage_ids(),
+            obs_ids: table.obs_ids(),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.linkage_ids.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.linkage_ids.is_empty()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Utility
+// ---------------------------------------------------------------------------
+
+/// Build a sorted index over nights for O(log n) partition filtering.
+pub fn compute_night_sorted_indices(nights: &[i64]) -> Vec<usize> {
+    let mut indices: Vec<usize> = (0..nights.len()).collect();
+    indices.sort_unstable_by_key(|&i| nights[i]);
+    indices
+}
+
+/// Return the sub-slice of `sorted_indices` whose nights fall within
+/// `[start_night, end_night]` (inclusive), using binary search.
+pub fn indices_in_partition<'a>(
+    nights: &[i64],
+    sorted_indices: &'a [usize],
+    start_night: i64,
+    end_night: i64,
+) -> &'a [usize] {
+    let lo = sorted_indices.partition_point(|&i| nights[i] < start_night);
+    let hi = sorted_indices.partition_point(|&i| nights[i] <= end_night);
+    &sorted_indices[lo..hi]
+}
+
+// ---------------------------------------------------------------------------
+// Built-in implementations — for standalone / Python use
+// ---------------------------------------------------------------------------
+
+/// Built-in struct-of-arrays observation storage.
 #[derive(Debug, Clone)]
 pub struct Observations {
     pub id: Vec<u64>,
@@ -31,13 +148,9 @@ pub struct Observations {
     pub observatory_code: Vec<u32>,
     pub object_id: Vec<Option<u64>>,
     pub night: Vec<i64>,
-    /// Sorted indices into the arrays, ordered by night.
-    /// Built once, enables O(log n) partition filtering via binary search.
-    pub night_sorted_indices: Vec<usize>,
 }
 
 impl Observations {
-    /// Build observations from parallel arrays, precomputing the night sort index.
     pub fn new(
         id: Vec<u64>,
         time_mjd: Vec<f64>,
@@ -47,8 +160,6 @@ impl Observations {
         object_id: Vec<Option<u64>>,
         night: Vec<i64>,
     ) -> Self {
-        let mut night_sorted_indices: Vec<usize> = (0..night.len()).collect();
-        night_sorted_indices.sort_unstable_by_key(|&i| night[i]);
         Self {
             id,
             time_mjd,
@@ -57,54 +168,59 @@ impl Observations {
             observatory_code,
             object_id,
             night,
-            night_sorted_indices,
         }
     }
+}
 
-    pub fn len(&self) -> usize {
+impl ObservationTable for Observations {
+    fn len(&self) -> usize {
         self.id.len()
     }
-
-    pub fn is_empty(&self) -> bool {
-        self.id.is_empty()
+    fn ids(&self) -> &[u64] {
+        &self.id
     }
-
-    /// Return indices of observations within [start_night, end_night] (inclusive)
-    /// using binary search on the pre-sorted night index.
-    pub fn indices_in_partition(&self, start_night: i64, end_night: i64) -> &[usize] {
-        let nights = &self.night;
-        let idx = &self.night_sorted_indices;
-
-        let lo = idx.partition_point(|&i| nights[i] < start_night);
-        let hi = idx.partition_point(|&i| nights[i] <= end_night);
-
-        &idx[lo..hi]
+    fn times_mjd(&self) -> &[f64] {
+        &self.time_mjd
+    }
+    fn ra(&self) -> &[f64] {
+        &self.ra
+    }
+    fn dec(&self) -> &[f64] {
+        &self.dec
+    }
+    fn nights(&self) -> &[i64] {
+        &self.night
+    }
+    fn object_ids(&self) -> &[Option<u64>] {
+        &self.object_id
+    }
+    fn observatory_codes(&self) -> &[u32] {
+        &self.observatory_code
     }
 }
 
-/// A single linkage member: maps a linkage to an observation.
-#[derive(Debug, Clone)]
-pub struct LinkageMember {
-    pub linkage_id: u64,
-    pub obs_id: u64,
-}
-
-/// Columnar storage for linkage members.
+/// Built-in struct-of-arrays linkage member storage.
 #[derive(Debug, Clone)]
 pub struct LinkageMembers {
     pub linkage_id: Vec<u64>,
     pub obs_id: Vec<u64>,
 }
 
-impl LinkageMembers {
-    pub fn len(&self) -> usize {
+impl LinkageMemberTable for LinkageMembers {
+    fn len(&self) -> usize {
         self.linkage_id.len()
     }
-
-    pub fn is_empty(&self) -> bool {
-        self.linkage_id.is_empty()
+    fn linkage_ids(&self) -> &[u64] {
+        &self.linkage_id
+    }
+    fn obs_ids(&self) -> &[u64] {
+        &self.obs_id
     }
 }
+
+// ---------------------------------------------------------------------------
+// Output types — owned, not behind traits
+// ---------------------------------------------------------------------------
 
 /// Classification of a single linkage.
 #[derive(Debug, Clone)]

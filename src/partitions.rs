@@ -122,6 +122,8 @@ pub fn create_linking_windows(
 }
 
 /// Create partition summaries by counting observations per partition.
+///
+/// Uses a pre-sorted night index for O(log n) lookups per partition.
 pub fn create_summaries(
     obs_nights: &[i64],
     partitions: &[Partition],
@@ -130,7 +132,6 @@ pub fn create_summaries(
     partitions
         .iter()
         .map(|p| {
-            // Count observations in this partition using binary search
             let lo = night_sorted_indices.partition_point(|&i| obs_nights[i] < p.start_night);
             let hi = night_sorted_indices.partition_point(|&i| obs_nights[i] <= p.end_night);
             let num_obs = (hi - lo) as i64;

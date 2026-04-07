@@ -3,8 +3,10 @@
 //! An object is findable if it has at least `min_obs` observations
 //! spanning at least `min_nights` distinct nights.
 
+use std::collections::HashMap;
+
 use crate::partitions::Partition;
-use crate::types::{FindableObservation, Observations};
+use crate::types::{FindableObservation, ObservationSlices};
 
 use super::FindabilityMetric;
 
@@ -35,7 +37,7 @@ impl FindabilityMetric for SingletonMetric {
     fn determine_object_findable(
         &self,
         obs_indices: &[usize],
-        observations: &Observations,
+        observations: &ObservationSlices<'_>,
         partitions: &[Partition],
     ) -> Vec<FindableObservation> {
         let mut results = Vec::new();
@@ -46,8 +48,8 @@ impl FindabilityMetric for SingletonMetric {
                 .iter()
                 .copied()
                 .filter(|&i| {
-                    observations.night[i] >= partition.start_night
-                        && observations.night[i] <= partition.end_night
+                    observations.nights[i] >= partition.start_night
+                        && observations.nights[i] <= partition.end_night
                 })
                 .collect();
 
@@ -56,10 +58,9 @@ impl FindabilityMetric for SingletonMetric {
             }
 
             // Count observations per night
-            let mut night_counts: std::collections::HashMap<i64, usize> =
-                std::collections::HashMap::new();
+            let mut night_counts: HashMap<i64, usize> = HashMap::new();
             for &i in &partition_indices {
-                *night_counts.entry(observations.night[i]).or_default() += 1;
+                *night_counts.entry(observations.nights[i]).or_default() += 1;
             }
 
             let num_nights = night_counts.len();
@@ -96,8 +97,8 @@ impl FindabilityMetric for SingletonMetric {
 
                 // Collect observation IDs from this night
                 for &i in &partition_indices {
-                    if observations.night[i] == night && discovery_obs.len() < self.min_obs {
-                        discovery_obs.push(observations.id[i]);
+                    if observations.nights[i] == night && discovery_obs.len() < self.min_obs {
+                        discovery_obs.push(observations.ids[i]);
                     }
                 }
 
@@ -111,7 +112,7 @@ impl FindabilityMetric for SingletonMetric {
                 discovery_obs.truncate(self.min_obs);
                 results.push(FindableObservation {
                     partition_id: partition.id,
-                    object_id: observations.object_id[partition_indices[0]].unwrap(),
+                    object_id: observations.object_ids[partition_indices[0]].unwrap(),
                     discovery_night: Some(dn),
                     obs_ids: Some(discovery_obs),
                 });
