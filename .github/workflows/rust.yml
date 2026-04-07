@@ -1,0 +1,48 @@
+name: Rust CI
+
+on:
+  push:
+    branches: [ "main", "feature/**" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ── Build & Lint ────────────────────────────────────────────────
+  build-lint:
+    name: Build & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: rustfmt, clippy
+          rustflags: ""
+
+      - name: Build
+        run: cargo build --verbose
+
+      - name: Lint
+        run: |
+          cargo fmt -- --check
+          cargo clippy --all-targets --all-features
+
+  # ── Test ─────────────────────────────────────────────────────────
+  test:
+    name: Test
+    needs: build-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          rustflags: ""
+
+      - name: Unit tests
+        run: cargo test --verbose

@@ -1,0 +1,33 @@
+[package]
+name = "difi"
+version = "3.0.0-dev"
+description = "Did I Find It? — Evaluate linkage completeness and purity for astronomical surveys"
+authors = [
+    "Joachim Moeyens <moeyensj@uw.edu>",
+]
+edition = "2024"
+rust-version = "1.85.0"
+license = "BSD-3-Clause"
+include = ["src/**/*", "Cargo.toml"]
+
+[lib]
+name = "difi"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+python = ["dep:pyo3", "dep:pyo3-arrow", "arrow/ffi"]
+
+[dependencies]
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+pyo3 = { version = "0.28", features = ["extension-module"], optional = true }
+pyo3-arrow = { version = "0.17", optional = true }
+rayon = "1.11.0"
+arrow = { version = "58", default-features = false }
+parquet = { version = "58", default-features = false, features = ["arrow", "snap"] }
+
+[dev-dependencies]
+criterion = { version = "0.8.2", features = ["html_reports"] }
+tempfile = "3"
