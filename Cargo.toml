@@ -31,3 +31,8 @@ parquet = { version = "58", default-features = false, features = ["arrow", "snap
 [dev-dependencies]
 criterion = { version = "0.8.2", features = ["html_reports"] }
 tempfile = "3"
+parquet = { version = "58", default-features = false, features = ["arrow", "snap"] }
+
+[[bench]]
+name = "benchmark_pipeline"
+harness = false
