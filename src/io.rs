@@ -171,7 +171,12 @@ pub fn read_observations(path: &Path) -> Result<(Observations, StringInterner, S
             all_ra.push(ra[i]);
             all_dec.push(dec[i]);
             all_obs_code.push(obs_code_interner.intern(&obs_codes_str[i]) as u32);
-            all_object_id.push(object_ids_str[i].as_ref().map(|s| id_interner.intern(s)));
+            all_object_id.push(
+                object_ids_str[i]
+                    .as_ref()
+                    .map(|s| id_interner.intern(s))
+                    .unwrap_or(crate::types::NO_OBJECT),
+            );
             all_night.push(night[i]);
         }
     }
@@ -339,7 +344,7 @@ pub fn write_all_linkages(
     let linked_obj_ids: Vec<Option<&str>> = all_linkages
         .linked_object_id
         .iter()
-        .map(|opt| opt.and_then(|id| id_interner.resolve(id)))
+        .map(|&id| id_interner.resolve(id))
         .collect();
 
     let columns: Vec<Arc<dyn Array>> = vec![

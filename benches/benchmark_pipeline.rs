@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 use std::path::PathBuf;
 
@@ -59,7 +59,7 @@ fn generate_synthetic_data(
                 ra.push(base_ra + n as f64 * 0.01 + o as f64 * 0.001);
                 dec.push(base_dec + n as f64 * 0.005);
                 observatory_code.push(0);
-                object_id.push(Some(obj as u64));
+                object_id.push(obj as u64);
                 night.push(60000 + n as i64);
             }
         }
@@ -99,8 +99,7 @@ fn bench_full_pipeline(c: &mut Criterion) {
             let (mut all_objects, _, mut summaries) =
                 analyze_observations(&obs, None, &metric).unwrap();
             let all_linkages =
-                analyze_linkages(&obs, &lm, &mut all_objects, &mut summaries[0], 6, 20.0)
-                    .unwrap();
+                analyze_linkages(&obs, &lm, &mut all_objects, &mut summaries[0], 6, 20.0).unwrap();
             black_box(all_linkages);
         })
     });
@@ -112,15 +111,11 @@ fn bench_cifi_scaling(c: &mut Criterion) {
 
     for n_objects in [10, 100, 1000] {
         let obs = generate_synthetic_data(n_objects, 10, 3);
-        group.bench_with_input(
-            BenchmarkId::new("objects", n_objects),
-            &obs,
-            |b, obs| {
-                b.iter(|| {
-                    black_box(analyze_observations(obs, None, &metric).unwrap());
-                })
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("objects", n_objects), &obs, |b, obs| {
+            b.iter(|| {
+                black_box(analyze_observations(obs, None, &metric).unwrap());
+            })
+        });
     }
 
     group.finish();

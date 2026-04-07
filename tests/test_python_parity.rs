@@ -42,15 +42,8 @@ fn run_pipeline() -> (
     let (mut all_objects, _findable, mut summaries) =
         analyze_observations(&obs, None, &metric).unwrap();
 
-    let all_linkages = analyze_linkages(
-        &obs,
-        &lm,
-        &mut all_objects,
-        &mut summaries[0],
-        6,
-        20.0,
-    )
-    .unwrap();
+    let all_linkages =
+        analyze_linkages(&obs, &lm, &mut all_objects, &mut summaries[0], 6, 20.0).unwrap();
 
     (all_objects, all_linkages, summaries, id_interner2)
 }
@@ -84,7 +77,11 @@ fn test_difi_summary_counts() {
     let n_contaminated: usize = all_linkages.contaminated.iter().filter(|&&c| c).count();
     let n_mixed: usize = all_linkages.mixed.iter().filter(|&&m| m).count();
     let n_found_pure: usize = all_linkages.found_pure.iter().filter(|&&f| f).count();
-    let n_found_contaminated: usize = all_linkages.found_contaminated.iter().filter(|&&f| f).count();
+    let n_found_contaminated: usize = all_linkages
+        .found_contaminated
+        .iter()
+        .filter(|&&f| f)
+        .count();
 
     assert_eq!(n_pure, 10, "10 pure linkages");
     assert_eq!(n_pure_complete, 5, "5 pure complete linkages");
@@ -115,13 +112,62 @@ fn test_difi_per_linkage() {
         ("linkage_pure_00002", Some("00002"), 30, 0.0, "pure", true),
         ("linkage_pure_00003", Some("00003"), 30, 0.0, "pure", true),
         ("linkage_pure_00004", Some("00004"), 30, 0.0, "pure", true),
-        ("linkage_pure_incomplete_00000", Some("00000"), 6, 0.0, "pure", false),
-        ("linkage_pure_incomplete_00001", Some("00001"), 10, 0.0, "pure", false),
-        ("linkage_pure_incomplete_00002", Some("00002"), 7, 0.0, "pure", false),
-        ("linkage_pure_incomplete_00003", Some("00003"), 8, 0.0, "pure", false),
-        ("linkage_pure_incomplete_00004", Some("00004"), 10, 0.0, "pure", false),
-        ("linkage_partial_00000", Some("00000"), 12, 8.3, "contaminated", false),
-        ("linkage_partial_00001", Some("00001"), 12, 16.7, "contaminated", false),
+        (
+            "linkage_pure_incomplete_00000",
+            Some("00000"),
+            6,
+            0.0,
+            "pure",
+            false,
+        ),
+        (
+            "linkage_pure_incomplete_00001",
+            Some("00001"),
+            10,
+            0.0,
+            "pure",
+            false,
+        ),
+        (
+            "linkage_pure_incomplete_00002",
+            Some("00002"),
+            7,
+            0.0,
+            "pure",
+            false,
+        ),
+        (
+            "linkage_pure_incomplete_00003",
+            Some("00003"),
+            8,
+            0.0,
+            "pure",
+            false,
+        ),
+        (
+            "linkage_pure_incomplete_00004",
+            Some("00004"),
+            10,
+            0.0,
+            "pure",
+            false,
+        ),
+        (
+            "linkage_partial_00000",
+            Some("00000"),
+            12,
+            8.3,
+            "contaminated",
+            false,
+        ),
+        (
+            "linkage_partial_00001",
+            Some("00001"),
+            12,
+            16.7,
+            "contaminated",
+            false,
+        ),
         ("linkage_partial_00002", None, 12, 25.0, "mixed", false),
         ("linkage_partial_00003", None, 12, 41.7, "mixed", false),
         ("linkage_partial_00004", None, 12, 50.0, "mixed", false),
@@ -178,8 +224,8 @@ fn test_difi_per_linkage() {
         );
 
         // Check linked_object_id
-        let actual_linked = all_linkages.linked_object_id[i]
-            .and_then(|id| interner.resolve(id))
+        let actual_linked = interner
+            .resolve(all_linkages.linked_object_id[i])
             .map(|s| s.to_string());
         let exp_linked_str = exp_linked.map(|s| s.to_string());
         assert_eq!(
@@ -220,7 +266,10 @@ fn test_difi_per_object() {
             .unwrap_or_else(|| panic!("Missing object: {oid}"));
 
         assert_eq!(all_objects.found_pure[i], *fp, "{oid}: found_pure");
-        assert_eq!(all_objects.found_contaminated[i], *fc, "{oid}: found_contaminated");
+        assert_eq!(
+            all_objects.found_contaminated[i], *fc,
+            "{oid}: found_contaminated"
+        );
         assert_eq!(all_objects.pure[i], *p, "{oid}: pure");
         assert_eq!(all_objects.pure_complete[i], *pc, "{oid}: pure_complete");
         assert_eq!(all_objects.contaminated[i], *c, "{oid}: contaminated");

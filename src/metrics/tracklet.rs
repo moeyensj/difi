@@ -243,7 +243,7 @@ impl FindabilityMetric for TrackletMetric {
 
             results.push(FindableObservation {
                 partition_id: partition.id,
-                object_id: observations.object_ids[partition_indices[0]].unwrap(),
+                object_id: observations.object_ids[partition_indices[0]],
                 discovery_night: Some(discovery_night),
                 obs_ids: Some(discovery_obs),
             });
