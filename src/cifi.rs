@@ -11,8 +11,8 @@ use crate::error::Result;
 use crate::metrics::FindabilityMetric;
 use crate::partitions::{self, Partition, PartitionSummary};
 use crate::types::{
-    AllObjects, FindableObservations, ObjectSummary, ObservationSlices, ObservationTable,
-    compute_night_sorted_indices, indices_in_partition,
+    AllObjects, FindableObservations, NO_OBJECT, ObjectSummary, ObservationSlices,
+    ObservationTable, compute_night_sorted_indices, indices_in_partition,
 };
 
 /// Analyze observations to determine findability and build object summaries.
@@ -63,7 +63,8 @@ fn analyze_observations_inner(
     // Group observation indices by object_id (skip observations without object_id)
     let mut object_indices: HashMap<u64, Vec<usize>> = HashMap::new();
     for i in 0..obs.len() {
-        if let Some(obj_id) = obs.object_ids[i] {
+        let obj_id = obs.object_ids[i];
+        if obj_id != NO_OBJECT {
             object_indices.entry(obj_id).or_default().push(i);
         }
     }
@@ -114,7 +115,8 @@ fn analyze_observations_inner(
         // Group by object within this partition
         let mut partition_objects: HashMap<u64, Vec<usize>> = HashMap::new();
         for &i in indices {
-            if let Some(obj_id) = obs.object_ids[i] {
+            let obj_id = obs.object_ids[i];
+            if obj_id != NO_OBJECT {
                 partition_objects.entry(obj_id).or_default().push(i);
             }
         }

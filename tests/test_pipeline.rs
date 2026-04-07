@@ -54,8 +54,7 @@ fn test_cifi_singleton() {
         min_nightly_obs_in_min_nights: 1,
     };
 
-    let (all_objects, findable, summaries) =
-        analyze_observations(&obs, None, &metric).unwrap();
+    let (all_objects, findable, summaries) = analyze_observations(&obs, None, &metric).unwrap();
 
     // We should have objects and findable observations
     assert!(!all_objects.is_empty(), "Expected some objects");
@@ -63,10 +62,7 @@ fn test_cifi_singleton() {
     assert_eq!(summaries.len(), 1, "Single partition expected");
 
     // All findable objects should have a discovery night
-    assert!(findable
-        .discovery_night
-        .iter()
-        .all(|dn| dn.is_some()));
+    assert!(findable.discovery_night.iter().all(|dn| dn.is_some()));
 
     println!("Objects: {}", all_objects.len());
     println!("Findable: {}", findable.len());
@@ -97,15 +93,8 @@ fn test_full_pipeline() {
     assert_eq!(summaries.len(), 1);
 
     // DIFI
-    let all_linkages = analyze_linkages(
-        &obs,
-        &lm,
-        &mut all_objects,
-        &mut summaries[0],
-        6,
-        20.0,
-    )
-    .unwrap();
+    let all_linkages =
+        analyze_linkages(&obs, &lm, &mut all_objects, &mut summaries[0], 6, 20.0).unwrap();
 
     // Should have classified some linkages
     assert!(!all_linkages.is_empty(), "Expected some linkages");
@@ -142,7 +131,7 @@ fn test_full_pipeline() {
     for i in 0..all_linkages.len() {
         if all_linkages.pure[i] || all_linkages.contaminated[i] {
             assert!(
-                all_linkages.linked_object_id[i].is_some(),
+                all_linkages.linked_object_id[i] != difi::types::NO_OBJECT,
                 "Pure/contaminated linkage {i} should have linked_object_id"
             );
         }
@@ -152,7 +141,7 @@ fn test_full_pipeline() {
     for i in 0..all_linkages.len() {
         if all_linkages.mixed[i] {
             assert!(
-                all_linkages.linked_object_id[i].is_none(),
+                all_linkages.linked_object_id[i] == difi::types::NO_OBJECT,
                 "Mixed linkage {i} should not have linked_object_id"
             );
         }

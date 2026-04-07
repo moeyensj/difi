@@ -1,12 +1,27 @@
 //! Core data types for difi.
 //!
-//! Defines the `ObservationStore` and `LinkageMemberStore` traits as the
+//! Defines the `ObservationTable` and `LinkageMemberTable` traits as the
 //! compile-time contract for data access. Downstream consumers (e.g. thor-rust)
 //! implement these traits for their own types. difi also provides built-in
 //! implementations (`Observations`, `LinkageMembers`) for standalone use.
 //!
 //! Internally, algorithms work on `ObservationSlices` / `LinkageMemberSlices`
 //! (concrete borrowed slice bundles) so generics stay at the API boundary.
+//!
+//! # Memory efficiency
+//!
+//! - `object_id` uses a sentinel value (`NO_OBJECT = u64::MAX`) instead of
+//!   `Option<u64>`, saving 8 bytes per observation due to alignment.
+//! - Sorted ID indices enable O(log N) binary search lookups, eliminating
+//!   the need for O(N × 50B) HashMaps at survey scale.
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/// Sentinel value indicating no associated object.
+/// Used instead of `Option<u64>` to avoid 8 bytes of alignment padding per row.
+pub const NO_OBJECT: u64 = u64::MAX;
 
 // ---------------------------------------------------------------------------
 // Traits — the public contract
@@ -16,6 +31,7 @@
 ///
 /// Implementors must provide parallel arrays of equal length.
 /// All string IDs should be pre-interned to `u64` by the caller.
+/// Observations with no known object use `NO_OBJECT` as the sentinel.
 pub trait ObservationTable: Sync {
     fn len(&self) -> usize;
     fn ids(&self) -> &[u64];
@@ -23,7 +39,8 @@ pub trait ObservationTable: Sync {
     fn ra(&self) -> &[f64];
     fn dec(&self) -> &[f64];
     fn nights(&self) -> &[i64];
-    fn object_ids(&self) -> &[Option<u64>];
+    /// Object IDs. `NO_OBJECT` (u64::MAX) means no association.
+    fn object_ids(&self) -> &[u64];
     fn observatory_codes(&self) -> &[u32];
 
     fn is_empty(&self) -> bool {
@@ -50,7 +67,7 @@ pub trait LinkageMemberTable: Sync {
 
 /// Borrowed slice view into observation data.
 ///
-/// Created once at API entry points from an `&impl ObservationStore`,
+/// Created once at API entry points from an `&impl ObservationTable`,
 /// then passed to all internal functions. This keeps generics out of
 /// the algorithm code.
 pub struct ObservationSlices<'a> {
@@ -59,7 +76,7 @@ pub struct ObservationSlices<'a> {
     pub ra: &'a [f64],
     pub dec: &'a [f64],
     pub nights: &'a [i64],
-    pub object_ids: &'a [Option<u64>],
+    pub object_ids: &'a [u64],
     pub observatory_codes: &'a [u32],
 }
 
@@ -121,6 +138,22 @@ pub fn compute_night_sorted_indices(nights: &[i64]) -> Vec<usize> {
     indices
 }
 
+/// Build a sorted index over IDs for O(log n) lookups by observation ID.
+pub fn compute_id_sorted_indices(ids: &[u64]) -> Vec<usize> {
+    let mut indices: Vec<usize> = (0..ids.len()).collect();
+    indices.sort_unstable_by_key(|&i| ids[i]);
+    indices
+}
+
+/// Look up the original index of an observation by its ID using the sorted
+/// index. Returns `None` if not found. O(log n).
+pub fn lookup_by_id(ids: &[u64], id_sorted_indices: &[usize], target: u64) -> Option<usize> {
+    id_sorted_indices
+        .binary_search_by_key(&target, |&i| ids[i])
+        .ok()
+        .map(|pos| id_sorted_indices[pos])
+}
+
 /// Return the sub-slice of `sorted_indices` whose nights fall within
 /// `[start_night, end_night]` (inclusive), using binary search.
 pub fn indices_in_partition<'a>(
@@ -146,7 +179,8 @@ pub struct Observations {
     pub ra: Vec<f64>,
     pub dec: Vec<f64>,
     pub observatory_code: Vec<u32>,
-    pub object_id: Vec<Option<u64>>,
+    /// Object ID per observation. `NO_OBJECT` means no association.
+    pub object_id: Vec<u64>,
     pub night: Vec<i64>,
 }
 
@@ -157,7 +191,7 @@ impl Observations {
         ra: Vec<f64>,
         dec: Vec<f64>,
         observatory_code: Vec<u32>,
-        object_id: Vec<Option<u64>>,
+        object_id: Vec<u64>,
         night: Vec<i64>,
     ) -> Self {
         Self {
@@ -191,7 +225,7 @@ impl ObservationTable for Observations {
     fn nights(&self) -> &[i64] {
         &self.night
     }
-    fn object_ids(&self) -> &[Option<u64>] {
+    fn object_ids(&self) -> &[u64] {
         &self.object_id
     }
     fn observatory_codes(&self) -> &[u32] {
@@ -227,7 +261,7 @@ impl LinkageMemberTable for LinkageMembers {
 pub struct LinkageSummary {
     pub linkage_id: u64,
     pub partition_id: u64,
-    pub linked_object_id: Option<u64>,
+    pub linked_object_id: u64,
     pub num_obs: i64,
     pub num_obs_outside_partition: i64,
     pub num_members: i64,
@@ -245,7 +279,8 @@ pub struct LinkageSummary {
 pub struct AllLinkages {
     pub linkage_id: Vec<u64>,
     pub partition_id: Vec<u64>,
-    pub linked_object_id: Vec<Option<u64>>,
+    /// `NO_OBJECT` means no linked object (mixed linkage).
+    pub linked_object_id: Vec<u64>,
     pub num_obs: Vec<i64>,
     pub num_obs_outside_partition: Vec<i64>,
     pub num_members: Vec<i64>,
@@ -429,6 +464,9 @@ impl StringInterner {
 
     /// Look up the string for an interned ID.
     pub fn resolve(&self, id: u64) -> Option<&str> {
+        if id == NO_OBJECT {
+            return None;
+        }
         self.to_string.get(id as usize).map(|s| s.as_str())
     }
 

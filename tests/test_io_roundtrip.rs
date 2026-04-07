@@ -37,7 +37,12 @@ fn test_write_all_objects() {
     let dir = tempfile::tempdir().unwrap();
 
     // Write all output types
-    write_all_objects(&dir.path().join("all_objects.parquet"), &all_objects, &id_interner2).unwrap();
+    write_all_objects(
+        &dir.path().join("all_objects.parquet"),
+        &all_objects,
+        &id_interner2,
+    )
+    .unwrap();
     write_all_linkages(
         &dir.path().join("all_linkages.parquet"),
         &all_linkages,

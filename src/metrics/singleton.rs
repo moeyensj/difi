@@ -112,7 +112,7 @@ impl FindabilityMetric for SingletonMetric {
                 discovery_obs.truncate(self.min_obs);
                 results.push(FindableObservation {
                     partition_id: partition.id,
-                    object_id: observations.object_ids[partition_indices[0]].unwrap(),
+                    object_id: observations.object_ids[partition_indices[0]],
                     discovery_night: Some(dn),
                     obs_ids: Some(discovery_obs),
                 });

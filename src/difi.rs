@@ -4,17 +4,19 @@
 //! constituent observations' ground-truth object associations. Updates
 //! object summaries with linkage statistics.
 //!
-//! Key algorithmic improvement over v2: all aggregation is done in a single
-//! pass per linkage using HashMap accumulators, replacing the chain of
-//! ~10 group_by → aggregate → join operations.
+//! Key algorithmic improvements over v2:
+//! - Single-pass aggregation replacing ~10 group_by → aggregate → join ops
+//! - Sorted ID index + binary search instead of HashMap for obs lookups
+//!   (eliminates ~50 bytes/entry HashMap at survey scale)
 
 use std::collections::{HashMap, HashSet};
 
 use crate::error::{Error, Result};
 use crate::partitions::PartitionSummary;
 use crate::types::{
-    AllLinkages, AllObjects, LinkageMemberSlices, LinkageMemberTable, LinkageSummary,
-    ObservationSlices, ObservationTable, compute_night_sorted_indices, indices_in_partition,
+    AllLinkages, AllObjects, LinkageMemberSlices, LinkageMemberTable, LinkageSummary, NO_OBJECT,
+    ObservationSlices, ObservationTable, compute_id_sorted_indices, compute_night_sorted_indices,
+    indices_in_partition, lookup_by_id,
 };
 
 /// Classify all linkages within a single partition.
@@ -47,9 +49,8 @@ fn classify_linkages_inner(
     min_obs: usize,
     contamination_percentage: f64,
 ) -> Result<AllLinkages> {
-    // Build obs_id -> index lookup
-    let obs_id_to_idx: HashMap<u64, usize> =
-        obs.ids.iter().enumerate().map(|(i, &id)| (id, i)).collect();
+    // Build sorted ID index for O(log n) lookups (replaces HashMap)
+    let id_sorted = compute_id_sorted_indices(obs.ids);
 
     // Count observations per object in partition (for pure_complete check)
     let night_sorted = compute_night_sorted_indices(obs.nights);
@@ -61,14 +62,15 @@ fn classify_linkages_inner(
     );
     let mut obs_per_object_in_partition: HashMap<u64, usize> = HashMap::new();
     for &i in partition_indices {
-        if let Some(obj_id) = obs.object_ids[i] {
+        let obj_id = obs.object_ids[i];
+        if obj_id != NO_OBJECT {
             *obs_per_object_in_partition.entry(obj_id).or_default() += 1;
         }
     }
 
     // Single pass: group linkage members by linkage_id, accumulate per-object counts
     struct LinkageAccum {
-        object_counts: HashMap<Option<u64>, usize>,
+        object_counts: HashMap<u64, usize>,
         total_obs: usize,
         outside_partition: usize,
         num_distinct_objects: usize,
@@ -81,12 +83,12 @@ fn classify_linkages_inner(
         let linkage_id = lm.linkage_ids[i];
         let obs_id = lm.obs_ids[i];
 
-        let obs_idx = obs_id_to_idx
-            .get(&obs_id)
-            .ok_or_else(|| Error::InvalidInput(format!("Observation ID {} not found", obs_id)))?;
+        // Binary search instead of HashMap lookup
+        let obs_idx = lookup_by_id(obs.ids, &id_sorted, obs_id)
+            .ok_or_else(|| Error::InvalidInput(format!("Observation ID {obs_id} not found")))?;
 
-        let object_id = obs.object_ids[*obs_idx];
-        let night = obs.nights[*obs_idx];
+        let object_id = obs.object_ids[obs_idx];
+        let night = obs.nights[obs_idx];
         let in_partition =
             night >= partition_summary.start_night && night <= partition_summary.end_night;
 
@@ -123,7 +125,7 @@ fn classify_linkages_inner(
             .object_counts
             .iter()
             .max_by_key(|&(_, &count)| count)
-            .map(|(obj, &count)| (*obj, count))
+            .map(|(&obj, &count)| (obj, count))
             .unwrap();
 
         let contamination = if accum.total_obs > 0 {
@@ -139,21 +141,17 @@ fn classify_linkages_inner(
         let linked_object_id = if pure || contaminated {
             dominant_object
         } else {
-            None
+            NO_OBJECT
         };
 
         // Check pure_complete: does this linkage contain all partition observations
         // of the linked object?
-        let pure_complete = if pure {
-            if let Some(obj_id) = linked_object_id {
-                let expected = obs_per_object_in_partition
-                    .get(&obj_id)
-                    .copied()
-                    .unwrap_or(0);
-                expected > 0 && accum.obs_inside_partition == expected
-            } else {
-                false
-            }
+        let pure_complete = if pure && linked_object_id != NO_OBJECT {
+            let expected = obs_per_object_in_partition
+                .get(&linked_object_id)
+                .copied()
+                .unwrap_or(0);
+            expected > 0 && accum.obs_inside_partition == expected
         } else {
             false
         };
@@ -183,9 +181,7 @@ fn classify_linkages_inner(
 
 /// Update AllObjects with linkage classification statistics.
 ///
-/// Single-pass algorithm: for each linkage member, look up which linkage it
-/// belongs to, determine the linkage classification, and accumulate counters
-/// on the appropriate object.
+/// Uses sorted index + binary search for obs lookups instead of HashMap.
 pub fn update_all_objects(
     all_objects: &mut AllObjects,
     observations: &impl ObservationTable,
@@ -206,25 +202,20 @@ fn update_all_objects_inner(
     all_linkages: &AllLinkages,
     min_obs: usize,
 ) {
-    // Build object_id -> AllObjects index lookup
+    // Build sorted ID index for obs lookups
+    let id_sorted = compute_id_sorted_indices(obs.ids);
+
+    // Build object_id -> AllObjects index lookup (small — proportional to objects, not observations)
     let mut obj_to_idx: HashMap<u64, usize> = HashMap::new();
     for (i, &obj_id) in all_objects.object_id.iter().enumerate() {
         obj_to_idx.insert(obj_id, i);
     }
 
-    // Build linkage_id -> AllLinkages index lookup
+    // Build linkage_id -> AllLinkages index lookup (small — proportional to linkages)
     let mut linkage_to_idx: HashMap<u64, usize> = HashMap::new();
     for (i, &lid) in all_linkages.linkage_id.iter().enumerate() {
         linkage_to_idx.insert(lid, i);
     }
-
-    // Build obs_id -> object_id lookup
-    let obs_to_obj: HashMap<u64, Option<u64>> = obs
-        .ids
-        .iter()
-        .zip(obs.object_ids.iter())
-        .map(|(&id, &obj)| (id, obj))
-        .collect();
 
     // Group linkage members by (linkage_id, object_id) and count
     struct MembershipInfo {
@@ -238,8 +229,15 @@ fn update_all_objects_inner(
         let linkage_id = lm.linkage_ids[i];
         let obs_id = lm.obs_ids[i];
 
-        let object_id = match obs_to_obj.get(&obs_id).and_then(|&o| o) {
-            Some(id) => id,
+        // Binary search for object_id
+        let object_id = match lookup_by_id(obs.ids, &id_sorted, obs_id) {
+            Some(idx) => {
+                let oid = obs.object_ids[idx];
+                if oid == NO_OBJECT {
+                    continue;
+                }
+                oid
+            }
             None => continue,
         };
 
@@ -268,7 +266,7 @@ fn update_all_objects_inner(
         };
 
         let li = info.linkage_idx;
-        let is_linked_object = all_linkages.linked_object_id[li] == Some(*object_id);
+        let is_linked_object = all_linkages.linked_object_id[li] == *object_id;
 
         if all_linkages.pure[li] && is_linked_object {
             all_objects.pure[obj_idx] += 1;
@@ -362,9 +360,10 @@ pub fn analyze_linkages(
 
     for i in 0..all_linkages.len() {
         if all_linkages.pure[i] {
-            if all_linkages.linked_object_id[i].is_some() {
+            let lid = all_linkages.linked_object_id[i];
+            if lid != NO_OBJECT {
                 pure_known += 1;
-                found_objects.insert(all_linkages.linked_object_id[i].unwrap());
+                found_objects.insert(lid);
             } else {
                 pure_unknown += 1;
             }

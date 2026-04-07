@@ -26,8 +26,7 @@ fn test_tracklet_metric_on_test_data() {
         min_obs_angular_separation: 1.0, // 1 arcsecond
     };
 
-    let (all_objects, findable, summaries) =
-        analyze_observations(&obs, None, &metric).unwrap();
+    let (all_objects, findable, summaries) = analyze_observations(&obs, None, &metric).unwrap();
 
     // Test data has 5 objects with 3 observations per night across 10 nights.
     // With tracklet_min_obs=2, max_obs_separation=1.5h, and 3 obs/night,
@@ -66,13 +65,11 @@ fn test_tracklet_metric_strict_params() {
         min_obs_angular_separation: 1.0,
     };
 
-    let (_, findable_strict, _) =
-        analyze_observations(&obs, None, &strict_metric).unwrap();
+    let (_, findable_strict, _) = analyze_observations(&obs, None, &strict_metric).unwrap();
 
     // Default params for comparison
     let default_metric = TrackletMetric::default();
-    let (_, findable_default, _) =
-        analyze_observations(&obs, None, &default_metric).unwrap();
+    let (_, findable_default, _) = analyze_observations(&obs, None, &default_metric).unwrap();
 
     // Stricter params should find <= objects than default
     assert!(

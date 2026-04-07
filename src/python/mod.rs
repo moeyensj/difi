@@ -221,8 +221,8 @@ fn analyze_linkages(
             );
             let _ = d.set_item(
                 "linked_object_id",
-                all_linkages.linked_object_id[i]
-                    .and_then(|id| id_interner2.resolve(id))
+                id_interner2
+                    .resolve(all_linkages.linked_object_id[i])
                     .unwrap_or(""),
             );
             let _ = d.set_item("num_obs", all_linkages.num_obs[i]);
