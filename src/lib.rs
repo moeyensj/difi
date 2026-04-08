@@ -18,6 +18,7 @@ pub mod difi;
 pub mod error;
 pub mod io;
 pub mod metrics;
+pub mod mmap;
 pub mod partitions;
 #[cfg(feature = "python")]
 mod python;
