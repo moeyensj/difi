@@ -3,7 +3,6 @@
 Evaluate linkage completeness and purity for astronomical surveys.
 
 v3 is a Rust rewrite with Python bindings via PyO3/maturin.
-The public API accepts and returns quivr Table types for compatibility.
 """
 
 from difi._core import version

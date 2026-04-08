@@ -156,7 +156,6 @@ fn build_projection_mask(
 // Readers
 // ---------------------------------------------------------------------------
 
-
 /// Read observations from a Parquet file.
 ///
 /// Returns the observations, a string interner for obs/object IDs,
