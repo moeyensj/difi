@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1775669294126,
+  "lastUpdate": 1775673062124,
   "repoUrl": "https://github.com/moeyensj/difi",
   "entries": {
     "difi Benchmarks": [
@@ -197,6 +197,72 @@ window.BENCHMARK_DATA = {
             "name": "io_read_observations_150",
             "value": 271320,
             "range": "± 2110",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "moeyensj@gmail.com",
+            "name": "Joachim Moeyens",
+            "username": "moeyensj"
+          },
+          "committer": {
+            "email": "moeyensj@gmail.com",
+            "name": "Joachim Moeyens",
+            "username": "moeyensj"
+          },
+          "distinct": true,
+          "id": "03c95381f731f84e3c4f6d159a14838b9983899b",
+          "message": "Rename crate to difi-rs, bump to v2.0.0-rc5, fix publish workflow\n\nPackage name difi-rs for crates.io (lib name stays difi for imports).\nTrigger publish on v* tag push. Replace deprecated macos-13 runner.\nUpdate B612 Foundation links to b612.ai.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
+          "timestamp": "2026-04-08T11:28:40-07:00",
+          "tree_id": "3aab0634d2155dd3e8e112a74f3dc0f7f2cb9923",
+          "url": "https://github.com/moeyensj/difi/commit/03c95381f731f84e3c4f6d159a14838b9983899b"
+        },
+        "date": 1775673061450,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "cifi_singleton_5obj_150obs",
+            "value": 64564,
+            "range": "± 4947",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cifi_tracklet_5obj_150obs",
+            "value": 80067,
+            "range": "± 7932",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "full_pipeline_5obj_20linkages",
+            "value": 191896,
+            "range": "± 1552",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cifi_singleton_scaling/objects/10",
+            "value": 112329,
+            "range": "± 10104",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cifi_singleton_scaling/objects/100",
+            "value": 495948,
+            "range": "± 6827",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cifi_singleton_scaling/objects/1000",
+            "value": 3408825,
+            "range": "± 31632",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "io_read_observations_150",
+            "value": 271542,
+            "range": "± 2025",
             "unit": "ns/iter"
           }
         ]
