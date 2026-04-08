@@ -443,7 +443,7 @@ impl FindableObservations {
 }
 
 /// Maps string IDs to interned integer IDs and back.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct StringInterner {
     to_id: std::collections::HashMap<String, u64>,
     to_string: Vec<String>,
