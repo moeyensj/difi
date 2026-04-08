@@ -3,6 +3,9 @@
 //! Reads observations and linkage members from Parquet files,
 //! handling string ID interning at the boundary. Writes output
 //! types back with string de-interning.
+//!
+//! Column projection is supported to skip unused columns at read time,
+//! which is critical at survey scale (166M+ rows).
 
 use std::path::Path;
 use std::sync::Arc;
@@ -132,16 +135,55 @@ fn get_time_as_mjd(batch: &RecordBatch) -> Result<Vec<f64>> {
 }
 
 // ---------------------------------------------------------------------------
+// Column projection
+// ---------------------------------------------------------------------------
+
+/// Build a column projection mask for the given column names.
+/// Returns indices into the Parquet schema for only the requested columns.
+fn build_projection_mask(
+    parquet_schema: &parquet::schema::types::SchemaDescriptor,
+    arrow_schema: &Schema,
+    columns: &[&str],
+) -> parquet::arrow::ProjectionMask {
+    let indices: Vec<usize> = columns
+        .iter()
+        .filter_map(|name| arrow_schema.fields().iter().position(|f| f.name() == *name))
+        .collect();
+    parquet::arrow::ProjectionMask::roots(parquet_schema, indices)
+}
+
+// ---------------------------------------------------------------------------
 // Readers
 // ---------------------------------------------------------------------------
+
 
 /// Read observations from a Parquet file.
 ///
 /// Returns the observations, a string interner for obs/object IDs,
 /// and a separate interner for observatory codes.
 pub fn read_observations(path: &Path) -> Result<(Observations, StringInterner, StringInterner)> {
+    read_observations_projected(path, None)
+}
+
+/// Read observations with optional column projection.
+///
+/// If `columns` is Some, only those columns are read from Parquet.
+/// Missing projected columns get default/empty values.
+pub fn read_observations_projected(
+    path: &Path,
+    columns: Option<&[&str]>,
+) -> Result<(Observations, StringInterner, StringInterner)> {
     let file = std::fs::File::open(path)?;
-    let reader = ParquetRecordBatchReaderBuilder::try_new(file)?.build()?;
+    let builder = ParquetRecordBatchReaderBuilder::try_new(file)?;
+
+    let reader = if let Some(cols) = columns {
+        let parquet_schema = builder.parquet_schema().clone();
+        let arrow_schema = builder.schema().clone();
+        let mask = build_projection_mask(&parquet_schema, &arrow_schema, cols);
+        builder.with_projection(mask).build()?
+    } else {
+        builder.build()?
+    };
 
     let mut id_interner = StringInterner::new();
     let mut obs_code_interner = StringInterner::new();
@@ -156,16 +198,40 @@ pub fn read_observations(path: &Path) -> Result<(Observations, StringInterner, S
 
     for batch in reader {
         let batch = batch?;
+        let n = batch.num_rows();
 
+        // Required: id, night
         let ids_str = get_string_column(&batch, "id")?;
-        let time_mjd = get_time_as_mjd(&batch)?;
-        let ra = get_f64_column(&batch, "ra")?;
-        let dec = get_f64_column(&batch, "dec")?;
-        let obs_codes_str = get_string_column(&batch, "observatory_code")?;
-        let object_ids_str = get_optional_string_column(&batch, "object_id")?;
         let night = get_i64_column(&batch, "night")?;
 
-        for i in 0..batch.num_rows() {
+        // Optional columns — fill with defaults if not projected
+        let time_mjd = if batch.column_by_name("time").is_some() {
+            get_time_as_mjd(&batch)?
+        } else {
+            vec![0.0; n]
+        };
+
+        let ra = if batch.column_by_name("ra").is_some() {
+            get_f64_column(&batch, "ra")?
+        } else {
+            vec![0.0; n]
+        };
+
+        let dec = if batch.column_by_name("dec").is_some() {
+            get_f64_column(&batch, "dec")?
+        } else {
+            vec![0.0; n]
+        };
+
+        let obs_codes_str = if batch.column_by_name("observatory_code").is_some() {
+            get_string_column(&batch, "observatory_code")?
+        } else {
+            vec![String::new(); n]
+        };
+
+        let object_ids_str = get_optional_string_column(&batch, "object_id")?;
+
+        for i in 0..n {
             all_id.push(id_interner.intern(&ids_str[i]));
             all_time.push(time_mjd[i]);
             all_ra.push(ra[i]);
@@ -470,4 +536,21 @@ pub fn write_findable_observations(
     writer.write(&batch)?;
     writer.close()?;
     Ok(())
+}
+
+/// Predefined column sets for common use cases.
+pub mod columns {
+    /// Columns needed for CIFI analysis (both singleton and tracklet metrics).
+    pub const CIFI: &[&str] = &[
+        "id",
+        "night",
+        "object_id",
+        "time",
+        "ra",
+        "dec",
+        "observatory_code",
+    ];
+
+    /// Minimal columns for DIFI linkage classification.
+    pub const DIFI: &[&str] = &["id", "night", "object_id"];
 }
