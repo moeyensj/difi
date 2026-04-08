@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use difi::cifi::analyze_observations;
 use difi::io::read_observations;
 use difi::metrics::singleton::SingletonMetric;
-use difi::mmap::{load_observations_cached, write_cache, MmapObservations};
+use difi::mmap::{MmapObservations, load_observations_cached, write_cache};
 use difi::types::ObservationTable;
 
 fn test_data_dir() -> PathBuf {
@@ -65,10 +65,7 @@ fn test_mmap_cifi_parity() {
     assert_eq!(objects_mem.len(), objects_mmap.len());
     assert_eq!(findable_mem.len(), findable_mmap.len());
     assert_eq!(summaries_mem.len(), summaries_mmap.len());
-    assert_eq!(
-        summaries_mem[0].findable,
-        summaries_mmap[0].findable
-    );
+    assert_eq!(summaries_mem[0].findable, summaries_mmap[0].findable);
 }
 
 #[test]

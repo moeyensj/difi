@@ -3,10 +3,10 @@
 Did I Find It?
 
 [![Rust CI](https://github.com/moeyensj/difi/actions/workflows/rust.yml/badge.svg)](https://github.com/moeyensj/difi/actions/workflows/rust.yml)
+[![Coverage Status](https://coveralls.io/repos/github/moeyensj/difi/badge.svg?branch=main)](https://coveralls.io/github/moeyensj/difi?branch=main)
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 [![DOI](https://zenodo.org/badge/152989392.svg)](https://zenodo.org/badge/latestdoi/152989392)
-[![Built with Claude Code](https://img.shields.io/badge/Built%20with-Claude%20Code-D97757?logo=anthropic&logoColor=white&style=flat-square)](https://claude.ai)
-
+[![Built with Claude Code](https://img.shields.io/badge/Built%20with-Claude%20Code-D97757?logo=anthropic&logoColor=white&style=flat-square)](https://claude.ai)  
 <a href="https://b612foundation.org/asteroid-institute/"><img src="https://img.shields.io/badge/Asteroid%20Institute-b612foundation.org-1a1a2e?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiLz48bGluZSB4MT0iMiIgeTE9IjEyIiB4Mj0iMjIiIHkyPSIxMiIvPjxwYXRoIGQ9Ik0xMiAyYTE1LjMgMTUuMyAwIDAgMSA0IDEwIDE1LjMgMTUuMyAwIDAgMS00IDEwIDE1LjMgMTUuMyAwIDAgMS00LTEwIDE1LjMgMTUuMyAwIDAgMSA0LTEweiIvPjwvc3ZnPg==&logoColor=white&style=flat-square" alt="Asteroid Institute"></a>
 <a href="https://dirac.astro.washington.edu/"><img src="https://img.shields.io/badge/DIRAC%20Institute-dirac.astro.washington.edu-1a1a2e?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiLz48bGluZSB4MT0iMiIgeTE9IjEyIiB4Mj0iMjIiIHkyPSIxMiIvPjxwYXRoIGQ9Ik0xMiAyYTE1LjMgMTUuMyAwIDAgMSA0IDEwIDE1LjMgMTUuMyAwIDAgMS00IDEwIDE1LjMgMTUuMyAwIDAgMS00LTEwIDE1LjMgMTUuMyAwIDAgMSA0LTEweiIvPjwvc3ZnPg==&logoColor=white&style=flat-square" alt="DIRAC Institute"></a>
 
@@ -19,7 +19,7 @@ from software such as [THOR](https://github.com/moeyensj/thor),
 object associations and a set of predicted linkages, difi determines which
 objects were successfully discovered and how clean each linkage is.
 
-This is difi v3 — a ground-up rewrite in Rust with Python bindings. It uses
+This is difi v2 — a ground-up rewrite in Rust with Python bindings. It uses
 [Rayon](https://github.com/rayon-rs/rayon) for parallelism and
 [Apache Arrow](https://arrow.apache.org/) for zero-copy data interchange.
 
@@ -114,42 +114,42 @@ print(f"Pure: {difi_result['num_pure']}, Mixed: {difi_result['num_mixed']}")
 The `metric` parameter controls what observation pattern makes an object "findable":
 
 ```python
-from difi import analyze_observations, SingletonMetric, TrackletMetric
+from difi import analyze_observations
 
 # Singleton metric (default): object needs >= min_obs detections
 # across >= min_nights distinct nights
-result = analyze_observations("observations.parquet")  # uses SingletonMetric()
-
-# Configure the metric
-metric = SingletonMetric(min_obs=10, min_nights=5, min_nightly_obs_in_min_nights=2)
-result = analyze_observations("observations.parquet", metric=metric)
-
-# Tracklet metric: intra-night tracklets with temporal proximity
-# and angular motion on >= min_linkage_nights nights
-metric = TrackletMetric(
-    tracklet_min_obs=2,
-    max_obs_separation=1.5 / 24,       # 1.5 hours in days
-    min_linkage_nights=3,
-    min_obs_angular_separation=1.0,     # arcseconds
+result = analyze_observations(
+    "observations.parquet",
+    metric="singletons",
+    min_obs=6,
+    min_nights=3,
 )
-result = analyze_observations("observations.parquet", metric=metric)
 
-# String shorthands use default parameters
-result = analyze_observations("observations.parquet", metric="tracklets")
+# Tracklet metric: object needs intra-night tracklets (multiple
+# detections within max_obs_separation hours showing angular motion)
+# on >= min_nights distinct nights
+result = analyze_observations(
+    "observations.parquet",
+    metric="tracklets",
+    min_nights=3,
+)
 ```
 
-In Rust, metrics are structs with the same parameters:
+In Rust, metrics are structs with full configuration:
 
 ```rust
 use difi::metrics::singleton::SingletonMetric;
 use difi::metrics::tracklet::TrackletMetric;
 
+// Singleton: 6 obs across 3 nights, at least 2 obs/night when exactly 3 nights
 let singleton = SingletonMetric {
     min_obs: 6,
     min_nights: 3,
     min_nightly_obs_in_min_nights: 2,
 };
 
+// Tracklet: 2+ obs per tracklet within 1.5 hours, 1" angular separation,
+// tracklets on 3+ nights
 let tracklet = TrackletMetric {
     tracklet_min_obs: 2,
     max_obs_separation: 1.5 / 24.0,  // days
@@ -216,54 +216,11 @@ difi operates in two phases:
 
    **Completeness** = (found objects / findable objects) x 100%
 
-## Partitions
-
-Partitions divide observations into time windows for analysis. By default,
-difi creates a single partition spanning all nights. For multi-window analysis
-(e.g. sliding detection windows), create partitions explicitly:
-
-```python
-from difi import Partitions
-
-# Single partition spanning all nights (default behavior)
-partitions = Partitions.create_single(observations.night)
-
-# Non-overlapping windows of 15 nights
-partitions = Partitions.create_linking_windows(
-    observations.night,
-    detection_window=15,
-)
-
-# Sliding windows: 15-night window slides by 1 night, with a ramp-up
-# starting from min_nights=3
-partitions = Partitions.create_linking_windows(
-    observations.night,
-    detection_window=15,
-    min_nights=3,
-    sliding=True,
-)
-```
-
-In Rust:
-
-```rust
-use difi::partitions::{create_single, create_linking_windows};
-
-// Single partition
-let partition = create_single(&nights)?;
-
-// Non-overlapping 15-night windows
-let partitions = create_linking_windows(&nights, Some(15), None, false)?;
-
-// Sliding windows with ramp-up from 3 nights
-let partitions = create_linking_windows(&nights, Some(15), Some(3), true)?;
-```
-
 ## Performance
 
 Benchmarked on the neomod_quads survey dataset (166M observations, 15,935 objects):
 
-| Scale | Python v2 | Rust v3 | Speedup |
+| Scale | Python (v2rc3) | Rust (v2rc4) | Speedup |
 |-------|-----------|---------|---------|
 | 55M obs (30 nights) | 23.0s | 0.42s | 55x |
 | 111M obs (60 nights) | 67.3s | 0.85s | 80x |
