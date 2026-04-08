@@ -1,6 +1,6 @@
 [package]
 name = "difi"
-version = "3.0.0-dev"
+version = "2.0.0-rc4"
 description = "Did I Find It? — Evaluate linkage completeness and purity for astronomical surveys"
 authors = [
     "Joachim Moeyens <moeyensj@uw.edu>",
@@ -8,7 +8,10 @@ authors = [
 edition = "2024"
 rust-version = "1.85.0"
 license = "BSD-3-Clause"
-include = ["src/**/*", "Cargo.toml"]
+repository = "https://github.com/moeyensj/difi"
+homepage = "https://github.com/moeyensj/difi"
+documentation = "https://docs.rs/difi"
+include = ["src/**/*", "benches/**/*", "tests/**/*", "Cargo.toml", "README.md", "LICENSE.md"]
 
 [lib]
 name = "difi"

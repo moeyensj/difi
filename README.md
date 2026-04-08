@@ -40,7 +40,7 @@ Verify:
 ```python
 >>> import difi
 >>> difi.__version__
-'3.0.0.dev0'
+'2.0.0rc4'
 ```
 
 ### Rust only
