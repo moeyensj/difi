@@ -132,16 +132,20 @@ impl<'a> LinkageMemberSlices<'a> {
 // ---------------------------------------------------------------------------
 
 /// Build a sorted index over nights for O(log n) partition filtering.
+/// Uses Rayon parallel sort for large arrays.
 pub fn compute_night_sorted_indices(nights: &[i64]) -> Vec<usize> {
+    use rayon::prelude::*;
     let mut indices: Vec<usize> = (0..nights.len()).collect();
-    indices.sort_unstable_by_key(|&i| nights[i]);
+    indices.par_sort_unstable_by_key(|&i| nights[i]);
     indices
 }
 
 /// Build a sorted index over IDs for O(log n) lookups by observation ID.
+/// Uses Rayon parallel sort for large arrays.
 pub fn compute_id_sorted_indices(ids: &[u64]) -> Vec<usize> {
+    use rayon::prelude::*;
     let mut indices: Vec<usize> = (0..ids.len()).collect();
-    indices.sort_unstable_by_key(|&i| ids[i]);
+    indices.par_sort_unstable_by_key(|&i| ids[i]);
     indices
 }
 
