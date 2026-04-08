@@ -189,4 +189,59 @@ mod tests {
         assert_eq!(partitions[0].start_night, 1);
         assert_eq!(partitions[0].end_night, 10);
     }
+
+    #[test]
+    fn test_create_linking_windows_sliding() {
+        let nights: Vec<i64> = (0..10).collect();
+        let partitions = create_linking_windows(&nights, Some(5), Some(3), true).unwrap();
+        // Ramp-up: windows start at length 3, grow to 5, then slide
+        assert!(!partitions.is_empty());
+        // First window: [0, 2] (length 3 = min_nights)
+        assert_eq!(partitions[0].start_night, 0);
+        assert_eq!(partitions[0].end_night, 2);
+        // Windows should grow until detection_window is reached
+        assert!(partitions.last().unwrap().end_night <= 9);
+    }
+
+    #[test]
+    fn test_create_linking_windows_empty() {
+        assert!(create_linking_windows(&[], Some(3), None, false).is_err());
+    }
+
+    #[test]
+    fn test_create_linking_windows_window_too_small() {
+        let nights: Vec<i64> = (0..10).collect();
+        assert!(create_linking_windows(&nights, Some(2), Some(5), false).is_err());
+    }
+
+    #[test]
+    fn test_create_linking_windows_larger_than_range() {
+        let nights: Vec<i64> = (0..5).collect();
+        let partitions = create_linking_windows(&nights, Some(100), None, false).unwrap();
+        assert_eq!(partitions.len(), 1);
+        assert_eq!(partitions[0].start_night, 0);
+        assert_eq!(partitions[0].end_night, 4);
+    }
+
+    #[test]
+    fn test_create_summaries() {
+        let nights = vec![1, 1, 2, 2, 2, 3];
+        let partitions = vec![
+            Partition {
+                id: 0,
+                start_night: 1,
+                end_night: 2,
+            },
+            Partition {
+                id: 1,
+                start_night: 3,
+                end_night: 3,
+            },
+        ];
+        let sorted = crate::types::compute_night_sorted_indices(&nights);
+        let summaries = create_summaries(&nights, &partitions, &sorted);
+        assert_eq!(summaries.len(), 2);
+        assert_eq!(summaries[0].observations, 5); // nights 1,1,2,2,2
+        assert_eq!(summaries[1].observations, 1); // night 3
+    }
 }
