@@ -1,5 +1,5 @@
 [package]
-name = "difi"
+name = "difi-rs"
 version = "2.0.0-rc4"
 description = "Did I Find It? — Evaluate linkage completeness and purity for astronomical surveys"
 authors = [
@@ -10,7 +10,7 @@ rust-version = "1.85.0"
 license = "BSD-3-Clause"
 repository = "https://github.com/moeyensj/difi"
 homepage = "https://github.com/moeyensj/difi"
-documentation = "https://docs.rs/difi"
+documentation = "https://docs.rs/difi-rs"
 include = ["src/**/*", "benches/**/*", "tests/**/*", "Cargo.toml", "README.md", "LICENSE.md"]
 
 [lib]
