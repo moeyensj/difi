@@ -122,3 +122,134 @@ impl FindabilityMetric for SingletonMetric {
         results
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::ObservationSlices;
+
+    fn make_obs_slices<'a>(
+        ids: &'a [u64],
+        times: &'a [f64],
+        ra: &'a [f64],
+        dec: &'a [f64],
+        nights: &'a [i64],
+        object_ids: &'a [u64],
+        obs_codes: &'a [u32],
+    ) -> ObservationSlices<'a> {
+        ObservationSlices {
+            ids,
+            times_mjd: times,
+            ra,
+            dec,
+            nights,
+            object_ids,
+            observatory_codes: obs_codes,
+        }
+    }
+
+    #[test]
+    fn test_singleton_not_enough_obs() {
+        let ids: Vec<u64> = (0..3).collect();
+        let times = vec![60000.0, 60001.0, 60002.0];
+        let ra = vec![0.0; 3];
+        let dec = vec![0.0; 3];
+        let nights = vec![1, 2, 3];
+        let object_ids = vec![0u64; 3];
+        let obs_codes = vec![0u32; 3];
+        let obs = make_obs_slices(&ids, &times, &ra, &dec, &nights, &object_ids, &obs_codes);
+
+        let metric = SingletonMetric {
+            min_obs: 6,
+            min_nights: 3,
+            min_nightly_obs_in_min_nights: 1,
+        };
+        let partition = Partition {
+            id: 0,
+            start_night: 1,
+            end_night: 3,
+        };
+
+        let result = metric.determine_object_findable(&[0, 1, 2], &obs, &[partition]);
+        assert!(result.is_empty(), "3 obs < min_obs=6, not findable");
+    }
+
+    #[test]
+    fn test_singleton_not_enough_nights() {
+        let ids: Vec<u64> = (0..6).collect();
+        let times = vec![60000.0; 6];
+        let ra = vec![0.0; 6];
+        let dec = vec![0.0; 6];
+        let nights = vec![1, 1, 1, 1, 1, 1]; // all same night
+        let object_ids = vec![0u64; 6];
+        let obs_codes = vec![0u32; 6];
+        let obs = make_obs_slices(&ids, &times, &ra, &dec, &nights, &object_ids, &obs_codes);
+
+        let metric = SingletonMetric {
+            min_obs: 6,
+            min_nights: 3,
+            min_nightly_obs_in_min_nights: 1,
+        };
+        let partition = Partition {
+            id: 0,
+            start_night: 1,
+            end_night: 1,
+        };
+
+        let result = metric.determine_object_findable(&[0, 1, 2, 3, 4, 5], &obs, &[partition]);
+        assert!(result.is_empty(), "1 night < min_nights=3, not findable");
+    }
+
+    #[test]
+    fn test_singleton_findable() {
+        let ids: Vec<u64> = (0..6).collect();
+        let times = vec![60000.0, 60000.1, 60001.0, 60001.1, 60002.0, 60002.1];
+        let ra = vec![0.0; 6];
+        let dec = vec![0.0; 6];
+        let nights = vec![1, 1, 2, 2, 3, 3];
+        let object_ids = vec![0u64; 6];
+        let obs_codes = vec![0u32; 6];
+        let obs = make_obs_slices(&ids, &times, &ra, &dec, &nights, &object_ids, &obs_codes);
+
+        let metric = SingletonMetric::default(); // min_obs=6, min_nights=3
+        let partition = Partition {
+            id: 0,
+            start_night: 1,
+            end_night: 3,
+        };
+
+        let result = metric.determine_object_findable(&[0, 1, 2, 3, 4, 5], &obs, &[partition]);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].discovery_night, Some(3));
+    }
+
+    #[test]
+    fn test_singleton_min_nightly_obs_enforced() {
+        // Exactly min_nights=3 nights, but one night has 0 obs below threshold
+        let ids: Vec<u64> = (0..7).collect();
+        let times = vec![0.0; 7];
+        let ra = vec![0.0; 7];
+        let dec = vec![0.0; 7];
+        let nights = vec![1, 1, 1, 2, 2, 2, 3]; // night 3 has only 1 obs
+        let object_ids = vec![0u64; 7];
+        let obs_codes = vec![0u32; 7];
+        let obs = make_obs_slices(&ids, &times, &ra, &dec, &nights, &object_ids, &obs_codes);
+
+        let metric = SingletonMetric {
+            min_obs: 6,
+            min_nights: 3,
+            min_nightly_obs_in_min_nights: 2, // need 2/night when exactly 3 nights
+        };
+        let partition = Partition {
+            id: 0,
+            start_night: 1,
+            end_night: 3,
+        };
+
+        let result = metric.determine_object_findable(&[0, 1, 2, 3, 4, 5, 6], &obs, &[partition]);
+        assert!(
+            result.is_empty(),
+            "Night 3 has 1 obs < min_nightly=2, not findable"
+        );
+    }
+}
