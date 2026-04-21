@@ -1,6 +1,6 @@
 [package]
 name = "difi-rs"
-version = "2.0.0-rc5"
+version = "2.0.0-rc6"
 description = "Did I Find It? — Evaluate linkage completeness and purity for astronomical surveys"
 authors = [
     "Joachim Moeyens <moeyensj@uw.edu>",
@@ -20,6 +20,7 @@ crate-type = ["cdylib", "rlib"]
 [features]
 default = []
 python = ["dep:pyo3", "dep:pyo3-arrow", "arrow/ffi"]
+cli = ["dep:clap", "dep:toml", "dep:anyhow", "dep:sha2"]
 
 [dependencies]
 thiserror = "2"
@@ -27,6 +28,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 pyo3 = { version = "0.28", features = ["extension-module"], optional = true }
 pyo3-arrow = { version = "0.17", optional = true }
+clap = { version = "4", features = ["derive"], optional = true }
+toml = { version = "0.8", optional = true }
+anyhow = { version = "1", optional = true }
+sha2 = { version = "0.10", optional = true }
 rayon = "1.11.0"
 memmap2 = "0.9"
 arrow = { version = "58", default-features = false }
@@ -36,6 +41,13 @@ parquet = { version = "58", default-features = false, features = ["arrow", "snap
 criterion = { version = "0.8.2", features = ["html_reports"] }
 tempfile = "3"
 parquet = { version = "58", default-features = false, features = ["arrow", "snap"] }
+assert_cmd = "2"
+predicates = "3"
+
+[[bin]]
+name = "difi"
+path = "src/bin/difi/main.rs"
+required-features = ["cli"]
 
 [[bench]]
 name = "benchmark_pipeline"
