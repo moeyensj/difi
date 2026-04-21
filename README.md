@@ -49,6 +49,17 @@ Verify:
 cargo build --release
 ```
 
+### CLI
+
+The `difi` binary ships with the crate behind a `cli` Cargo feature (so
+library consumers don't pull clap/toml/anyhow transitively):
+
+```bash
+cargo install difi-rs --features cli
+# or from a checkout
+cargo build --release --features cli   # binary: ./target/release/difi
+```
+
 ## Input format
 
 difi requires two input tables:
@@ -158,6 +169,92 @@ let tracklet = TrackletMetric {
 };
 ```
 
+### CLI
+
+A thin wrapper over the library, for shell pipelines and reproducible runs.
+Subcommand names mirror the Python verbs; short aliases keep shell use ergonomic.
+
+```bash
+# CIFI: findability from observations  (alias: `difi cifi`)
+difi analyze-observations \
+    -i observations.parquet \
+    -o out/ \
+    --metric singletons --min-obs 6 --min-nights 3
+
+# CIFI + DIFI: classify linkages end-to-end  (alias: `difi analyze`)
+difi analyze-linkages \
+    -i observations.parquet \
+    -l linkage_members.parquet \
+    -o out/ \
+    --contamination-percentage 20
+```
+
+Outputs in `<output-dir>/`: `all_objects.parquet`, `findable_observations.parquet`,
+`partition_summaries.parquet`, `run_manifest.json` (plus `all_linkages.parquet`
+for `analyze-linkages`). The manifest captures the exact argv, input SHA-256
+prefixes, host, and per-scenario timings for reproducibility.
+
+#### Partitioned CIFI
+
+```bash
+# Sliding 30-night windows
+difi cifi -i observations.parquet -o out/ \
+    --partition-mode sliding --partition-window 30
+
+# Tracklets with non-overlapping 15-night blocks
+difi cifi -i observations.parquet -o out/ \
+    --metric tracklets --min-linkage-nights 3 \
+    --partition-mode blocks --partition-window 15
+```
+
+`analyze-linkages` is single-partition in v1 (matches Python); partition flags
+are rejected there.
+
+#### Batch scenarios
+
+Declare scenarios in TOML for findability sweeps (LSST baselines, etc.):
+
+```toml
+# lsst_findability.toml
+[defaults]
+observations = "/path/to/observations.parquet"
+
+[[scenario]]
+name = "singleton_6obs_3nights"
+metric = "singletons"
+min_obs = 6
+min_nights = 3
+
+[[scenario]]
+name = "tracklet_3pairs_15nights"
+metric = "tracklets"
+min_linkage_nights = 3
+partition_mode = "sliding"
+partition_window = 15
+```
+
+```bash
+difi cifi --scenarios lsst_findability.toml -o results/
+# results/<scenario>/all_objects.parquet, partition_summaries.parquet, ...
+# results/run_manifest.json summarizes every scenario
+```
+
+Per-scenario `observations = "..."` overrides `[defaults]`.
+
+#### Machine-readable progress
+
+`--progress-json` emits one NDJSON event per line on stdout; human text still
+goes to stderr.
+
+```bash
+difi --progress-json cifi -i observations.parquet -o out/ \
+    | jq -c 'select(.event == "scenario_done")'
+```
+
+Errors always produce a human line on stderr; under `--progress-json` an
+`{"event":"error", ...}` line is additionally written to stdout so machine
+consumers see them too.
+
 ### Rust
 
 ```rust
@@ -231,14 +328,20 @@ Memory at 100M observations: ~3.2 GB (DIFI), ~5.6 GB (CIFI with tracklets).
 ## Development
 
 ```bash
-# Build
+# Build the library
 cargo build
 
-# Test (18 tests including exact Python v2 parity checks)
-cargo test
+# Build the library + CLI binary
+cargo build --features cli
+
+# Verify lib-only build pulls no CLI deps
+cargo build --no-default-features
+
+# Full test suite (library + CLI integration tests)
+cargo test --features cli
 
 # Lint
-cargo clippy --all-targets --all-features
+cargo clippy --all-targets --features cli -- -D warnings
 
 # Benchmarks
 cargo bench
