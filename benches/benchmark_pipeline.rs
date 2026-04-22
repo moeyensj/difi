@@ -98,9 +98,9 @@ fn bench_full_pipeline(c: &mut Criterion) {
             let metric = SingletonMetric::default();
             let (mut all_objects, _, mut summaries) =
                 analyze_observations(&obs, None, &metric).unwrap();
-            let all_linkages =
+            let result =
                 analyze_linkages(&obs, &lm, &mut all_objects, &mut summaries[0], 6, 20.0).unwrap();
-            black_box(all_linkages);
+            black_box(result);
         })
     });
 }

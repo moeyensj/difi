@@ -22,7 +22,8 @@ use parquet::file::properties::WriterProperties;
 use crate::error::{Error, Result};
 use crate::partitions::PartitionSummary;
 use crate::types::{
-    AllLinkages, AllObjects, FindableObservations, LinkageMembers, Observations, StringInterner,
+    AllLinkages, AllObjects, FindableObservations, IgnoredLinkages, LinkageMembers, Observations,
+    StringInterner,
 };
 
 // ---------------------------------------------------------------------------
@@ -291,6 +292,224 @@ pub fn read_linkage_members(
     })
 }
 
+/// Parse a `LargeUtf8` / `Utf8` column of stringified `u64`s into a `Vec<u64>`.
+fn get_u64_string_column(batch: &RecordBatch, name: &str) -> Result<Vec<u64>> {
+    let strings = get_string_column(batch, name)?;
+    strings
+        .iter()
+        .map(|s| {
+            s.parse::<u64>().map_err(|e| {
+                Error::InvalidInput(format!("Column {name}: could not parse {s:?} as u64: {e}"))
+            })
+        })
+        .collect()
+}
+
+/// Extract a nullable Int64 column as `Vec<Option<i64>>`.
+fn get_optional_i64_column(batch: &RecordBatch, name: &str) -> Result<Vec<Option<i64>>> {
+    let col = batch
+        .column_by_name(name)
+        .ok_or_else(|| Error::InvalidInput(format!("Missing column: {name}")))?;
+    let arr = col
+        .as_any()
+        .downcast_ref::<Int64Array>()
+        .ok_or_else(|| Error::InvalidInput(format!("Column {name} is not Int64")))?;
+    Ok((0..arr.len())
+        .map(|i| {
+            if arr.is_null(i) {
+                None
+            } else {
+                Some(arr.value(i))
+            }
+        })
+        .collect())
+}
+
+/// Extract a nullable Float64 column as `Vec<Option<f64>>`.
+fn get_optional_f64_column(batch: &RecordBatch, name: &str) -> Result<Vec<Option<f64>>> {
+    let col = batch
+        .column_by_name(name)
+        .ok_or_else(|| Error::InvalidInput(format!("Missing column: {name}")))?;
+    let arr = col
+        .as_any()
+        .downcast_ref::<Float64Array>()
+        .ok_or_else(|| Error::InvalidInput(format!("Column {name} is not Float64")))?;
+    Ok((0..arr.len())
+        .map(|i| {
+            if arr.is_null(i) {
+                None
+            } else {
+                Some(arr.value(i))
+            }
+        })
+        .collect())
+}
+
+/// Extract a nullable Boolean column as `Vec<Option<bool>>`.
+fn get_optional_bool_column(batch: &RecordBatch, name: &str) -> Result<Vec<Option<bool>>> {
+    let col = batch
+        .column_by_name(name)
+        .ok_or_else(|| Error::InvalidInput(format!("Missing column: {name}")))?;
+    let arr = col
+        .as_any()
+        .downcast_ref::<BooleanArray>()
+        .ok_or_else(|| Error::InvalidInput(format!("Column {name} is not Boolean")))?;
+    Ok((0..arr.len())
+        .map(|i| {
+            if arr.is_null(i) {
+                None
+            } else {
+                Some(arr.value(i))
+            }
+        })
+        .collect())
+}
+
+/// Read an `AllObjects` table from a Parquet file written by `write_all_objects`.
+///
+/// **Interner ordering contract:** callers must intern observations first
+/// (via `read_observations` / `read_observations_projected`), then pass the
+/// returned `&mut StringInterner` here. This re-interns `object_id` strings
+/// so the `u64` IDs align with the observations in the current session. Using
+/// a fresh interner, or interning additional strings between calls, will
+/// silently produce misaligned IDs.
+pub fn read_all_objects(path: &Path, id_interner: &mut StringInterner) -> Result<AllObjects> {
+    let file = std::fs::File::open(path)?;
+    let reader = ParquetRecordBatchReaderBuilder::try_new(file)?.build()?;
+
+    let mut out = AllObjects::default();
+
+    for batch in reader {
+        let batch = batch?;
+
+        let object_ids_str = get_string_column(&batch, "object_id")?;
+        let partition_ids = get_u64_string_column(&batch, "partition_id")?;
+        let mjd_min = get_f64_column(&batch, "mjd_min")?;
+        let mjd_max = get_f64_column(&batch, "mjd_max")?;
+        let arc_length = get_f64_column(&batch, "arc_length")?;
+        let num_obs = get_i64_column(&batch, "num_obs")?;
+        let num_observatories = get_i64_column(&batch, "num_observatories")?;
+        let findable = get_optional_bool_column(&batch, "findable")?;
+        let found_pure = get_i64_column(&batch, "found_pure")?;
+        let found_contaminated = get_i64_column(&batch, "found_contaminated")?;
+        let pure = get_i64_column(&batch, "pure")?;
+        let pure_complete = get_i64_column(&batch, "pure_complete")?;
+        let contaminated = get_i64_column(&batch, "contaminated")?;
+        let contaminant = get_i64_column(&batch, "contaminant")?;
+        let mixed = get_i64_column(&batch, "mixed")?;
+        let obs_in_pure = get_i64_column(&batch, "obs_in_pure")?;
+        let obs_in_pure_complete = get_i64_column(&batch, "obs_in_pure_complete")?;
+        let obs_in_contaminated = get_i64_column(&batch, "obs_in_contaminated")?;
+        let obs_as_contaminant = get_i64_column(&batch, "obs_as_contaminant")?;
+        let obs_in_mixed = get_i64_column(&batch, "obs_in_mixed")?;
+
+        for s in &object_ids_str {
+            out.object_id.push(id_interner.intern(s));
+        }
+        out.partition_id.extend(partition_ids);
+        out.mjd_min.extend(mjd_min);
+        out.mjd_max.extend(mjd_max);
+        out.arc_length.extend(arc_length);
+        out.num_obs.extend(num_obs);
+        out.num_observatories.extend(num_observatories);
+        out.findable.extend(findable);
+        out.found_pure.extend(found_pure);
+        out.found_contaminated.extend(found_contaminated);
+        out.pure.extend(pure);
+        out.pure_complete.extend(pure_complete);
+        out.contaminated.extend(contaminated);
+        out.contaminant.extend(contaminant);
+        out.mixed.extend(mixed);
+        out.obs_in_pure.extend(obs_in_pure);
+        out.obs_in_pure_complete.extend(obs_in_pure_complete);
+        out.obs_in_contaminated.extend(obs_in_contaminated);
+        out.obs_as_contaminant.extend(obs_as_contaminant);
+        out.obs_in_mixed.extend(obs_in_mixed);
+    }
+
+    Ok(out)
+}
+
+/// Read a `Vec<PartitionSummary>` from a Parquet file written by
+/// `write_partition_summaries`. `id` is parsed from its `LargeUtf8`
+/// representation back to `u64`.
+pub fn read_partition_summaries(path: &Path) -> Result<Vec<PartitionSummary>> {
+    let file = std::fs::File::open(path)?;
+    let reader = ParquetRecordBatchReaderBuilder::try_new(file)?.build()?;
+
+    let mut out = Vec::new();
+
+    for batch in reader {
+        let batch = batch?;
+
+        let ids = get_u64_string_column(&batch, "id")?;
+        let start_night = get_i64_column(&batch, "start_night")?;
+        let end_night = get_i64_column(&batch, "end_night")?;
+        let observations = get_i64_column(&batch, "observations")?;
+        let findable = get_optional_i64_column(&batch, "findable")?;
+        let found = get_optional_i64_column(&batch, "found")?;
+        let completeness = get_optional_f64_column(&batch, "completeness")?;
+        let pure_known = get_optional_i64_column(&batch, "pure_known")?;
+        let pure_unknown = get_optional_i64_column(&batch, "pure_unknown")?;
+        let contaminated = get_optional_i64_column(&batch, "contaminated")?;
+        let mixed = get_optional_i64_column(&batch, "mixed")?;
+
+        for i in 0..batch.num_rows() {
+            out.push(PartitionSummary {
+                id: ids[i],
+                start_night: start_night[i],
+                end_night: end_night[i],
+                observations: observations[i],
+                findable: findable[i],
+                found: found[i],
+                completeness: completeness[i],
+                pure_known: pure_known[i],
+                pure_unknown: pure_unknown[i],
+                contaminated: contaminated[i],
+                mixed: mixed[i],
+            });
+        }
+    }
+
+    Ok(out)
+}
+
+/// Read `FindableObservations` from a Parquet file written by
+/// `write_findable_observations`.
+///
+/// Note: the writer does not persist the `obs_ids` field, so the returned
+/// `FindableObservations.obs_ids` is filled with `None` for every row. The
+/// DIFI phase does not consume `obs_ids`, so this is sufficient for CIFI-output
+/// reuse today.
+///
+/// Same interner ordering contract as `read_all_objects`.
+pub fn read_findable_observations(
+    path: &Path,
+    id_interner: &mut StringInterner,
+) -> Result<FindableObservations> {
+    let file = std::fs::File::open(path)?;
+    let reader = ParquetRecordBatchReaderBuilder::try_new(file)?.build()?;
+
+    let mut out = FindableObservations::default();
+
+    for batch in reader {
+        let batch = batch?;
+
+        let partition_ids = get_u64_string_column(&batch, "partition_id")?;
+        let object_ids_str = get_string_column(&batch, "object_id")?;
+        let discovery_night = get_optional_i64_column(&batch, "discovery_night")?;
+
+        for i in 0..batch.num_rows() {
+            out.partition_id.push(partition_ids[i]);
+            out.object_id.push(id_interner.intern(&object_ids_str[i]));
+            out.discovery_night.push(discovery_night[i]);
+            out.obs_ids.push(None);
+        }
+    }
+
+    Ok(out)
+}
+
 // ---------------------------------------------------------------------------
 // Writers
 // ---------------------------------------------------------------------------
@@ -527,6 +746,51 @@ pub fn write_findable_observations(
         Arc::new(LargeStringArray::from(partition_id_refs)),
         Arc::new(LargeStringArray::from(object_ids)),
         Arc::new(Int64Array::from(findable.discovery_night.clone())),
+    ];
+
+    let batch = RecordBatch::try_new(schema.clone(), columns)?;
+    let file = std::fs::File::create(path)?;
+    let mut writer = ArrowWriter::try_new(file, schema, Some(write_props()))?;
+    writer.write(&batch)?;
+    writer.close()?;
+    Ok(())
+}
+
+/// Write ignored-linkage records to a Parquet file, de-interning IDs back to
+/// strings. Consumers can union with `all_linkages.parquet` by
+/// `(linkage_id, partition_id)`.
+pub fn write_ignored_linkages(
+    path: &Path,
+    ignored: &IgnoredLinkages,
+    id_interner: &StringInterner,
+) -> Result<()> {
+    let schema = Arc::new(Schema::new(vec![
+        Field::new("linkage_id", DataType::LargeUtf8, false),
+        Field::new("partition_id", DataType::LargeUtf8, false),
+        Field::new("reason", DataType::LargeUtf8, false),
+        Field::new("num_obs", DataType::Int64, false),
+        Field::new("num_members", DataType::Int64, false),
+    ]));
+
+    let linkage_ids: Vec<&str> = ignored
+        .linkage_id
+        .iter()
+        .map(|&id| id_interner.resolve(id).unwrap_or(""))
+        .collect();
+    let partition_ids: Vec<String> = ignored
+        .partition_id
+        .iter()
+        .map(|id| id.to_string())
+        .collect();
+    let partition_id_refs: Vec<&str> = partition_ids.iter().map(|s| s.as_str()).collect();
+    let reasons: Vec<&str> = ignored.reason.iter().map(|r| r.as_str()).collect();
+
+    let columns: Vec<Arc<dyn Array>> = vec![
+        Arc::new(LargeStringArray::from(linkage_ids)),
+        Arc::new(LargeStringArray::from(partition_id_refs)),
+        Arc::new(LargeStringArray::from(reasons)),
+        Arc::new(Int64Array::from(ignored.num_obs.clone())),
+        Arc::new(Int64Array::from(ignored.num_members.clone())),
     ];
 
     let batch = RecordBatch::try_new(schema.clone(), columns)?;

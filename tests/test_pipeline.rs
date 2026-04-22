@@ -93,7 +93,7 @@ fn test_full_pipeline() {
     assert_eq!(summaries.len(), 1);
 
     // DIFI
-    let all_linkages =
+    let (all_linkages, _ignored) =
         analyze_linkages(&obs, &lm, &mut all_objects, &mut summaries[0], 6, 20.0).unwrap();
 
     // Should have classified some linkages
