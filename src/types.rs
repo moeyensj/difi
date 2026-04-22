@@ -324,6 +324,75 @@ impl AllLinkages {
     }
 }
 
+/// Reason a linkage was excluded from the partition's `AllLinkages` table.
+///
+/// Linkages that would otherwise produce phantom rows (e.g. classified against
+/// a partition where none of their observations fall) are redirected here so
+/// the rest of difi's output remains aggregation-safe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IgnoredLinkageReason {
+    /// Linkage has observations, but none of them fall within the partition's
+    /// `[start_night, end_night]` range. In a multi-partition run this is a
+    /// soft signal (the linkage belongs to a different partition); across all
+    /// partitions it's a hard user-error signal (wrong linkage file).
+    NoObservationsInPartition,
+}
+
+impl IgnoredLinkageReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            IgnoredLinkageReason::NoObservationsInPartition => "no_observations_in_partition",
+        }
+    }
+}
+
+/// A single (linkage, partition) pair that was excluded from the partition's
+/// `AllLinkages` table, with context for why.
+#[derive(Debug, Clone)]
+pub struct IgnoredLinkage {
+    pub linkage_id: u64,
+    pub partition_id: u64,
+    pub reason: IgnoredLinkageReason,
+    pub num_obs: i64,
+    pub num_members: i64,
+}
+
+/// Columnar storage for ignored linkages.
+#[derive(Debug, Clone, Default)]
+pub struct IgnoredLinkages {
+    pub linkage_id: Vec<u64>,
+    pub partition_id: Vec<u64>,
+    pub reason: Vec<IgnoredLinkageReason>,
+    pub num_obs: Vec<i64>,
+    pub num_members: Vec<i64>,
+}
+
+impl IgnoredLinkages {
+    pub fn len(&self) -> usize {
+        self.linkage_id.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.linkage_id.is_empty()
+    }
+
+    pub fn push(&mut self, i: IgnoredLinkage) {
+        self.linkage_id.push(i.linkage_id);
+        self.partition_id.push(i.partition_id);
+        self.reason.push(i.reason);
+        self.num_obs.push(i.num_obs);
+        self.num_members.push(i.num_members);
+    }
+
+    pub fn extend(&mut self, other: IgnoredLinkages) {
+        self.linkage_id.extend(other.linkage_id);
+        self.partition_id.extend(other.partition_id);
+        self.reason.extend(other.reason);
+        self.num_obs.extend(other.num_obs);
+        self.num_members.extend(other.num_members);
+    }
+}
+
 /// Per-object summary of linkage results.
 #[derive(Debug, Clone)]
 pub struct ObjectSummary {

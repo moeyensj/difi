@@ -197,6 +197,265 @@ fn analyze_alias_resolves_to_analyze_linkages() {
 }
 
 // ---------------------------------------------------------------------------
+// Multi-partition analyze-linkages (Phase 3)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn analyze_linkages_sliding_partition_writes_ignored_linkages_and_manifest_warnings() {
+    // With a narrow sliding window, many linkages will be wholly outside
+    // individual partitions. Those rows should be excluded from
+    // all_linkages.parquet and written to ignored_linkages.parquet, with
+    // counts recorded in manifest.warnings.
+    let tmp = TempDir::new().unwrap();
+    cmd()
+        .args([
+            "analyze-linkages",
+            "--partition-mode",
+            "sliding",
+            "--partition-window",
+            "3",
+            "--partition-min-nights",
+            "2",
+        ])
+        .arg("-i")
+        .arg(observations_parquet())
+        .arg("-l")
+        .arg(linkage_members_parquet())
+        .arg("-o")
+        .arg(tmp.path())
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("difi: warning"));
+
+    expect_file(&tmp.path().join("ignored_linkages.parquet"));
+
+    let manifest: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(tmp.path().join("run_manifest.json")).unwrap(),
+    )
+    .unwrap();
+    let rows = manifest["warnings"]["ignored_linkage_rows"]
+        .as_u64()
+        .expect("warnings.ignored_linkage_rows should be a number");
+    assert!(
+        rows > 0,
+        "sliding partitions should produce non-zero ignored rows"
+    );
+}
+
+#[test]
+fn analyze_linkages_sliding_partition_produces_multi_partition_output() {
+    let tmp = TempDir::new().unwrap();
+    cmd()
+        .args([
+            "analyze-linkages",
+            "--partition-mode",
+            "sliding",
+            "--partition-window",
+            "3",
+            "--partition-min-nights",
+            "2",
+        ])
+        .arg("-i")
+        .arg(observations_parquet())
+        .arg("-l")
+        .arg(linkage_members_parquet())
+        .arg("-o")
+        .arg(tmp.path())
+        .assert()
+        .success();
+
+    expect_file(&tmp.path().join("all_linkages.parquet"));
+    expect_file(&tmp.path().join("all_objects.parquet"));
+    expect_file(&tmp.path().join("partition_summaries.parquet"));
+
+    // Manifest should record the partition mode as sliding.
+    let manifest: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(tmp.path().join("run_manifest.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        manifest["scenarios"][0]["partitions"]["mode"]
+            .as_str()
+            .unwrap(),
+        "sliding"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// --cifi-output-dir reuse (Phase 4)
+// ---------------------------------------------------------------------------
+
+fn run_cifi_to(tmp: &Path) -> PathBuf {
+    let cifi_dir = tmp.join("cifi_out");
+    cmd()
+        .arg("cifi")
+        .arg("-i")
+        .arg(observations_parquet())
+        .arg("-o")
+        .arg(&cifi_dir)
+        .assert()
+        .success();
+    cifi_dir
+}
+
+fn run_sliding_cifi_to(tmp: &Path) -> PathBuf {
+    let cifi_dir = tmp.join("cifi_out_sliding");
+    cmd()
+        .args([
+            "cifi",
+            "--partition-mode",
+            "sliding",
+            "--partition-window",
+            "3",
+            "--partition-min-nights",
+            "2",
+        ])
+        .arg("-i")
+        .arg(observations_parquet())
+        .arg("-o")
+        .arg(&cifi_dir)
+        .assert()
+        .success();
+    cifi_dir
+}
+
+#[test]
+fn analyze_linkages_with_cifi_output_dir_succeeds_and_records_provenance() {
+    let tmp = TempDir::new().unwrap();
+    let cifi_dir = run_cifi_to(tmp.path());
+    let difi_dir = tmp.path().join("difi_out");
+
+    cmd()
+        .arg("analyze-linkages")
+        .arg("-i")
+        .arg(observations_parquet())
+        .arg("-l")
+        .arg(linkage_members_parquet())
+        .arg("--cifi-output-dir")
+        .arg(&cifi_dir)
+        .arg("-o")
+        .arg(&difi_dir)
+        .assert()
+        .success();
+
+    expect_file(&difi_dir.join("all_linkages.parquet"));
+    expect_file(&difi_dir.join("all_objects.parquet"));
+    expect_file(&difi_dir.join("partition_summaries.parquet"));
+    expect_file(&difi_dir.join("run_manifest.json"));
+
+    let manifest: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(difi_dir.join("run_manifest.json")).unwrap())
+            .unwrap();
+    assert!(
+        manifest["reused_cifi"].is_object(),
+        "reused_cifi should be populated"
+    );
+    assert!(
+        manifest["reused_cifi"]["observations_input"]["sha256_prefix"].is_string(),
+        "reused_cifi must record the reused observations fingerprint"
+    );
+    // CIFI phase should be recorded as elapsed=0 (skipped).
+    assert_eq!(
+        manifest["scenarios"][0]["cifi_elapsed_s"].as_f64().unwrap(),
+        0.0
+    );
+}
+
+#[test]
+fn analyze_linkages_reuse_records_snapshot_partition_scheme_not_cli_defaults() {
+    // Regression: the reuse path used to record `args.partition.to_manifest()`
+    // (always "single" in reuse mode, since partition flags are rejected)
+    // instead of the reused CIFI's actual partition scheme. The manifest's
+    // scenarios[0].partitions should now reflect the snapshot.
+    let tmp = TempDir::new().unwrap();
+    let cifi_dir = run_sliding_cifi_to(tmp.path());
+    let difi_dir = tmp.path().join("difi_out");
+
+    cmd()
+        .arg("analyze-linkages")
+        .arg("-i")
+        .arg(observations_parquet())
+        .arg("-l")
+        .arg(linkage_members_parquet())
+        .arg("--cifi-output-dir")
+        .arg(&cifi_dir)
+        .arg("-o")
+        .arg(&difi_dir)
+        .assert()
+        .success();
+
+    let manifest: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(difi_dir.join("run_manifest.json")).unwrap())
+            .unwrap();
+    let partitions = &manifest["scenarios"][0]["partitions"];
+    assert_eq!(
+        partitions["mode"].as_str().unwrap(),
+        "sliding",
+        "reuse manifest should record the snapshot's partition mode (sliding), \
+         not the default Single from unused CLI args. got: {partitions:?}"
+    );
+    assert_eq!(partitions["window"].as_i64().unwrap(), 3);
+}
+
+#[test]
+fn analyze_linkages_rejects_cifi_dir_plus_partition_flags() {
+    let tmp = TempDir::new().unwrap();
+    let cifi_dir = run_cifi_to(tmp.path());
+    let difi_dir = tmp.path().join("difi_out");
+
+    cmd()
+        .arg("analyze-linkages")
+        .arg("-i")
+        .arg(observations_parquet())
+        .arg("-l")
+        .arg(linkage_members_parquet())
+        .arg("--cifi-output-dir")
+        .arg(&cifi_dir)
+        .arg("--partition-mode")
+        .arg("sliding")
+        .arg("--partition-window")
+        .arg("5")
+        .arg("-o")
+        .arg(&difi_dir)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--cifi-output-dir"));
+}
+
+#[test]
+fn analyze_linkages_rejects_mismatched_observations_fingerprint() {
+    let tmp = TempDir::new().unwrap();
+    let cifi_dir = run_cifi_to(tmp.path());
+
+    // Copy the real observations and append a byte so the sha256 prefix diverges.
+    let fake_obs = tmp.path().join("fake_obs.parquet");
+    std::fs::copy(observations_parquet(), &fake_obs).unwrap();
+    {
+        use std::io::Write;
+        let mut f = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&fake_obs)
+            .unwrap();
+        f.write_all(b"tamper").unwrap();
+    }
+
+    let difi_dir = tmp.path().join("difi_out");
+    cmd()
+        .arg("analyze-linkages")
+        .arg("-i")
+        .arg(&fake_obs)
+        .arg("-l")
+        .arg(linkage_members_parquet())
+        .arg("--cifi-output-dir")
+        .arg(&cifi_dir)
+        .arg("-o")
+        .arg(&difi_dir)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("fingerprint mismatch"));
+}
+
+// ---------------------------------------------------------------------------
 // Scenarios TOML (batch mode)
 // ---------------------------------------------------------------------------
 

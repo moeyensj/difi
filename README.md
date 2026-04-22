@@ -39,8 +39,7 @@ Verify:
 
 ```python
 >>> import difi
->>> difi.__version__
-'2.0.0rc4'
+>>> difi.__version__  # matches the published rc
 ```
 
 ### Rust only
@@ -118,6 +117,10 @@ difi_result = analyze_linkages(
 )
 print(f"Completeness: {difi_result['completeness']:.1f}%")
 print(f"Pure: {difi_result['num_pure']}, Mixed: {difi_result['num_mixed']}")
+# num_ignored_linkages counts linkages excluded because they had no
+# observations inside the analysis partition (non-zero signals a mismatch
+# between your --linkages file and the observation set).
+print(f"Ignored: {difi_result['num_ignored_linkages']}")
 ```
 
 #### Findability metrics
@@ -189,10 +192,16 @@ difi analyze-linkages \
     --contamination-percentage 20
 ```
 
-Outputs in `<output-dir>/`: `all_objects.parquet`, `findable_observations.parquet`,
-`partition_summaries.parquet`, `run_manifest.json` (plus `all_linkages.parquet`
-for `analyze-linkages`). The manifest captures the exact argv, input SHA-256
-prefixes, host, and per-scenario timings for reproducibility.
+Outputs in `<output-dir>/`:
+
+| File | Written by | Contents |
+|---|---|---|
+| `all_objects.parquet` | both | One row per (object, partition) — CIFI findability flag plus DIFI linkage stats merged in |
+| `findable_observations.parquet` | both | One row per findable (object, partition) with discovery night |
+| `partition_summaries.parquet` | both | One row per partition with observation / findable / found / completeness counts |
+| `all_linkages.parquet` | `analyze-linkages` | One row per classified (linkage, partition) with pure/contaminated/mixed flags |
+| `ignored_linkages.parquet` | `analyze-linkages` (only when non-empty) | Linkages excluded from classification, with reason + partition |
+| `run_manifest.json` | both | argv, input SHA-256 prefixes, host, per-scenario timings, `warnings` counts, optional `reused_cifi` provenance |
 
 #### Partitioned CIFI
 
@@ -207,8 +216,34 @@ difi cifi -i observations.parquet -o out/ \
     --partition-mode blocks --partition-window 15
 ```
 
-`analyze-linkages` is single-partition in v1 (matches Python); partition flags
-are rejected there.
+Partition flags also apply to `analyze-linkages` — the CLI loops DIFI over
+each partition's summary and writes a combined `all_linkages.parquet` keyed by
+`partition_id`. Linkages whose observations fall entirely outside a given
+partition are excluded from `all_linkages.parquet` and reported in a separate
+`ignored_linkages.parquet`; the manifest's `warnings` section surfaces counts
+so a run with an unexpectedly high `orphan_linkages` value (linkages that
+never intersect any partition) flags a likely mismatched `--linkages` file.
+
+#### Reusing a CIFI snapshot
+
+CIFI is the expensive phase on survey-scale inputs. Run it once, reuse across
+multiple linkage sets:
+
+```bash
+# Produce a reusable CIFI snapshot
+difi cifi -i observations.parquet -o cifi_snapshot/
+
+# Classify two independent linkage sets against the same CIFI work
+difi analyze-linkages -i observations.parquet -l thor_linkages.parquet \
+    --cifi-output-dir cifi_snapshot/ -o difi_thor/
+difi analyze-linkages -i observations.parquet -l precovery_linkages.parquet \
+    --cifi-output-dir cifi_snapshot/ -o difi_precovery/
+```
+
+`--cifi-output-dir` is mutually exclusive with partition flags (the snapshot
+encodes its own partitions). A SHA-256 prefix of the observations file is
+stored in each manifest; mismatches between the snapshot and the current
+observations fail fast with a clear error.
 
 #### Batch scenarios
 
@@ -272,11 +307,19 @@ let metric = SingletonMetric::default();
 let (mut all_objects, findable, mut summaries) =
     analyze_observations(&obs, None, &metric)?;
 
-// Step 2: DIFI — classify linkages
-let all_linkages = analyze_linkages(
+// Step 2: DIFI — classify linkages. Returns (AllLinkages, IgnoredLinkages).
+// Linkages whose observations all fall outside summaries[0]'s night range
+// are redirected to `ignored` with reason NoObservationsInPartition, instead
+// of producing phantom pure/contaminated/mixed rows.
+let (all_linkages, ignored) = analyze_linkages(
     &obs, &lm, &mut all_objects, &mut summaries[0], 6, 20.0,
 )?;
 ```
+
+For multi-partition DIFI, loop over `summaries` and concatenate each partition's
+`AllLinkages` / `IgnoredLinkages`. The `update_all_objects` call inside
+`analyze_linkages` scopes its writes to the current partition's rows in
+`AllObjects`, so multi-partition loops are safe.
 
 ### Cross-crate usage (e.g. from THOR)
 
@@ -311,7 +354,12 @@ difi operates in two phases:
    - **Contaminated** — mostly one object, contamination <= threshold
    - **Mixed** — too contaminated to attribute to a single object
 
-   **Completeness** = (found objects / findable objects) x 100%
+   **Completeness** = (found objects / findable objects) × 100%, where
+   *found* counts objects for which at least one pure linkage contains
+   ≥ `min_obs` observations **inside the partition**. Single-partition runs see
+   no difference from the whole-linkage interpretation; multi-partition runs
+   stay bounded by in-partition evidence instead of inflating when a
+   cross-boundary linkage has enough total obs but few inside any one window.
 
 ## Performance
 
@@ -342,6 +390,10 @@ cargo test --features cli
 
 # Lint
 cargo clippy --all-targets --features cli -- -D warnings
+
+# Verify Cargo.toml and pyproject.toml versions agree (CI runs this on every
+# PR; the publish workflow also checks tag vs both files before any upload)
+./scripts/check_versions.sh
 
 # Benchmarks
 cargo bench

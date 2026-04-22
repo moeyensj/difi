@@ -88,6 +88,31 @@ impl RunContext {
             let _ = out.flush();
         }
     }
+
+    /// Emit a structured warning. Always writes a human-readable line to
+    /// stderr; under `--progress-json` additionally writes an NDJSON
+    /// `{"event":"warning", ...}` line to stdout with the supplied fields.
+    pub fn emit_warning(&self, message: &str, fields: serde_json::Value) {
+        let _ = writeln!(std::io::stderr(), "difi: warning: {message}");
+        if self.progress_json {
+            let mut payload = serde_json::json!({
+                "event": "warning",
+                "message": message,
+                "ts_unix_s": unix_seconds_now(),
+            });
+            if let serde_json::Value::Object(map) = fields
+                && let serde_json::Value::Object(ref mut outer) = payload
+            {
+                for (k, v) in map {
+                    outer.insert(k, v);
+                }
+            }
+            let _guard = self.stdout_lock.lock().unwrap();
+            let mut out = std::io::stdout().lock();
+            let _ = writeln!(out, "{payload}");
+            let _ = out.flush();
+        }
+    }
 }
 
 fn unix_seconds_now() -> f64 {
@@ -343,6 +368,15 @@ pub struct PartitionArgs {
 }
 
 impl PartitionArgs {
+    /// True when the user left every partition flag at its CLI default.
+    /// Used by `analyze-linkages` to reject `--cifi-output-dir` + any
+    /// non-default partition flag (the reused CIFI dictates the partitions).
+    pub fn is_default(&self) -> bool {
+        self.partition_mode == PartitionMode::Single
+            && self.partition_window.is_none()
+            && self.partition_min_nights.is_none()
+    }
+
     pub fn build(&self, nights: &[i64]) -> Result<Vec<Partition>> {
         match self.partition_mode {
             PartitionMode::Single => Ok(vec![partitions::create_single(nights)?]),
@@ -391,7 +425,7 @@ impl PartitionArgs {
 // Input fingerprinting
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InputFingerprint {
     pub path: String,
     pub size_bytes: u64,
@@ -435,10 +469,74 @@ pub struct Manifest {
     pub observations_input: InputFingerprint,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub linkages_input: Option<InputFingerprint>,
+    /// Provenance of a reused CIFI output, set when the run was invoked with
+    /// `--cifi-output-dir`. Omitted otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reused_cifi: Option<ReusedCifiRef>,
+    /// Structured warnings surfaced during the run (e.g. ignored linkages).
+    /// Omitted when empty.
+    #[serde(skip_serializing_if = "WarningsManifest::is_empty")]
+    pub warnings: WarningsManifest,
     pub scenarios: Vec<ScenarioManifest>,
     pub host: HostInfo,
     pub started_at_unix_s: f64,
     pub finished_at_unix_s: f64,
+}
+
+/// Structured warnings recorded in the manifest.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct WarningsManifest {
+    /// Total (linkage, partition) rows written to `ignored_linkages.parquet`.
+    pub ignored_linkage_rows: usize,
+    /// Distinct linkage IDs that appeared in `ignored_linkages.parquet` but
+    /// were never classified in any partition — strong signal of a
+    /// mismatched `--linkages` file for the partition scheme.
+    pub orphan_linkages: usize,
+}
+
+impl WarningsManifest {
+    pub fn is_empty(&self) -> bool {
+        self.ignored_linkage_rows == 0 && self.orphan_linkages == 0
+    }
+}
+
+/// Lightweight reference to a reused CIFI run's manifest. Captures enough to
+/// audit provenance without embedding the full reused manifest.
+#[derive(Debug, Clone, Serialize)]
+pub struct ReusedCifiRef {
+    pub path: String,
+    pub manifest_difi_version: String,
+    pub manifest_command: Vec<String>,
+    pub observations_input: InputFingerprint,
+}
+
+/// Read a manifest for fingerprint verification, tolerating extra fields.
+/// Carries the reused run's scenario metadata so a reusing run can record the
+/// *snapshot's* metric / partition scheme in its own manifest (rather than
+/// the current CLI args, which are defaults in reuse mode).
+#[derive(Debug, Clone, Deserialize)]
+pub struct ManifestForReuse {
+    pub difi_version: String,
+    pub command: Vec<String>,
+    pub observations_input: InputFingerprint,
+    #[serde(default)]
+    pub scenarios: Vec<ReusedScenario>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ReusedScenario {
+    #[serde(default)]
+    pub metric: serde_json::Value,
+    #[serde(default)]
+    pub partitions: serde_json::Value,
+}
+
+pub fn read_manifest_for_reuse(path: &Path) -> Result<ManifestForReuse> {
+    let text = std::fs::read_to_string(path)
+        .with_context(|| format!("read manifest {}", path.display()))?;
+    let m: ManifestForReuse = serde_json::from_str(&text)
+        .with_context(|| format!("parse manifest {}", path.display()))?;
+    Ok(m)
 }
 
 #[derive(Debug, Clone, Serialize)]

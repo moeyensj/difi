@@ -186,7 +186,7 @@ fn analyze_linkages(
     }
 
     // DIFI
-    let all_linkages = difi_mod::analyze_linkages(
+    let (all_linkages, ignored_linkages) = difi_mod::analyze_linkages(
         &obs,
         &lm,
         &mut all_objects,
@@ -205,6 +205,7 @@ fn analyze_linkages(
     dict.set_item("num_pure", n_pure)?;
     dict.set_item("num_contaminated", n_contaminated)?;
     dict.set_item("num_mixed", n_mixed)?;
+    dict.set_item("num_ignored_linkages", ignored_linkages.len())?;
     dict.set_item("completeness", summaries[0].completeness)?;
     dict.set_item("found", summaries[0].found)?;
     dict.set_item("findable", summaries[0].findable)?;

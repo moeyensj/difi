@@ -42,7 +42,7 @@ fn run_pipeline() -> (
     let (mut all_objects, _findable, mut summaries) =
         analyze_observations(&obs, None, &metric).unwrap();
 
-    let all_linkages =
+    let (all_linkages, _ignored) =
         analyze_linkages(&obs, &lm, &mut all_objects, &mut summaries[0], 6, 20.0).unwrap();
 
     (all_objects, all_linkages, summaries, id_interner2)
