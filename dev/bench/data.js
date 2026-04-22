@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1775673632359,
+  "lastUpdate": 1776882479022,
   "repoUrl": "https://github.com/moeyensj/difi",
   "entries": {
     "difi Benchmarks": [
@@ -329,6 +329,72 @@ window.BENCHMARK_DATA = {
             "name": "io_read_observations_150",
             "value": 269836,
             "range": "± 1380",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "moeyensj@gmail.com",
+            "name": "Joachim Moeyens",
+            "username": "moeyensj"
+          },
+          "committer": {
+            "email": "moeyensj@users.noreply.github.com",
+            "name": "Joachim Moeyens",
+            "username": "moeyensj"
+          },
+          "distinct": true,
+          "id": "b4ebf50da117a070aed85bade1cf7c5498637ab5",
+          "message": "Add difi CLI binary\n\nNew `difi` binary gated behind the `cli` Cargo feature so lib-only\nconsumers (thor-rust, precovery) don't compile clap/toml/anyhow/sha2.\n\nSubcommands:\n- `difi analyze-observations` (alias `cifi`) — runs CIFI, writes\n  all_objects / findable_observations / partition_summaries parquet\n  plus a run_manifest.json with version, argv, input sha256-prefix,\n  host info, and per-scenario timings.\n- `difi analyze-linkages` (alias `analyze`) — runs CIFI then DIFI in\n  one shot, adds all_linkages.parquet.\n\nAlso:\n- `--scenarios <FILE>.toml` on analyze-observations for batch CIFI\n  runs with per-scenario observations/metric/partition overrides.\n- `--progress-json` emits NDJSON progress events on stdout; human\n  messages always go to stderr regardless. A panic hook additionally\n  emits `{\"event\":\"error\"}` on stdout before the default hook runs,\n  so the NDJSON contract survives library panics.\n- Scenario observations-path precedence: per-scenario entry >\n  --observations CLI flag > [defaults] (most explicit wins; CLI\n  overrides file defaults for ephemeral re-runs).\n- Exit codes per proposal: 1 (config/args), 2 (I/O), 3 (data); chain\n  inspection prefers the library's classified error over a raw\n  io::Error, since parquet/arrow errors can carry an inner io::Error.\n- README updated with a CLI section (install, subcommand examples,\n  partitions, scenarios TOML, --progress-json) and feature-gated dev\n  commands.\n\nTests (`tests/cli.rs`, 16 cases via assert_cmd + predicates): subcommand\noutputs, cifi / analyze aliases, sliding partitions, scenarios TOML,\nCLI-observations overrides TOML defaults, missing-input returns exit\ncode 2, missing-window error path, NDJSON validity, error events\ndual-emitted to stdout+stderr, --help / --version.\n\nLibrary (`src/lib.rs` and below) untouched — the CLI is pure glue.\n\nVerified:\n- `cargo build --no-default-features`   # no CLI deps leak into lib builds\n- `cargo build --features cli`\n- `cargo fmt -- --check`\n- `cargo clippy --all-targets --all-features`\n- `cargo test --features cli`           # 30 passed (16 new + 14 existing)\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+          "timestamp": "2026-04-22T11:22:41-07:00",
+          "tree_id": "5a2b280c2f2e06669c4a10d1755715ba667bf56a",
+          "url": "https://github.com/moeyensj/difi/commit/b4ebf50da117a070aed85bade1cf7c5498637ab5"
+        },
+        "date": 1776882478683,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "cifi_singleton_5obj_150obs",
+            "value": 68472,
+            "range": "± 1337",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cifi_tracklet_5obj_150obs",
+            "value": 80791,
+            "range": "± 2281",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "full_pipeline_5obj_20linkages",
+            "value": 146282,
+            "range": "± 18634",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cifi_singleton_scaling/objects/10",
+            "value": 109701,
+            "range": "± 4304",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cifi_singleton_scaling/objects/100",
+            "value": 481763,
+            "range": "± 19962",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cifi_singleton_scaling/objects/1000",
+            "value": 3802278,
+            "range": "± 282991",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "io_read_observations_150",
+            "value": 295833,
+            "range": "± 1766",
             "unit": "ns/iter"
           }
         ]
