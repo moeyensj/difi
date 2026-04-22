@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1776882479022,
+  "lastUpdate": 1776886494493,
   "repoUrl": "https://github.com/moeyensj/difi",
   "entries": {
     "difi Benchmarks": [
@@ -395,6 +395,72 @@ window.BENCHMARK_DATA = {
             "name": "io_read_observations_150",
             "value": 295833,
             "range": "± 1766",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "moeyensj@gmail.com",
+            "name": "Joachim Moeyens",
+            "username": "moeyensj"
+          },
+          "committer": {
+            "email": "moeyensj@users.noreply.github.com",
+            "name": "Joachim Moeyens",
+            "username": "moeyensj"
+          },
+          "distinct": true,
+          "id": "d680bfac1894fc550ed64967094ffc0235f280e2",
+          "message": "Add version-consistency check to guard Cargo/pyproject/tag drift\n\nToday's rc6 publish partially failed: crates.io published difi-rs\nv2.0.0-rc6 fine, but PyPI 400-rejected the upload because pyproject.toml\nwas still pinned at \"2.0.0rc5\" (from the prior release). maturin built\nwheels named difi-2.0.0rc5-*.whl against an rc6 Cargo.toml, PyPI said\n\"File already exists\", and the Publish workflow failed. The same class of\ndrift also explains why v2.0.0rc4 never got a tag (publish failed mid-way\nand was abandoned).\n\nThis adds a shared check and wires it into both workflows so the drift\ncannot reach a release again.\n\n- `scripts/check_versions.sh` — single source of truth. Compares\n  Cargo.toml (SemVer, e.g. `2.0.0-rc6`) against pyproject.toml (PEP 440,\n  e.g. `2.0.0rc6`) on the PEP 440 normal form. Optionally takes a tag\n  argument and verifies it matches both. Emits `::error::` annotations\n  for GitHub Actions and a plain ✓ line for local use.\n\n- `rust.yml` — runs the check on every PR inside the existing\n  build-lint job, immediately after checkout. Drift is caught at PR time,\n  not release time.\n\n- `publish.yml` — new `preflight` job runs the check against the pushed\n  tag before any artifact-producing job starts. publish-crate,\n  build-wheels, and build-sdist all `needs: preflight`, so\n  crates.io/PyPI cannot receive a build from an inconsistent tree.\n\nAlso bumps `pyproject.toml` from rc5 → rc6 so the check passes on this\nPR and pyproject matches the rc6 state of Cargo.toml on main. This does\nnot re-publish rc6 (rc6 is live on crates.io and the PyPI slot is blocked\nby rc5); the next release tag — rc7, when partitions lands — will be the\nfirst to exercise the preflight end-to-end.\n\nVerified locally:\n- `./scripts/check_versions.sh` → pass\n- `./scripts/check_versions.sh v2.0.0rc6` → pass\n- `./scripts/check_versions.sh v2.0.0rc7` → fail (exit 1, two error lines)\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+          "timestamp": "2026-04-22T12:32:38-07:00",
+          "tree_id": "56ea5c2d76c8c8f5918da1c52313011c3e7d494d",
+          "url": "https://github.com/moeyensj/difi/commit/d680bfac1894fc550ed64967094ffc0235f280e2"
+        },
+        "date": 1776886493616,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "cifi_singleton_5obj_150obs",
+            "value": 65178,
+            "range": "± 3390",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cifi_tracklet_5obj_150obs",
+            "value": 81651,
+            "range": "± 7922",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "full_pipeline_5obj_20linkages",
+            "value": 142336,
+            "range": "± 1181",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cifi_singleton_scaling/objects/10",
+            "value": 108730,
+            "range": "± 2847",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cifi_singleton_scaling/objects/100",
+            "value": 462927,
+            "range": "± 5260",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cifi_singleton_scaling/objects/1000",
+            "value": 3438611,
+            "range": "± 29838",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "io_read_observations_150",
+            "value": 276356,
+            "range": "± 23892",
             "unit": "ns/iter"
           }
         ]
