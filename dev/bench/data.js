@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1776886494493,
+  "lastUpdate": 1776908416201,
   "repoUrl": "https://github.com/moeyensj/difi",
   "entries": {
     "difi Benchmarks": [
@@ -461,6 +461,72 @@ window.BENCHMARK_DATA = {
             "name": "io_read_observations_150",
             "value": 276356,
             "range": "± 23892",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "moeyensj@gmail.com",
+            "name": "Joachim Moeyens",
+            "username": "moeyensj"
+          },
+          "committer": {
+            "email": "moeyensj@users.noreply.github.com",
+            "name": "Joachim Moeyens",
+            "username": "moeyensj"
+          },
+          "distinct": true,
+          "id": "7e99b93066c310ff9ad5a64c492a5728c1b7fe89",
+          "message": "Record cross-partition unique counts in scenario manifest\n\nPer-scenario findable_count / found_count in the manifest are SUMS across\npartitions, so an object findable in K sliding windows contributes K. For\nsurvey-level \"how many asteroids did the linker actually recover?\" you want\ndistinct-object counts, which today required grouping over all_objects.parquet\npost-hoc.\n\nAdds three fields to ScenarioManifest, alongside the existing sums:\n- unique_findable_count: distinct objects with findable=true in ≥ 1 partition\n- unique_found_count: distinct objects with ≥ 1 found-pure / found-contaminated\n  linkage across all partitions (None for CIFI-only runs)\n- unique_completeness: unique_found_count / unique_findable_count × 100\n  (None for CIFI-only runs or when no objects are findable)\n\nComputed by a single pass over all_objects (already in memory when the\nmanifest is written) via common::compute_unique_counts. Single-partition\nruns have unique_* == sum_* by construction — no behavior change there.\nOn a 76-partition sliding neomod run (per the empirical validation), the\nsum findable_count is ~200k (object, partition) pairs while\nunique_findable_count is ~15k distinct objects — a ~13× difference that\n`unique_completeness` surfaces directly.\n\nREADME updates the Pipeline / Completeness section with a per-partition\nvs. cross-partition table explaining when to quote which number.\n\nTests: `scenario_manifest_reports_unique_findable_found_and_completeness`\nasserts unique ≤ sum and completeness ∈ [0, 100] on a sliding run;\n`cifi_only_manifest_has_unique_findable_but_no_unique_found_or_completeness`\nasserts CIFI-only runs omit the DIFI-dependent fields.\n\nVerified:\n- cargo fmt -- --check\n- cargo clippy --all-targets --all-features -- -D warnings\n- cargo test --features cli  # 60 passed (+2 new)\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+          "timestamp": "2026-04-22T18:38:12-07:00",
+          "tree_id": "edab0e411f86b031b4d38e7604fc17c98cc66eb5",
+          "url": "https://github.com/moeyensj/difi/commit/7e99b93066c310ff9ad5a64c492a5728c1b7fe89"
+        },
+        "date": 1776908415943,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "cifi_singleton_5obj_150obs",
+            "value": 65313,
+            "range": "± 5338",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cifi_tracklet_5obj_150obs",
+            "value": 80970,
+            "range": "± 2216",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "full_pipeline_5obj_20linkages",
+            "value": 149768,
+            "range": "± 7478",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cifi_singleton_scaling/objects/10",
+            "value": 107546,
+            "range": "± 2777",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cifi_singleton_scaling/objects/100",
+            "value": 456562,
+            "range": "± 6932",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cifi_singleton_scaling/objects/1000",
+            "value": 3405036,
+            "range": "± 40307",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "io_read_observations_150",
+            "value": 268945,
+            "range": "± 1413",
             "unit": "ns/iter"
           }
         ]
