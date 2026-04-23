@@ -31,8 +31,8 @@ use difi::types::{
 use crate::analyze_observations::write_cifi_outputs;
 use crate::common::{
     HostInfo, InputFingerprint, Manifest, MetricArgs, PartitionArgs, ProgressEvent, ReusedCifiRef,
-    RunContext, ScenarioManifest, WarningsManifest, ensure_dir, fingerprint_input, now_unix_s,
-    read_manifest_for_reuse, version_string, write_manifest,
+    RunContext, ScenarioManifest, WarningsManifest, compute_unique_counts, ensure_dir,
+    fingerprint_input, now_unix_s, read_manifest_for_reuse, version_string, write_manifest,
 };
 
 #[derive(ClapArgs, Debug)]
@@ -444,6 +444,18 @@ fn write_outputs_and_manifest(
         }
     };
 
+    // Cross-partition distinct-object counts and survey-wide completeness.
+    // `findable_count` / `found_count` above are SUMS across partitions (an
+    // object findable in K partitions contributes K); these `unique_*` fields
+    // answer "how many distinct objects did the linker recover?"
+    let (unique_findable_count, unique_found_count_raw) = compute_unique_counts(all_objects);
+    let unique_found_count = Some(unique_found_count_raw);
+    let unique_completeness = if unique_findable_count > 0 {
+        Some(unique_found_count_raw as f64 / unique_findable_count as f64 * 100.0)
+    } else {
+        None
+    };
+
     ctx.emit(ProgressEvent::ScenarioDone {
         name: "default",
         findable: findable_count,
@@ -466,6 +478,9 @@ fn write_outputs_and_manifest(
             difi_elapsed_s: Some(difi_elapsed),
             findable_count,
             found_count,
+            unique_findable_count,
+            unique_found_count,
+            unique_completeness,
             outputs,
         }],
         host: HostInfo::capture(),

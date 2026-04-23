@@ -201,6 +201,87 @@ fn analyze_alias_resolves_to_analyze_linkages() {
 // ---------------------------------------------------------------------------
 
 #[test]
+fn scenario_manifest_reports_unique_findable_found_and_completeness() {
+    // Sliding-window analyze-linkages; assert the manifest carries distinct-
+    // object cross-partition counts alongside the per-partition sums, and
+    // that the relationships hold:
+    //   unique <= sum           (distinct can only be <= total occurrences)
+    //   0 <= unique_completeness <= 100
+    let tmp = TempDir::new().unwrap();
+    cmd()
+        .args([
+            "analyze-linkages",
+            "--partition-mode",
+            "sliding",
+            "--partition-window",
+            "3",
+            "--partition-min-nights",
+            "2",
+        ])
+        .arg("-i")
+        .arg(observations_parquet())
+        .arg("-l")
+        .arg(linkage_members_parquet())
+        .arg("-o")
+        .arg(tmp.path())
+        .assert()
+        .success();
+
+    let m: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(tmp.path().join("run_manifest.json")).unwrap(),
+    )
+    .unwrap();
+    let s = &m["scenarios"][0];
+
+    let findable = s["findable_count"].as_i64().unwrap();
+    let unique_findable = s["unique_findable_count"].as_i64().unwrap();
+    assert!(
+        unique_findable > 0 && unique_findable <= findable,
+        "unique_findable_count ({unique_findable}) must be in (0, findable_count={findable}]"
+    );
+
+    let found = s["found_count"].as_i64().unwrap();
+    let unique_found = s["unique_found_count"].as_i64().unwrap();
+    assert!(
+        unique_found <= found,
+        "unique_found_count ({unique_found}) must be <= found_count ({found})"
+    );
+    assert!(
+        unique_found <= unique_findable,
+        "unique_found_count ({unique_found}) must be <= unique_findable_count ({unique_findable})"
+    );
+
+    let uc = s["unique_completeness"].as_f64().unwrap();
+    assert!(
+        (0.0..=100.0).contains(&uc),
+        "unique_completeness ({uc}) should be in [0, 100]"
+    );
+}
+
+#[test]
+fn cifi_only_manifest_has_unique_findable_but_no_unique_found_or_completeness() {
+    let tmp = TempDir::new().unwrap();
+    cmd()
+        .arg("cifi")
+        .arg("-i")
+        .arg(observations_parquet())
+        .arg("-o")
+        .arg(tmp.path())
+        .assert()
+        .success();
+    let m: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(tmp.path().join("run_manifest.json")).unwrap(),
+    )
+    .unwrap();
+    let s = &m["scenarios"][0];
+    assert!(s["unique_findable_count"].as_i64().unwrap() > 0);
+    // CIFI-only skips DIFI, so the unique_found / unique_completeness fields
+    // are omitted via `skip_serializing_if = Option::is_none`.
+    assert!(s.get("unique_found_count").is_none() || s["unique_found_count"].is_null());
+    assert!(s.get("unique_completeness").is_none() || s["unique_completeness"].is_null());
+}
+
+#[test]
 fn analyze_linkages_sliding_partition_writes_ignored_linkages_and_manifest_warnings() {
     // With a narrow sliding window, many linkages will be wholly outside
     // individual partitions. Those rows should be excluded from

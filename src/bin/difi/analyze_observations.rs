@@ -269,6 +269,8 @@ fn run_cifi_scenario(
     summaries.sort_by_key(|s| s.start_night);
 
     let findable_count: i64 = summaries.iter().filter_map(|s| s.findable).sum();
+    // CIFI-only: unique_found / unique_completeness are None (DIFI hasn't run).
+    let (unique_findable_count, _unique_found) = common::compute_unique_counts(&all_objects);
 
     // Write outputs.
     let outputs = write_cifi_outputs(out_dir, &all_objects, &findable, &summaries, id_interner)?;
@@ -288,6 +290,9 @@ fn run_cifi_scenario(
         difi_elapsed_s: None,
         findable_count,
         found_count: None,
+        unique_findable_count,
+        unique_found_count: None,
+        unique_completeness: None,
         outputs,
     })
 }

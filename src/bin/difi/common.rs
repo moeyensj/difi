@@ -547,10 +547,54 @@ pub struct ScenarioManifest {
     pub cifi_elapsed_s: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub difi_elapsed_s: Option<f64>,
+
+    /// Sum of per-partition findable counts. An object findable in K partitions
+    /// contributes K here — useful for per-partition-window workload sizing,
+    /// NOT a survey-wide object count.
     pub findable_count: i64,
+
+    /// Sum of per-partition found counts. Same caveat as `findable_count`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub found_count: Option<i64>,
+
+    /// Distinct objects with `findable == true` in at least one partition.
+    /// Single-partition runs have `unique_findable_count == findable_count`.
+    pub unique_findable_count: i64,
+
+    /// Distinct objects with at least one found_pure or found_contaminated
+    /// linkage across all partitions. None for CIFI-only runs. Single-partition
+    /// runs have `unique_found_count == found_count`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unique_found_count: Option<i64>,
+
+    /// Survey-wide recovery rate: `unique_found_count / unique_findable_count × 100`.
+    /// This is the number to quote when reporting "how many asteroids did the
+    /// linker recover?" — the per-partition `completeness` in
+    /// `partition_summaries.parquet` over-counts objects that appear in
+    /// multiple sliding windows. None for CIFI-only runs or when
+    /// `unique_findable_count == 0`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unique_completeness: Option<f64>,
+
     pub outputs: std::collections::BTreeMap<String, String>,
+}
+
+/// Compute `(unique_findable, unique_found)` distinct-object counts across all
+/// partitions of an `AllObjects` table. `unique_found` counts objects with at
+/// least one pure-or-contaminated linkage (found_pure > 0 || found_contaminated > 0).
+pub fn compute_unique_counts(all_objects: &difi::types::AllObjects) -> (i64, i64) {
+    use std::collections::HashSet;
+    let mut findable: HashSet<u64> = HashSet::new();
+    let mut found: HashSet<u64> = HashSet::new();
+    for i in 0..all_objects.len() {
+        if all_objects.findable[i] == Some(true) {
+            findable.insert(all_objects.object_id[i]);
+        }
+        if all_objects.found_pure[i] > 0 || all_objects.found_contaminated[i] > 0 {
+            found.insert(all_objects.object_id[i]);
+        }
+    }
+    (findable.len() as i64, found.len() as i64)
 }
 
 #[derive(Debug, Clone, Serialize)]

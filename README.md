@@ -361,6 +361,28 @@ difi operates in two phases:
    stay bounded by in-partition evidence instead of inflating when a
    cross-boundary linkage has enough total obs but few inside any one window.
 
+### Per-partition vs. cross-partition (survey-wide) counts
+
+`partition_summaries.parquet` carries per-partition rows with the same
+*completeness* formula scoped to each window. For a sliding-window run, the
+same real object typically appears in many windows, so naively summing
+`findable` / `found` across partitions double-counts.
+
+`run_manifest.json → scenarios[0]` carries both views:
+
+| Field | Meaning |
+|---|---|
+| `findable_count` | **Sum** across partitions. Useful for workload sizing |
+| `found_count` | Sum across partitions (DIFI runs only) |
+| `unique_findable_count` | **Distinct objects** findable in ≥ 1 partition |
+| `unique_found_count` | Distinct objects with ≥ 1 found-pure linkage across all partitions (DIFI runs only) |
+| `unique_completeness` | `unique_found_count / unique_findable_count × 100` — the number to quote for "how many asteroids did the linker recover?" (DIFI runs only) |
+
+In single-partition runs the `unique_*` values equal the sum counterparts by
+construction. In multi-partition sliding-window runs they diverge: for a 76-partition
+survey run, `findable_count` can be ~200k (object, partition) pairs while
+`unique_findable_count` is ~15k distinct objects.
+
 ## Performance
 
 Benchmarked on the neomod_quads survey dataset (166M observations, 15,935 objects):
