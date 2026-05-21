@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1776908416201,
+  "lastUpdate": 1779390201406,
   "repoUrl": "https://github.com/moeyensj/difi",
   "entries": {
     "difi Benchmarks": [
@@ -527,6 +527,72 @@ window.BENCHMARK_DATA = {
             "name": "io_read_observations_150",
             "value": 268945,
             "range": "± 1413",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "moeyensj@users.noreply.github.com",
+            "name": "Joachim Moeyens",
+            "username": "moeyensj"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "487b1e2e1f33a2d5ad4df9a003ff74351f5187c6",
+          "message": "Release v2.0.0: bump version, refresh README badges, update LICENSE (#64)\n\n- Bump Cargo.toml + pyproject.toml to 2.0.0\n- Add PyPI, crates.io, and docs.rs badges; move Claude Code badge to\n  second badge row\n- Update LICENSE copyright year to 2026\n\nCo-authored-by: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+          "timestamp": "2026-05-21T11:58:19-07:00",
+          "tree_id": "97b7e6de8a5e66bd6f1fd962659c5fcefe40b259",
+          "url": "https://github.com/moeyensj/difi/commit/487b1e2e1f33a2d5ad4df9a003ff74351f5187c6"
+        },
+        "date": 1779390201036,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "cifi_singleton_5obj_150obs",
+            "value": 68662,
+            "range": "± 8850",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cifi_tracklet_5obj_150obs",
+            "value": 81881,
+            "range": "± 9194",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "full_pipeline_5obj_20linkages",
+            "value": 173964,
+            "range": "± 4255",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cifi_singleton_scaling/objects/10",
+            "value": 112012,
+            "range": "± 2729",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cifi_singleton_scaling/objects/100",
+            "value": 476133,
+            "range": "± 5784",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cifi_singleton_scaling/objects/1000",
+            "value": 3603757,
+            "range": "± 29319",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "io_read_observations_150",
+            "value": 294579,
+            "range": "± 1332",
             "unit": "ns/iter"
           }
         ]
